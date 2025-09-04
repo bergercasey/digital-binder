@@ -111,8 +111,8 @@
           <select id="job-stage"></select>
         </div>
         <div class="field">
-          <label>Crew (multi-select)</label>
-          <select id="job-crew" multiple size="6"></select>
+          <label>Crew</label>
+          <div id="crew-box" class="chips"></div>
         </div>
         <div class="field">
           <label>Notes</label>
@@ -226,7 +226,6 @@
         }));
         el.querySelector('[data-act="select"]').addEventListener("click", () => {
           state.ui.selectedContractorId = c.id;
-          // pick first non-archived job if none selected
           const first = c.jobs.find(j => !j.archived) || c.jobs[0];
           state.ui.selectedJobId = first ? first.id : null;
           renderAll();
@@ -286,16 +285,41 @@
       });
       if (j?.stage) stageSel.value = j.stage;
 
-      // Crew options (multi)
-      const crewSel = $("job-crew");
-      crewSel.innerHTML = "";
+      // CREW CHECKBOXES (iPad-friendly)
+      const crewBox = $("crew-box");
+      crewBox.innerHTML = "";
+      const crewSet = new Set(j?.crew || []);
       state.roster.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name; opt.textContent = name; crewSel.appendChild(opt);
+        const id = "crew-" + name.replace(/\s+/g, "_");
+        const wrap = document.createElement("label");
+        wrap.className = "chip";
+        wrap.style.display = "inline-flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "6px";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.id = id; cb.value = name;
+        cb.checked = crewSet.has(name);
+        cb.addEventListener("change", () => {
+          if (!j) return;
+          if (cb.checked) {
+            if (!j.crew.includes(name)) j.crew.push(name);
+          } else {
+            j.crew = j.crew.filter(x => x !== name);
+          }
+          markUpdated(j);
+          save();
+          $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+        });
+
+        const txt = document.createElement("span");
+        txt.textContent = name;
+
+        wrap.appendChild(cb);
+        wrap.appendChild(txt);
+        crewBox.appendChild(wrap);
       });
-      if (j?.crew) {
-        Array.from(crewSel.options).forEach(o => { o.selected = j.crew.includes(o.value); });
-      }
 
       // Settings textareas
       $("roster-input").value = state.roster.join("\n");
@@ -317,7 +341,7 @@
 
     const save = debounce(async () => {
       status("Saving…");
-      const payload = { roster: state.roster, stages: state.stages, contractors: state.contractors, version: 1 };
+      const payload = { roster: state.roster, stages: state.stages, contractors: state.contractors, version: 2 };
       try {
         const res = await API.save(payload);
         status(res.local ? "Saved locally (offline)" : "Saved");
@@ -342,7 +366,12 @@
       const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: "", archived: false, updatedAt: new Date().toISOString() };
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      save(); renderAll();
+
+      // Render immediately so the new tab shows up right away
+      renderTabs();
+      renderJobFields();
+
+      save();
     });
 
     $("archive-job").addEventListener("click", () => {
@@ -378,18 +407,14 @@
     $("job-stage").addEventListener("change", e => {
       const j = currentJob(); if (!j) return; j.stage = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
     });
-    $("job-crew").addEventListener("change", e => {
-      const j = currentJob(); if (!j) return;
-      j.crew = Array.from(e.target.selectedOptions).map(o => o.value);
-      markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
-    });
 
     $("save-settings").addEventListener("click", () => {
       const roster = $("roster-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
       const stages = $("stages-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
       if (roster.length) state.roster = roster;
       if (stages.length) state.stages = stages;
-      save(); renderJobFields(); // refresh dropdowns
+      save();
+      renderJobFields(); // refresh Stage dropdown & Crew checkboxes
       alert("Settings saved.");
     });
 
@@ -401,14 +426,13 @@
     $("refresh-btn").addEventListener("click", async () => {
       status("Loading…");
       const data = await API.load();
-      if (data) { state = { ...data, ui: state.ui || {} }; }
-      // set sensible UI defaults if not present
+      if (data) { state = { ...state, ...data, ui: state.ui || {} }; }
       state.ui.selectedContractorId ??= state.contractors[0]?.id || null;
       state.ui.selectedJobId ??= state.contractors[0]?.jobs[0]?.id || null;
       renderAll();
     });
 
-    // ---------- Init: Load from backend (or local fallback), then render
+    // ---------- Init: Load, then render
     (async function init() {
       status("Loading…");
       const data = await API.load();
