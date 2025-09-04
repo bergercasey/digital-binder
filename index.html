@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HVAC Digital Binder</title>
+  <style>
+    :root {
+      --bg: #fff;
+      --ink: #111;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #2563eb;
+      --accent-ink: #fff;
+      --pad: 12px;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+    header { padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+    h1 { margin: 0 0 6px; text-align: center; font-size: 20px; font-weight: 700; }
+    .toolbar { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+    button, select, input[type="text"], textarea {
+      font: inherit;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+    button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+    button.ghost { background: transparent; border-color: var(--line); }
+    .status { text-align:center; font-size:12px; color: var(--muted); margin-top: 6px; }
+    main { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 100px); }
+    aside { border-right: 1px solid var(--line); padding: var(--pad); }
+    .aside-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; }
+    .list { display:flex; flex-direction:column; gap:6px; }
+    .contractor {
+      display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius: 8px; cursor:pointer;
+    }
+    .contractor.active { outline: 2px solid var(--accent); }
+    .contractor input { width: 100%; border:none; outline:none; }
+    section.content { padding: var(--pad); }
+    .top-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom: 10px; }
+    .tabs { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .tab {
+      padding: 6px 10px; border:1px solid var(--line); border-radius: 999px; cursor:pointer;
+      display:flex; align-items:center; gap:6px; background:#fff;
+    }
+    .tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    .pill { font-size: 12px; color: var(--muted); }
+    .fields { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    label { font-size: 12px; color: var(--muted); }
+    textarea { min-height: 120px; resize: vertical; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .spacer { flex:1; }
+    .archive-toggle { display:flex; align-items:center; gap:6px; }
+    .muted { color: var(--muted); }
+    .settings { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .chip { padding: 4px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: none; border-bottom: 1px solid var(--line); }
+      .fields { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>HVAC Digital Binder</h1>
+    <div class="toolbar">
+      <button class="primary" id="add-contractor">+ Contractor</button>
+      <button class="ghost" id="settings-btn">Settings</button>
+      <button class="ghost" id="refresh-btn">Reload</button>
+      <div class="spacer"></div>
+    </div>
+    <div class="status" id="status">Loaded</div>
+  </header>
+
+  <main>
+    <aside>
+      <div class="aside-head">
+        <strong>Contractors</strong>
+        <span class="muted" id="contractor-count"></span>
+      </div>
+      <div class="list" id="contractor-list"></div>
+    </aside>
+
+    <section class="content">
+      <div class="top-row">
+        <div class="tabs" id="job-tabs"></div>
+        <div class="row">
+          <div class="archive-toggle">
+            <input type="checkbox" id="show-archived"/>
+            <label for="show-archived">Show archived</label>
+          </div>
+          <button class="ghost" id="add-job">+ Job</button>
+          <button class="ghost" id="archive-job">Archive</button>
+          <button class="danger" id="delete-job">Delete</button>
+        </div>
+      </div>
+
+      <div class="fields">
+        <div class="field">
+          <label>Job Name</label>
+          <input type="text" id="job-name" placeholder="e.g., 123 Main St Buildout" />
+        </div>
+        <div class="field">
+          <label>Stage</label>
+          <select id="job-stage"></select>
+        </div>
+        <div class="field">
+          <label>Crew (multi-select)</label>
+          <select id="job-crew" multiple size="6"></select>
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <textarea id="job-notes" placeholder="Updates, materials, inspections, dates..."></textarea>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="muted">Last updated: <span id="job-updated">—</span></div>
+        <div class="spacer"></div>
+        <button id="duplicate-job" class="ghost">Duplicate</button>
+      </div>
+
+      <div class="settings">
+        <h3 style="margin:0 0 6px;">Settings</h3>
+        <div class="fields">
+          <div class="field">
+            <label>Roster (one per line)</label>
+            <textarea id="roster-input" placeholder="e.g., Alice\nBob\nChris"></textarea>
+          </div>
+          <div class="field">
+            <label>Stages (one per line)</label>
+            <textarea id="stages-input" placeholder="e.g., Bid\nRough-in\nTrim\nComplete"></textarea>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="save-settings" class="primary">Save Settings</button>
+          <span class="muted">These power the dropdowns above.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ---------- Utilities
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+
+    const uuid = () => Math.random().toString(36).slice(2, 10);
+
+    const debounce = (fn, ms=400) => {
+      let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    };
+
+    // ---------- Persistence layer with Netlify Functions (+ local fallback)
+    const API = {
+      async load() {
+        try {
+          const res = await fetch("/.netlify/functions/load");
+          if (!res.ok) throw new Error("load failed");
+          return await res.json();
+        } catch (err) {
+          console.warn("Load failed, falling back to localStorage", err);
+          const raw = localStorage.getItem("binder-data");
+          return raw ? JSON.parse(raw) : null;
+        }
+      },
+      async save(data) {
+        try {
+          const res = await fetch("/.netlify/functions/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!res.ok) throw new Error("save failed");
+          return await res.json();
+        } catch (err) {
+          console.warn("Save failed, writing to localStorage", err);
+          localStorage.setItem("binder-data", JSON.stringify(data));
+          return { ok: true, local: true };
+        }
+      }
+    };
+
+    // ---------- App state
+    let state = {
+      roster: ["Alice","Bob","Chris","Dee"],
+      stages: ["Bid","Rough-in","Trim","Complete"],
+      contractors: [
+        { id: uuid(), name: "Acme Mechanical", jobs: [
+          { id: uuid(), name: "123 Main St", stage: "Rough-in", crew: ["Alice","Bob"], notes: "Ducts delivered. Rough inspection Fri.", archived: false, updatedAt: new Date().toISOString() }
+        ]}
+      ],
+      ui: {
+        selectedContractorId: null,
+        selectedJobId: null,
+        showArchived: false
+      }
+    };
+
+    // ---------- Rendering
+    function renderContractors() {
+      const list = $("contractor-list");
+      list.innerHTML = "";
+      const count = state.contractors.length;
+      $("contractor-count").textContent = count === 1 ? "1 contractor" : count + " contractors";
+
+      state.contractors.forEach(c => {
+        const el = document.createElement("div");
+        el.className = "contractor" + (c.id === state.ui.selectedContractorId ? " active" : "");
+        el.innerHTML = \`
+          <input value="\${c.name}" />
+          <button data-act="select">Open</button>
+          <button class="danger" data-act="remove">✕</button>
+        \`;
+        el.querySelector("input").addEventListener("input", debounce(e => {
+          c.name = e.target.value.trim() || "Untitled Contractor";
+          save();
+          renderContractors();
+          renderTabs();
+        }));
+        el.querySelector('[data-act="select"]').addEventListener("click", () => {
+          state.ui.selectedContractorId = c.id;
+          // pick first non-archived job if none selected
+          const first = c.jobs.find(j => !j.archived) || c.jobs[0];
+          state.ui.selectedJobId = first ? first.id : null;
+          renderAll();
+        });
+        el.querySelector('[data-act="remove"]').addEventListener("click", () => {
+          if (!confirm("Delete contractor and all jobs?")) return;
+          state.contractors = state.contractors.filter(x => x.id !== c.id);
+          if (state.ui.selectedContractorId === c.id) {
+            state.ui.selectedContractorId = state.contractors[0]?.id || null;
+            state.ui.selectedJobId = state.contractors[0]?.jobs[0]?.id || null;
+          }
+          save(); renderAll();
+        });
+        list.appendChild(el);
+      });
+    }
+
+    function currentContractor() {
+      return state.contractors.find(c => c.id === state.ui.selectedContractorId) || null;
+    }
+    function currentJob() {
+      const c = currentContractor(); if (!c) return null;
+      return c.jobs.find(j => j.id === state.ui.selectedJobId) || null;
+    }
+
+    function renderTabs() {
+      const c = currentContractor();
+      const tabs = $("job-tabs");
+      tabs.innerHTML = "";
+      if (!c) return;
+
+      const jobs = c.jobs.filter(j => state.ui.showArchived ? true : !j.archived);
+      jobs.forEach(j => {
+        const el = document.createElement("div");
+        el.className = "tab" + (j.id === state.ui.selectedJobId ? " active" : "");
+        el.innerHTML = \`
+          <span>\${j.name || "Untitled Job"}</span>
+          \${j.archived ? '<span class="pill">Archived</span>' : ""}
+        \`;
+        el.addEventListener("click", () => { state.ui.selectedJobId = j.id; renderAll(); });
+        tabs.appendChild(el);
+      });
+    }
+
+    function renderJobFields() {
+      const j = currentJob();
+      $("job-name").value = j?.name || "";
+      $("job-notes").value = j?.notes || "";
+      $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
+
+      // Stage options
+      const stageSel = $("job-stage");
+      stageSel.innerHTML = "";
+      state.stages.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s; opt.textContent = s; stageSel.appendChild(opt);
+      });
+      if (j?.stage) stageSel.value = j.stage;
+
+      // Crew options (multi)
+      const crewSel = $("job-crew");
+      crewSel.innerHTML = "";
+      state.roster.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = name; crewSel.appendChild(opt);
+      });
+      if (j?.crew) {
+        Array.from(crewSel.options).forEach(o => { o.selected = j.crew.includes(o.value); });
+      }
+
+      // Settings textareas
+      $("roster-input").value = state.roster.join("\n");
+      $("stages-input").value = state.stages.join("\n");
+    }
+
+    function renderAll() {
+      renderContractors();
+      renderTabs();
+      renderJobFields();
+      $("show-archived").checked = !!state.ui.showArchived;
+      status("Ready");
+    }
+
+    // ---------- Mutations + Save
+    function markUpdated(job) {
+      job.updatedAt = new Date().toISOString();
+    }
+
+    const save = debounce(async () => {
+      status("Saving…");
+      const payload = { roster: state.roster, stages: state.stages, contractors: state.contractors, version: 1 };
+      try {
+        const res = await API.save(payload);
+        status(res.local ? "Saved locally (offline)" : "Saved");
+      } catch (e) {
+        status("Error saving (stored locally)");
+      }
+    }, 300);
+
+    function status(msg) { statusEl.textContent = msg; }
+
+    // ---------- Event wiring
+    $("add-contractor").addEventListener("click", () => {
+      const c = { id: uuid(), name: "New Contractor", jobs: [] };
+      state.contractors.unshift(c);
+      state.ui.selectedContractorId = c.id;
+      state.ui.selectedJobId = null;
+      save(); renderAll();
+    });
+
+    $("add-job").addEventListener("click", () => {
+      const c = currentContractor(); if (!c) { alert("Add a contractor first."); return; }
+      const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: "", archived: false, updatedAt: new Date().toISOString() };
+      c.jobs.unshift(j);
+      state.ui.selectedJobId = j.id;
+      save(); renderAll();
+    });
+
+    $("archive-job").addEventListener("click", () => {
+      const j = currentJob(); if (!j) return;
+      j.archived = !j.archived;
+      markUpdated(j); save(); renderAll();
+    });
+
+    $("delete-job").addEventListener("click", () => {
+      const c = currentContractor(); const j = currentJob(); if (!c || !j) return;
+      if (!confirm("Delete this job?")) return;
+      c.jobs = c.jobs.filter(x => x.id !== j.id);
+      state.ui.selectedJobId = c.jobs[0]?.id || null;
+      save(); renderAll();
+    });
+
+    $("duplicate-job").addEventListener("click", () => {
+      const c = currentContractor(); const j = currentJob(); if (!c || !j) return;
+      const copy = JSON.parse(JSON.stringify(j));
+      copy.id = uuid(); copy.name = j.name + " (copy)"; markUpdated(copy);
+      c.jobs.splice( (c.jobs.findIndex(x => x.id === j.id) + 1), 0, copy );
+      state.ui.selectedJobId = copy.id;
+      save(); renderAll();
+    });
+
+    // Field bindings
+    $("job-name").addEventListener("input", debounce(e => {
+      const j = currentJob(); if (!j) return; j.name = e.target.value; markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+    }));
+    $("job-notes").addEventListener("input", debounce(e => {
+      const j = currentJob(); if (!j) return; j.notes = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+    }));
+    $("job-stage").addEventListener("change", e => {
+      const j = currentJob(); if (!j) return; j.stage = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+    });
+    $("job-crew").addEventListener("change", e => {
+      const j = currentJob(); if (!j) return;
+      j.crew = Array.from(e.target.selectedOptions).map(o => o.value);
+      markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+    });
+
+    $("save-settings").addEventListener("click", () => {
+      const roster = $("roster-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      const stages = $("stages-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      if (roster.length) state.roster = roster;
+      if (stages.length) state.stages = stages;
+      save(); renderJobFields(); // refresh dropdowns
+      alert("Settings saved.");
+    });
+
+    $("show-archived").addEventListener("change", e => {
+      state.ui.showArchived = !!e.target.checked;
+      renderTabs();
+    });
+
+    $("refresh-btn").addEventListener("click", async () => {
+      status("Loading…");
+      const data = await API.load();
+      if (data) { state = { ...data, ui: state.ui || {} }; }
+      // set sensible UI defaults if not present
+      state.ui.selectedContractorId ??= state.contractors[0]?.id || null;
+      state.ui.selectedJobId ??= state.contractors[0]?.jobs[0]?.id || null;
+      renderAll();
+    });
+
+    // ---------- Init: Load from backend (or local fallback), then render
+    (async function init() {
+      status("Loading…");
+      const data = await API.load();
+      if (data) state = { ...state, ...data };
+      state.ui.selectedContractorId = state.contractors[0]?.id || null;
+      state.ui.selectedJobId = state.contractors[0]?.jobs[0]?.id || null;
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
