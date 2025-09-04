@@ -1,5 +1,4 @@
 // /.netlify/functions/save
-// Writes the binder state to Netlify Blobs.
 import { getStore } from '@netlify/blobs';
 
 export async function handler(event) {

@@ -1,6 +1,4 @@
 // /.netlify/functions/load
-// Reads the binder state from Netlify Blobs.
-// If no data exists yet, returns null (the frontend falls back to defaults).
 import { getStore } from '@netlify/blobs';
 
 export async function handler() {
