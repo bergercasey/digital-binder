@@ -1,4 +1,4 @@
-/* app.js v3.3 */
+/* app.js v3.4 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
@@ -10,6 +10,13 @@
 
   const uuid = () => Math.random().toString(36).slice(2, 10);
   const debounce = (fn, ms=400) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
+
+  const ymd = (d=new Date()) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  };
 
   // Convert hex (#rrggbb) to rgba with alpha 0.25
   function hexToRGBA(hex, alpha=0.25) {
@@ -59,7 +66,7 @@
     contractors: [
       { id: uuid(), name: "Acme Mechanical", logoDataUrl: "", jobs: [
         { id: uuid(), name: "101 - 123 Main St", stage: "Rough-in", crew: ["Alice","Bob"], notes: [
-          "Ducts delivered. Rough inspection Fri."
+          { d: ymd(), text: "Ducts delivered. Rough inspection Fri." }
         ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       ]}
     ],
@@ -143,6 +150,15 @@
     });
   }
 
+  // Colors
+  function hexToRGBAColor(hex) {
+    const m = hex.replace('#','');
+    const bigint = parseInt(m.length === 3 ? m.split('').map(c=>c+c).join('') : m, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return {r,g,b};
+  }
   function stageTint(stage) {
     const hex = state.stageColors[stage] || "#c4c4c4";
     return hexToRGBA(hex, 0.28);
@@ -200,6 +216,9 @@
     else { prev.style.display = "none"; }
   }
 
+  // Normalize notes to objects if needed when rendering or pushing new ones
+  const coerceNote = (n) => typeof n === "string" ? { d: ymd(), text: n } : n;
+
   function renderPanel() {
     const landing = $("placeholder-landing"); const companyLogoImg = $("company-logo"); const companyLogoEmpty = $("company-logo-empty");
     const contractorPanel = $("contractor-logo-panel"); const contractorLogo = $("contractor-logo");
@@ -244,6 +263,7 @@
         if (!j) return;
         if (cb.checked) { if (!j.crew.includes(name)) j.crew.push(name); }
         else { j.crew = j.crew.filter(x => x !== name); }
+        pushNote(j, `Crew updated: ${j.crew.join(", ")}`);
         markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); toast("Crew updated");
       });
       const txt = document.createElement("span"); txt.textContent = name;
@@ -251,10 +271,11 @@
     });
 
     const list = $("notes-list"); list.innerHTML = "";
-    (j.notes || []).forEach(text => {
+    (j.notes || []).map(coerceNote).forEach(n => {
       const item = document.createElement("div"); item.className = "note-item";
-      const body = document.createElement("div"); body.textContent = text;
-      item.appendChild(body); list.appendChild(item);
+      const d = document.createElement("div"); d.className = "note-date"; d.textContent = n.d || ymd();
+      const body = document.createElement("div"); body.textContent = n.text || String(n);
+      item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
@@ -269,10 +290,14 @@
   }
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
+  function pushNote(job, text) {
+    job.notes = job.notes || [];
+    job.notes.push({ d: ymd(), text });
+  }
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 9 };
+    const payload = { ...state, version: 10 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");
@@ -303,7 +328,7 @@
 
     // Company logo upload
     const companyFile = $("company-logo-file");
-    companyFile.addEventListener("change", () => {
+    companyFile?.addEventListener("change", () => {
       const f = companyFile.files?.[0]; if (!f) return;
       const reader = new FileReader();
       reader.onload = () => { state.companyLogoDataUrl = reader.result; $("company-logo-preview").src = state.companyLogoDataUrl; $("company-logo-preview").style.display = "block"; save(); renderPanel(); toast("Company logo updated"); };
@@ -322,6 +347,8 @@
     $("add-job").addEventListener("click", () => {
       const c = currentContractor(); if (!c) { alert("Open a contractor first."); return; }
       const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      // initial dated creation note
+      pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
       renderTabs(); renderPanel(); save();
@@ -330,7 +357,9 @@
 
     $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
-      j.archived = !j.archived; markUpdated(j); save(); renderAll();
+      j.archived = !j.archived;
+      pushNote(j, j.archived ? "Archived" : "Un-archived");
+      markUpdated(j); save(); renderAll();
       toast(j.archived ? "Job archived" : "Job un-archived");
     });
 
@@ -346,21 +375,25 @@
     $("job-name").addEventListener("blur", (e) => {
       const j = currentJob(); if (!j) return;
       const val = e.target.value.trim();
-      if (val !== j.name) {
-        j.name = val; markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+      if (val && val !== j.name) {
+        pushNote(j, `Job renamed: "${j.name}" → "${val}"`);
+        j.name = val;
+        markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       }
     });
     $("job-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 
     $("job-stage").addEventListener("change", e => {
       const j = currentJob(); if (!j) return;
-      j.stage = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); renderTabs(); toast("Stage updated");
+      j.stage = e.target.value;
+      pushNote(j, `Stage changed to ${j.stage}`);
+      markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); renderTabs(); toast("Stage updated");
     });
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       const txt = $("new-note").value.trim(); if (!txt) return;
-      j.notes = j.notes || []; j.notes.push(txt); $("new-note").value = "";
+      pushNote(j, txt); $("new-note").value = "";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
 

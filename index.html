@@ -86,6 +86,9 @@
     .placeholder img { max-width: 420px; opacity: .85; }
     .logo-panel { display:flex; align-items:center; justify-content:center; height: 220px; border: 2px dashed var(--line); border-radius: 12px; background:#fafafa; margin-top:12px; }
     .logo-panel img { max-height: 200px; max-width: 90%; object-fit: contain; }
+    /* Notes */
+    .note-item { padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    .note-date { font-size:12px; color:var(--muted); margin-bottom:4px; }
     /* Toasts */
     .toast-wrap { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; flex-direction: column; z-index: 9999; pointer-events: none; }
     .toast { pointer-events: auto; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-size: 14px; min-width: 200px; text-align: center; }
@@ -165,7 +168,7 @@
             </div>
           </div>
 
-          <!-- Notes (no per-entry timestamps) -->
+          <!-- Notes (dated entries) -->
           <div style="margin-top:14px;">
             <div class="field">
               <label>Add Note</label>
@@ -177,7 +180,7 @@
               <div class="muted">Last updated: <span id="job-updated">—</span></div>
             </div>
 
-            <h3 style="margin:14px 0 6px;">Notes</h3>
+            <h3 style="margin:14px 0 6px;">Log</h3>
             <div id="notes-list" class="list"></div>
           </div>
         </div>
