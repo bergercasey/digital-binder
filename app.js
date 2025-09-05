@@ -1,29 +1,26 @@
-/* app.js v3.1 */
+/* app.js v3.3 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
 
   // Error banner
   const errbar = $("errbar");
-  window.addEventListener("error", (e) => {
-    if (!errbar) return;
-    errbar.style.display = "block";
-    errbar.textContent = "Script error: " + (e.message || e.error || e.filename);
-  });
-  window.addEventListener("unhandledrejection", (e) => {
-    if (!errbar) return;
-    errbar.style.display = "block";
-    errbar.textContent = "Promise error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason));
-  });
+  window.addEventListener("error", (e) => { if (!errbar) return; errbar.style.display = "block"; errbar.textContent = "Script error: " + (e.message || e.error || e.filename); });
+  window.addEventListener("unhandledrejection", (e) => { if (!errbar) return; errbar.style.display = "block"; errbar.textContent = "Promise error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)); });
 
   const uuid = () => Math.random().toString(36).slice(2, 10);
   const debounce = (fn, ms=400) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
 
-  const palette = ["#60a5fa","#34d399","#fbbf24","#f87171","#a78bfa","#f472b6","#f59e0b","#22d3ee"];
-  const stageColor = (stage, stages) => {
-    const i = Math.max(0, stages.indexOf(stage));
-    return palette[i % palette.length];
-  };
+  // Convert hex (#rrggbb) to rgba with alpha 0.25
+  function hexToRGBA(hex, alpha=0.25) {
+    if (!hex) return `rgba(0,0,0,${alpha})`;
+    const m = hex.replace('#','');
+    const bigint = parseInt(m.length === 3 ? m.split('').map(c=>c+c).join('') : m, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
 
   const API = {
     async load() {
@@ -55,26 +52,24 @@
   };
 
   let state = {
+    companyLogoDataUrl: "",
     roster: ["Alice","Bob","Chris","Dee"],
     stages: ["Bid","Rough-in","Trim","Complete"],
+    stageColors: { "Bid": "#60a5fa", "Rough-in": "#f59e0b", "Trim": "#a78bfa", "Complete": "#34d399" },
     contractors: [
-      { id: uuid(), name: "Acme Mechanical", jobs: [
+      { id: uuid(), name: "Acme Mechanical", logoDataUrl: "", jobs: [
         { id: uuid(), name: "101 - 123 Main St", stage: "Rough-in", crew: ["Alice","Bob"], notes: [
-          { id: uuid(), text: "Job created. Stage: Rough-in. Crew: Alice, Bob", ts: new Date().toISOString() },
-          { id: uuid(), text: "Ducts delivered. Rough inspection Fri.", ts: new Date().toISOString() }
-        ], archived: false, updatedAt: new Date().toISOString() }
+          "Ducts delivered. Rough inspection Fri."
+        ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       ]}
     ],
-    ui: { selectedContractorId: null, selectedJobId: null, showArchived: false, view: "main" } // start with no contractor selected
+    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false }
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
   function toast(msg, ms=1800) {
-    const wrap = $("toast-wrap");
-    if (!wrap) return;
-    const t = document.createElement("div");
-    t.className = "toast";
-    t.textContent = msg;
+    const wrap = $("toast-wrap"); if (!wrap) return;
+    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
     wrap.appendChild(t);
     setTimeout(() => { t.style.opacity = "0"; t.style.transform = "translateY(6px)"; t.style.transition = "all 220ms ease"; }, ms);
     setTimeout(() => wrap.removeChild(t), ms + 260);
@@ -103,43 +98,54 @@
     $("contractor-count").textContent = count === 1 ? "1 contractor" : count + " contractors";
 
     state.contractors.forEach(c => {
-      const el = document.createElement("div");
-      el.className = "contractor" + (c.id === state.ui.selectedContractorId ? " active" : "");
-      const input = document.createElement("input");
-      input.value = c.name;
-      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.target.blur(); } });
-      input.addEventListener("blur", (e) => {
+      const box = document.createElement("div");
+      box.className = "contractor" + (c.id === state.ui.selectedContractorId ? " active" : "");
+
+      const row = document.createElement("div"); row.className = "row";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text"; nameInput.value = c.name;
+      nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+      nameInput.addEventListener("blur", (e) => {
         const val = e.target.value.trim() || "Untitled Contractor";
         if (val !== c.name) { c.name = val; save(); }
       });
 
-      const openBtn = document.createElement("button");
-      openBtn.textContent = "Open";
-      openBtn.addEventListener("click", () => {
-        state.ui.selectedContractorId = c.id;
-        // Do NOT auto-pick a job yet; show tabs only, wait for click (per request)
-        state.ui.selectedJobId = null;
-        renderAll();
-      });
+      const openBtn = document.createElement("button"); openBtn.textContent = "Open";
+      openBtn.addEventListener("click", () => { state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll(); });
 
-      const delBtn = document.createElement("button");
-      delBtn.className = "danger";
-      delBtn.textContent = "✕";
+      const delBtn = document.createElement("button"); delBtn.className = "danger"; delBtn.textContent = "✕";
       delBtn.addEventListener("click", () => {
         if (!confirm("Delete contractor and all jobs?")) return;
         state.contractors = state.contractors.filter(x => x.id !== c.id);
-        if (state.ui.selectedContractorId === c.id) {
-          state.ui.selectedContractorId = null;
-          state.ui.selectedJobId = null;
-        }
+        if (state.ui.selectedContractorId === c.id) { state.ui.selectedContractorId = null; state.ui.selectedJobId = null; }
         save(); renderAll(); toast("Contractor deleted");
       });
 
-      el.appendChild(input);
-      el.appendChild(openBtn);
-      el.appendChild(delBtn);
-      list.appendChild(el);
+      row.appendChild(nameInput); row.appendChild(openBtn); row.appendChild(delBtn);
+      box.appendChild(row);
+
+      // Logo upload when active
+      const logoField = document.createElement("div");
+      logoField.className = "logo-field";
+      const logoLabel = document.createElement("label"); logoLabel.textContent = "Logo (PNG/JPG)";
+      const file = document.createElement("input"); file.type = "file"; file.accept = "image/*";
+      const prev = document.createElement("img"); prev.className = "logo-preview"; prev.style.display = c.logoDataUrl ? "block" : "none"; prev.src = c.logoDataUrl || "";
+      file.addEventListener("change", () => {
+        const f = file.files?.[0]; if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => { c.logoDataUrl = reader.result; prev.src = c.logoDataUrl; prev.style.display = "block"; save(); renderPanel(); toast("Contractor logo updated"); };
+        reader.readAsDataURL(f);
+      });
+      logoField.appendChild(logoLabel); logoField.appendChild(file); logoField.appendChild(prev);
+      box.appendChild(logoField);
+
+      list.appendChild(box);
     });
+  }
+
+  function stageTint(stage) {
+    const hex = state.stageColors[stage] || "#c4c4c4";
+    return hexToRGBA(hex, 0.28);
   }
 
   function renderTabs() {
@@ -163,123 +169,102 @@
     jobs.forEach(j => {
       const el = document.createElement("div");
       el.className = "tab" + (j.id === state.ui.selectedJobId ? " active" : "");
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.style.background = stageColor(j.stage, state.stages);
+      el.style.background = j.id === state.ui.selectedJobId ? "#fff" : stageTint(j.stage);
+      el.style.borderColor = "#d1d5db";
 
-      const label = document.createElement("span");
-      label.className = "label";
-      label.textContent = j.name || "Untitled Job";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = state.stageColors[j.stage] || "#9ca3af";
+      const label = document.createElement("span"); label.className = "label"; label.textContent = j.name || "Untitled Job";
 
-      el.appendChild(dot);
-      el.appendChild(label);
-
-      if (j.archived) {
-        const pill = document.createElement("span");
-        pill.className = "pill";
-        pill.textContent = " Archived";
-        el.appendChild(pill);
-      }
-
-      el.addEventListener("click", () => {
-        state.ui.selectedJobId = j.id;
-        renderAll();
-      });
+      el.appendChild(dot); el.appendChild(label);
+      el.addEventListener("click", () => { state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
 
-  function renderJobFields() {
-    const j = currentJob();
-    const placeholder = $("placeholder");
-    const jobFields = $("job-fields");
+  function renderSettings() {
+    $("roster-input").value = state.roster.join("\n");
+    $("stages-input").value = state.stages.join("\n");
+    const wrap = $("stage-colors"); wrap.innerHTML = "";
+    state.stages.slice(0,10).forEach(stage => {
+      const row = document.createElement("div"); row.className = "row";
+      const label = document.createElement("label"); label.textContent = stage;
+      const picker = document.createElement("input"); picker.type = "color";
+      picker.value = state.stageColors[stage] || "#cccccc";
+      picker.addEventListener("input", () => { state.stageColors[stage] = picker.value; renderTabs(); });
+      row.appendChild(label); row.appendChild(picker); wrap.appendChild(row);
+    });
 
-    if (!currentContractor()) {
-      placeholder.style.display = "flex";
-      jobFields.style.display = "none";
+    // Company logo preview
+    const prev = $("company-logo-preview");
+    if (state.companyLogoDataUrl) { prev.src = state.companyLogoDataUrl; prev.style.display = "block"; }
+    else { prev.style.display = "none"; }
+  }
+
+  function renderPanel() {
+    const landing = $("placeholder-landing"); const companyLogoImg = $("company-logo"); const companyLogoEmpty = $("company-logo-empty");
+    const contractorPanel = $("contractor-logo-panel"); const contractorLogo = $("contractor-logo");
+    const jobFields = $("job-fields"); const jobActions = $("job-actions");
+
+    const c = currentContractor(); const j = currentJob();
+
+    if (!c) {
+      // Landing
+      jobFields.style.display = "none"; contractorPanel.style.display = "none"; landing.style.display = "flex";
+      if (state.companyLogoDataUrl) { companyLogoImg.src = state.companyLogoDataUrl; companyLogoImg.style.display = "block"; companyLogoEmpty.style.display = "none"; }
+      else { companyLogoImg.style.display = "none"; companyLogoEmpty.style.display = "block"; }
       return;
     }
 
-    // Contractor open, but no job selected yet
     if (!j) {
-      placeholder.style.display = "flex";
-      placeholder.textContent = "Select a job tab above, or create one with + Job.";
-      jobFields.style.display = "none";
+      // Contractor selected, no job
+      landing.style.display = "none"; jobFields.style.display = "none";
+      contractorPanel.style.display = "flex";
+      contractorLogo.src = c.logoDataUrl || state.companyLogoDataUrl || "";
       return;
     }
 
-    // Show fields
-    placeholder.style.display = "none";
-    jobFields.style.display = "block";
+    // Job selected
+    landing.style.display = "none"; contractorPanel.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
 
+    // Fields
     $("job-name").value = j?.name || "";
 
-    // Stage
-    const stageSel = $("job-stage");
-    stageSel.innerHTML = "";
-    state.stages.forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s; opt.textContent = s; stageSel.appendChild(opt);
-    });
+    const stageSel = $("job-stage"); stageSel.innerHTML = "";
+    state.stages.forEach(s => { const opt = document.createElement("option"); opt.value = s; opt.textContent = s; stageSel.appendChild(opt); });
     if (j?.stage) stageSel.value = j.stage;
 
-    // Crew chips
-    const crewBox = $("crew-box");
-    crewBox.innerHTML = "";
+    const crewBox = $("crew-box"); crewBox.innerHTML = "";
     const crewSet = new Set(j?.crew || []);
     state.roster.forEach(name => {
       const id = "crew-" + name.replace(/\s+/g, "_");
-      const wrap = document.createElement("label");
-      wrap.className = "chip";
-      wrap.style.display = "inline-flex";
-      wrap.style.alignItems = "center";
-      wrap.style.gap = "6px";
-
-      const cb = document.createElement("input");
-      cb.type = "checkbox"; cb.id = id; cb.value = name;
+      const wrap = document.createElement("label"); wrap.className = "chip"; wrap.style.display = "inline-flex"; wrap.style.alignItems = "center"; wrap.style.gap = "6px";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.id = id; cb.value = name;
       cb.checked = crewSet.has(name);
       cb.addEventListener("change", () => {
         if (!j) return;
         if (cb.checked) { if (!j.crew.includes(name)) j.crew.push(name); }
         else { j.crew = j.crew.filter(x => x !== name); }
-        markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
-        toast("Crew updated");
+        markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); toast("Crew updated");
       });
-
       const txt = document.createElement("span"); txt.textContent = name;
-      wrap.appendChild(cb); wrap.appendChild(txt);
-      crewBox.appendChild(wrap);
+      wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    // Notes list
-    const list = $("notes-list");
-    list.innerHTML = "";
-    const notes = (j?.notes || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
-    notes.forEach(n => {
-      const item = document.createElement("div");
-      item.className = "note-item";
-      const d = document.createElement("div");
-      d.className = "note-date";
-      d.textContent = new Date(n.ts).toLocaleString();
-      const body = document.createElement("div");
-      body.textContent = n.text;
-      item.appendChild(d); item.appendChild(body);
-      list.appendChild(item);
+    const list = $("notes-list"); list.innerHTML = "";
+    (j.notes || []).forEach(text => {
+      const item = document.createElement("div"); item.className = "note-item";
+      const body = document.createElement("div"); body.textContent = text;
+      item.appendChild(body); list.appendChild(item);
     });
 
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
-
-    // Settings textareas (on settings view only)
-    $("roster-input").value = state.roster.join("\n");
-    $("stages-input").value = state.stages.join("\n");
   }
 
   function renderAll() {
     showView(state.ui.view);
     renderContractors();
     renderTabs();
-    renderJobFields();
-    $("show-archived").checked = !!state.ui.showArchived;
+    renderPanel();
     status("Ready");
   }
 
@@ -287,7 +272,7 @@
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { roster: state.roster, stages: state.stages, contractors: state.contractors, version: 7 };
+    const payload = { ...state, version: 9 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");
@@ -299,11 +284,34 @@
   function wire() {
     statusEl = $("status");
 
-    $("to-settings").addEventListener("click", () => { showView("settings"); });
+    $("to-settings").addEventListener("click", () => { renderSettings(); showView("settings"); });
     $("to-main").addEventListener("click", () => { showView("main"); });
 
+    $("save-settings").addEventListener("click", () => {
+      const roster = $("roster-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      const stages = $("stages-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      if (roster.length) state.roster = roster;
+      if (stages.length) state.stages = stages;
+      // Refresh stage colors for new/removed stages
+      const existing = { ...state.stageColors };
+      const defaults = ["#60a5fa","#34d399","#fbbf24","#f87171","#a78bfa","#f472b6","#f59e0b","#22d3ee","#93c5fd","#86efac"];
+      state.stages.slice(0,10).forEach((s,i) => { if (!existing[s]) existing[s] = defaults[i % defaults.length]; });
+      Object.keys(existing).forEach(k => { if (!state.stages.includes(k)) delete existing[k]; });
+      state.stageColors = existing;
+      save(); renderSettings(); renderTabs(); renderPanel(); toast("Settings saved");
+    });
+
+    // Company logo upload
+    const companyFile = $("company-logo-file");
+    companyFile.addEventListener("change", () => {
+      const f = companyFile.files?.[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => { state.companyLogoDataUrl = reader.result; $("company-logo-preview").src = state.companyLogoDataUrl; $("company-logo-preview").style.display = "block"; save(); renderPanel(); toast("Company logo updated"); };
+      reader.readAsDataURL(f);
+    });
+
     $("add-contractor").addEventListener("click", () => {
-      const c = { id: uuid(), name: "New Contractor", jobs: [] };
+      const c = { id: uuid(), name: "New Contractor", logoDataUrl: "", jobs: [] };
       state.contractors.unshift(c);
       state.ui.selectedContractorId = c.id;
       state.ui.selectedJobId = null;
@@ -313,14 +321,10 @@
 
     $("add-job").addEventListener("click", () => {
       const c = currentContractor(); if (!c) { alert("Open a contractor first."); return; }
-      const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: [], archived: false, updatedAt: new Date().toISOString() };
-      // initial note for creation
-      const initText = `Job created. Stage: ${j.stage}${j.crew.length ? `. Crew: ${j.crew.join(", ")}` : ""}`;
-      j.notes.push({ id: uuid(), text: initText, ts: new Date().toISOString() });
-
+      const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      renderTabs(); renderJobFields(); save();
+      renderTabs(); renderPanel(); save();
       toast("Job created");
     });
 
@@ -343,43 +347,22 @@
       const j = currentJob(); if (!j) return;
       const val = e.target.value.trim();
       if (val !== j.name) {
-        j.name = val;
-        markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+        j.name = val; markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       }
     });
     $("job-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 
     $("job-stage").addEventListener("change", e => {
       const j = currentJob(); if (!j) return;
-      j.stage = e.target.value;
-      // append stage-change note
-      j.notes = j.notes || [];
-      j.notes.push({ id: uuid(), text: `Stage changed to ${j.stage}`, ts: new Date().toISOString() });
-      markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
-      renderTabs(); // update tab color
-      toast("Stage updated");
+      j.stage = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); renderTabs(); toast("Stage updated");
     });
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
-      const txt = $("new-note").value.trim();
-      if (!txt) return;
-      j.notes = j.notes || [];
-      j.notes.push({ id: uuid(), text: txt, ts: new Date().toISOString() });
-      $("new-note").value = "";
-      markUpdated(j); save(); renderJobFields();
-      toast("Note added");
+      const txt = $("new-note").value.trim(); if (!txt) return;
+      j.notes = j.notes || []; j.notes.push(txt); $("new-note").value = "";
+      markUpdated(j); save(); renderPanel(); toast("Note added");
     });
-
-    $("save-settings").addEventListener("click", () => {
-      const roster = $("roster-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
-      const stages = $("stages-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
-      state.roster = roster.length ? roster : state.roster;
-      state.stages = stages.length ? stages : state.stages;
-      save(); renderJobFields(); renderTabs(); toast("Settings saved");
-    });
-
-    $("show-archived").addEventListener("change", e => { state.ui.showArchived = !!e.target.checked; renderTabs(); });
 
     $("refresh-btn").addEventListener("click", async () => {
       const data = await API.load();
@@ -393,15 +376,9 @@
     status("Loading…");
     const data = await API.load();
     if (data) state = { ...state, ...data };
-    // On boot, do NOT auto select contractor/job
-    state.ui.selectedContractorId ??= null;
-    state.ui.selectedJobId = null;
+    state.ui.selectedContractorId ??= null; state.ui.selectedJobId = null;
     renderAll();
   }
 
-  window.addEventListener("DOMContentLoaded", () => {
-    statusEl = $("status");
-    wire();
-    boot();
-  });
+  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status"); wire(); boot(); });
 })();

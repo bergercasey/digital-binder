@@ -20,7 +20,7 @@
     header { padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 10; }
     h1 { margin: 0 0 6px; text-align: center; font-size: 20px; font-weight: 700; }
     .toolbar { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
-    button, select, input[type="text"], textarea {
+    button, select, input[type="text"], textarea, input[type="file"], input[type="color"] {
       font: inherit;
       padding: 6px 10px;
       border: 1px solid var(--line);
@@ -28,21 +28,27 @@
       background: #fff;
       cursor: pointer;
     }
-    button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
-    button.ghost { background: transparent; border-color: var(--line); }
+    input[type="text"], textarea, select, input[type="color"] { cursor:text; }
+    input[type="file"] { padding: 6px; }
+    button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); cursor:pointer; }
+    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; cursor:pointer; }
+    button.ghost { background: transparent; border-color: var(--line); cursor:pointer; }
     .status { text-align:center; font-size:12px; color: var(--muted); margin-top: 6px; }
     main { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 100px); }
     aside { border-right: 1px solid var(--line); padding: var(--pad); }
     .aside-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; }
     .list { display:flex; flex-direction:column; gap:6px; }
-    .contractor { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius: 8px; cursor:pointer; }
+    .contractor { display:flex; flex-direction:column; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius: 8px; }
     .contractor.active { outline: 2px solid var(--accent); }
-    .contractor input { width: 100%; border:none; outline:none; }
+    .contractor .row { display:flex; gap:6px; align-items:center; }
+    .contractor input[type="text"] { width: 100%; border:none; outline:none; }
+    .logo-field { display:none; }
+    .contractor.active .logo-field { display:flex; flex-direction:column; gap:4px; }
+    .contractor .logo-preview { max-height: 60px; max-width: 100%; object-fit: contain; }
     section.content { padding: var(--pad); }
     .top-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom: 10px; }
     /* Notebook Tabs */
-    .tabs-wrap { width:100%; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+    .tabs-wrap { width:100%; border-bottom: 2px solid var(--line); padding-bottom: 4px; min-height: 42px; }
     .tabs { display:flex; gap:4px; flex-wrap:wrap; align-items:flex-end; }
     .tab {
       position: relative;
@@ -57,14 +63,8 @@
       transform: translateY(2px);
       box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
-    .tab.active {
-      background: #fff;
-      transform: translateY(0);
-      z-index: 2;
-    }
-    .tab .pill { font-size: 11px; opacity: 0.85; }
+    .tab.active { background: #fff; transform: translateY(0); z-index: 2; }
     .tab .label { font-weight: 600; }
-    /* Color dot inside tab */
     .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
     .fields { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
     .field { display:flex; flex-direction:column; gap:6px; }
@@ -83,6 +83,9 @@
       height: 50vh; color: var(--muted); border: 2px dashed var(--line); border-radius: 12px;
       background: #fafafa;
     }
+    .placeholder img { max-width: 420px; opacity: .85; }
+    .logo-panel { display:flex; align-items:center; justify-content:center; height: 220px; border: 2px dashed var(--line); border-radius: 12px; background:#fafafa; margin-top:12px; }
+    .logo-panel img { max-height: 200px; max-width: 90%; object-fit: contain; }
     /* Toasts */
     .toast-wrap { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; flex-direction: column; z-index: 9999; pointer-events: none; }
     .toast { pointer-events: auto; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-size: 14px; min-width: 200px; text-align: center; }
@@ -121,23 +124,32 @@
       <div class="tabs-wrap">
         <div class="tabs" id="job-tabs"></div>
       </div>
-      <div class="top-row" style="margin-top:8px;">
-        <div class="row">
-          <div class="archive-toggle">
-            <input type="checkbox" id="show-archived"/>
-            <label for="show-archived">Show archived</label>
-          </div>
-          <button class="ghost" id="archive-job">Archive</button>
-          <button class="danger" id="delete-job">Delete</button>
-        </div>
-      </div>
 
       <div id="job-panel">
-        <div class="placeholder" id="placeholder">
-          Select a contractor to view jobs.
+        <!-- Landing: company logo only -->
+        <div class="placeholder" id="placeholder-landing">
+          <img id="company-logo" alt="Company logo" style="display:none;"/>
+          <div id="company-logo-empty">Upload a company logo in Settings.</div>
         </div>
 
-        <div id="job-fields" style="display:none;">
+        <!-- Contractor no job: show contractor logo -->
+        <div class="logo-panel" id="contractor-logo-panel" style="display:none;">
+          <img id="contractor-logo" alt="Contractor logo"/>
+        </div>
+
+        <!-- Job fields -->
+        <div id="job-fields" style="display:none; margin-top:12px;">
+          <div class="top-row" id="job-actions" style="display:none;">
+            <div class="row">
+              <div class="archive-toggle">
+                <input type="checkbox" id="show-archived"/>
+                <label for="show-archived">Show archived</label>
+              </div>
+              <button class="ghost" id="archive-job">Archive</button>
+              <button class="danger" id="delete-job">Delete</button>
+            </div>
+          </div>
+
           <div class="fields">
             <div class="field">
               <label>Job Name</label>
@@ -153,7 +165,7 @@
             </div>
           </div>
 
-          <!-- Notes log -->
+          <!-- Notes (no per-entry timestamps) -->
           <div style="margin-top:14px;">
             <div class="field">
               <label>Add Note</label>
@@ -177,6 +189,11 @@
       <h2 style="margin:0 0 10px;">Settings</h2>
       <div class="fields">
         <div class="field">
+          <label>Company Logo (PNG/JPG)</label>
+          <input type="file" id="company-logo-file" accept="image/*"/>
+          <img id="company-logo-preview" alt="Preview" style="max-height:120px; display:none; margin-top:6px;"/>
+        </div>
+        <div class="field">
           <label>Roster (one per line)</label>
           <textarea id="roster-input" placeholder="e.g., Alice
 Bob
@@ -190,10 +207,14 @@ Trim
 Complete"></textarea>
         </div>
       </div>
+
+      <h3 style="margin:14px 0 6px;">Stage Colors</h3>
+      <div id="stage-colors" class="list"></div>
+
       <div class="row" style="margin-top:8px;">
         <button id="save-settings" class="primary">Save Settings</button>
         <div class="spacer"></div>
-        <span class="muted">These power the Stage and Crew choices.</span>
+        <span class="muted">Pick up to 10 colors; tabs use ~25% transparency so labels stay readable.</span>
       </div>
     </section>
   </main>
