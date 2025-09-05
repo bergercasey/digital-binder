@@ -57,7 +57,6 @@
     .spacer { flex:1; }
     .archive-toggle { display:flex; align-items:center; gap:6px; }
     .muted { color: var(--muted); }
-    .settings { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
     .chips { display:flex; gap:6px; flex-wrap:wrap; }
     .chip { padding: 4px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; }
     @media (max-width: 900px) {
@@ -77,29 +76,14 @@
       z-index: 9999;
       pointer-events: none;
     }
-    .toast {
-      pointer-events: auto;
-      padding: 10px 14px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.12);
-      font-size: 14px;
-      min-width: 200px;
-      text-align: center;
-    }
+    .toast { pointer-events: auto; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-size: 14px; min-width: 200px; text-align: center; }
     /* Error banner */
-    .errbar {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      background: #fee2e2;
-      color: #991b1b;
-      padding: 8px 12px;
-      font-size: 13px;
-      border-bottom: 1px solid #fecaca;
-      z-index: 10000;
-      display: none;
-    }
+    .errbar { position: fixed; top: 0; left: 0; right: 0; background: #fee2e2; color: #991b1b; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #fecaca; z-index: 10000; display: none; }
+    /* Views */
+    .view { display: none; }
+    .view.active { display: block; }
+    .note-item { padding:10px; border:1px solid var(--line); border-radius:8px; }
+    .note-date { font-size:12px; color:var(--muted); margin-bottom:4px; }
   </style>
 </head>
 <body>
@@ -109,7 +93,9 @@
     <h1>HVAC Digital Binder</h1>
     <div class="toolbar">
       <button class="primary" id="add-contractor">+ Contractor</button>
-      <button class="ghost" id="settings-btn">Settings</button>
+      <button class="ghost" id="add-job">+ Job</button>
+      <button class="ghost" id="to-settings">Settings</button>
+      <button class="ghost" id="to-main" style="display:none;">Back to Jobs</button>
       <button class="ghost" id="refresh-btn">Reload</button>
       <div class="spacer"></div>
     </div>
@@ -125,7 +111,8 @@
       <div class="list" id="contractor-list"></div>
     </aside>
 
-    <section class="content">
+    <!-- MAIN VIEW -->
+    <section class="content view active" id="view-main">
       <div class="top-row">
         <div class="tabs" id="job-tabs"></div>
         <div class="row">
@@ -133,7 +120,6 @@
             <input type="checkbox" id="show-archived"/>
             <label for="show-archived">Show archived</label>
           </div>
-          <button class="ghost" id="add-job">+ Job</button>
           <button class="ghost" id="archive-job">Archive</button>
           <button class="danger" id="delete-job">Delete</button>
         </div>
@@ -152,46 +138,53 @@
           <label>Crew</label>
           <div id="crew-box" class="chips"></div>
         </div>
+      </div>
+
+      <!-- Notes log -->
+      <div style="margin-top:14px;">
         <div class="field">
-          <label>Notes</label>
-          <textarea id="job-notes" placeholder="Updates, materials, inspections, dates..."></textarea>
+          <label>Add Note</label>
+          <textarea id="new-note" placeholder="What changed? Materials, inspections, dates..."></textarea>
         </div>
-      </div>
+        <div class="row">
+          <button id="add-note" class="primary">Add Note</button>
+          <div class="spacer"></div>
+          <div class="muted">Last updated: <span id="job-updated">—</span></div>
+        </div>
 
-      <div class="row" style="margin-top:10px;">
-        <div class="muted">Last updated: <span id="job-updated">—</span></div>
-        <div class="spacer"></div>
-        <button id="duplicate-job" class="ghost">Duplicate</button>
+        <h3 style="margin:14px 0 6px;">Notes</h3>
+        <div id="notes-list" class="list"></div>
       </div>
+    </section>
 
-      <div class="settings" id="settings-section">
-        <h3 style="margin:0 0 6px;">Settings</h3>
-        <div class="fields">
-          <div class="field">
-            <label>Roster (one per line)</label>
-            <textarea id="roster-input" placeholder="e.g., Alice
+    <!-- SETTINGS VIEW -->
+    <section class="content view" id="view-settings">
+      <h2 style="margin:0 0 10px;">Settings</h2>
+      <div class="fields">
+        <div class="field">
+          <label>Roster (one per line)</label>
+          <textarea id="roster-input" placeholder="e.g., Alice
 Bob
 Chris"></textarea>
-          </div>
-          <div class="field">
-            <label>Stages (one per line)</label>
-            <textarea id="stages-input" placeholder="e.g., Bid
+        </div>
+        <div class="field">
+          <label>Stages (one per line)</label>
+          <textarea id="stages-input" placeholder="e.g., Bid
 Rough-in
 Trim
 Complete"></textarea>
-          </div>
         </div>
-        <div class="row" style="margin-top:8px;">
-          <button id="save-settings" class="primary">Save Settings</button>
-          <span class="muted">These power the dropdowns above.</span>
-        </div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="save-settings" class="primary">Save Settings</button>
+        <div class="spacer"></div>
+        <span class="muted">These power the Stage and Crew choices.</span>
       </div>
     </section>
   </main>
 
   <div class="toast-wrap" id="toast-wrap" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Load external JS (no inline script, uses defer so DOM is ready) -->
   <script defer src="app.js"></script>
 </body>
 </html>

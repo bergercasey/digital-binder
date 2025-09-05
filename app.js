@@ -1,9 +1,9 @@
-/* app.js: all logic moved here to avoid inline-script CSP issues */
+/* app.js v3.0 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
 
-  // Visible error banner for any JS error
+  // Error banner
   const errbar = $("errbar");
   window.addEventListener("error", (e) => {
     if (!errbar) return;
@@ -53,10 +53,12 @@
     stages: ["Bid","Rough-in","Trim","Complete"],
     contractors: [
       { id: uuid(), name: "Acme Mechanical", jobs: [
-        { id: uuid(), name: "123 Main St", stage: "Rough-in", crew: ["Alice","Bob"], notes: "Ducts delivered. Rough inspection Fri.", archived: false, updatedAt: new Date().toISOString() }
+        { id: uuid(), name: "123 Main St", stage: "Rough-in", crew: ["Alice","Bob"], notes: [
+          { id: uuid(), text: "Ducts delivered. Rough inspection Fri.", ts: new Date().toISOString() }
+        ], archived: false, updatedAt: new Date().toISOString() }
       ]}
     ],
-    ui: { selectedContractorId: null, selectedJobId: null, showArchived: false }
+    ui: { selectedContractorId: null, selectedJobId: null, showArchived: false, view: "main" } // main | settings
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
@@ -67,12 +69,15 @@
     t.className = "toast";
     t.textContent = msg;
     wrap.appendChild(t);
-    setTimeout(() => {
-      t.style.opacity = "0";
-      t.style.transform = "translateY(6px)";
-      t.style.transition = "all 220ms ease";
-    }, ms);
+    setTimeout(() => { t.style.opacity = "0"; t.style.transform = "translateY(6px)"; t.style.transition = "all 220ms ease"; }, ms);
     setTimeout(() => wrap.removeChild(t), ms + 260);
+  }
+
+  function showView(name) {
+    state.ui.view = name;
+    $("view-main").classList.toggle("active", name === "main");
+    $("view-settings").classList.toggle("active", name === "settings");
+    $("to-main").style.display = name === "settings" ? "inline-block" : "none";
   }
 
   function currentContractor() { return state.contractors.find(c => c.id === state.ui.selectedContractorId) || null; }
@@ -87,33 +92,45 @@
     state.contractors.forEach(c => {
       const el = document.createElement("div");
       el.className = "contractor" + (c.id === state.ui.selectedContractorId ? " active" : "");
-      el.innerHTML = `
-        <input value="${c.name}" />
-        <button data-act="select">Open</button>
-        <button class="danger" data-act="remove">✕</button>
-      `;
-      el.querySelector("input").addEventListener("input", debounce(e => {
-        c.name = e.target.value.trim() || "Untitled Contractor";
-        save();
-        renderContractors();
-        renderTabs();
-      }));
-      el.querySelector('[data-act="select"]').addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.value = c.name;
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.target.blur(); }
+      });
+      input.addEventListener("blur", (e) => {
+        const val = e.target.value.trim() || "Untitled Contractor";
+        if (val !== c.name) {
+          c.name = val;
+          save();
+        }
+        // Don't re-render here to avoid losing focus while typing
+      });
+
+      const openBtn = document.createElement("button");
+      openBtn.textContent = "Open";
+      openBtn.addEventListener("click", () => {
         state.ui.selectedContractorId = c.id;
         const first = c.jobs.find(j => !j.archived) || c.jobs[0];
         state.ui.selectedJobId = first ? first.id : null;
         renderAll();
       });
-      el.querySelector('[data-act="remove"]').addEventListener("click", () => {
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "danger";
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", () => {
         if (!confirm("Delete contractor and all jobs?")) return;
         state.contractors = state.contractors.filter(x => x.id !== c.id);
         if (state.ui.selectedContractorId === c.id) {
           state.ui.selectedContractorId = state.contractors[0]?.id || null;
           state.ui.selectedJobId = state.contractors[0]?.jobs[0]?.id || null;
         }
-        save(); renderAll();
-        toast("Contractor deleted");
+        save(); renderAll(); toast("Contractor deleted");
       });
+
+      el.appendChild(input);
+      el.appendChild(openBtn);
+      el.appendChild(delBtn);
       list.appendChild(el);
     });
   }
@@ -140,9 +157,8 @@
   function renderJobFields() {
     const j = currentJob();
     $("job-name").value = j?.name || "";
-    $("job-notes").value = j?.notes || "";
-    $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
 
+    // Stage
     const stageSel = $("job-stage");
     stageSel.innerHTML = "";
     state.stages.forEach(s => {
@@ -151,6 +167,7 @@
     });
     if (j?.stage) stageSel.value = j.stage;
 
+    // Crew chips
     const crewBox = $("crew-box");
     crewBox.innerHTML = "";
     const crewSet = new Set(j?.crew || []);
@@ -163,8 +180,7 @@
       wrap.style.gap = "6px";
 
       const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.id = id; cb.value = name;
+      cb.type = "checkbox"; cb.id = id; cb.value = name;
       cb.checked = crewSet.has(name);
       cb.addEventListener("change", () => {
         if (!j) return;
@@ -179,11 +195,31 @@
       crewBox.appendChild(wrap);
     });
 
+    // Notes list
+    const list = $("notes-list");
+    list.innerHTML = "";
+    const notes = (j?.notes || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
+    notes.forEach(n => {
+      const item = document.createElement("div");
+      item.className = "note-item";
+      const d = document.createElement("div");
+      d.className = "note-date";
+      d.textContent = new Date(n.ts).toLocaleString();
+      const body = document.createElement("div");
+      body.textContent = n.text;
+      item.appendChild(d); item.appendChild(body);
+      list.appendChild(item);
+    });
+
+    $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
+
+    // Settings textareas (only used in settings view)
     $("roster-input").value = state.roster.join("\n");
     $("stages-input").value = state.stages.join("\n");
   }
 
   function renderAll() {
+    showView(state.ui.view);
     renderContractors();
     renderTabs();
     renderJobFields();
@@ -195,7 +231,7 @@
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { roster: state.roster, stages: state.stages, contractors: state.contractors, version: 5 };
+    const payload = { roster: state.roster, stages: state.stages, contractors: state.contractors, version: 6 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");
@@ -206,6 +242,9 @@
 
   function wire() {
     statusEl = $("status");
+
+    $("to-settings").addEventListener("click", () => { showView("settings"); });
+    $("to-main").addEventListener("click", () => { showView("main"); });
 
     $("add-contractor").addEventListener("click", () => {
       const c = { id: uuid(), name: "New Contractor", jobs: [] };
@@ -218,7 +257,7 @@
 
     $("add-job").addEventListener("click", () => {
       const c = currentContractor(); if (!c) { alert("Add a contractor first."); return; }
-      const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: "", archived: false, updatedAt: new Date().toISOString() };
+      const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: [], archived: false, updatedAt: new Date().toISOString() };
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
       renderTabs(); renderJobFields(); save();
@@ -250,22 +289,39 @@
       toast("Job duplicated");
     });
 
-    $("job-name").addEventListener("input", debounce(e => {
-      const j = currentJob(); if (!j) return; j.name = e.target.value; markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
-    }));
-    $("job-notes").addEventListener("input", debounce(e => {
-      const j = currentJob(); if (!j) return; j.notes = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
-    }));
+    $("job-name").addEventListener("blur", (e) => {
+      const j = currentJob(); if (!j) return;
+      const val = e.target.value.trim();
+      if (val !== j.name) {
+        j.name = val;
+        markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+      }
+    });
+    $("job-name").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+    });
+
     $("job-stage").addEventListener("change", e => {
       const j = currentJob(); if (!j) return; j.stage = e.target.value; markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       toast("Stage updated");
     });
 
+    $("add-note").addEventListener("click", () => {
+      const j = currentJob(); if (!j) return;
+      const txt = $("new-note").value.trim();
+      if (!txt) return;
+      j.notes = j.notes || [];
+      j.notes.push({ id: uuid(), text: txt, ts: new Date().toISOString() });
+      $("new-note").value = "";
+      markUpdated(j); save(); renderJobFields();
+      toast("Note added");
+    });
+
     $("save-settings").addEventListener("click", () => {
       const roster = $("roster-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
       const stages = $("stages-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
-      if (roster.length) state.roster = roster;
-      if (stages.length) state.stages = stages;
+      state.roster = roster.length ? roster : state.roster;
+      state.stages = stages.length ? stages : state.stages;
       save(); renderJobFields(); toast("Settings saved");
     });
 
@@ -273,16 +329,11 @@
 
     $("refresh-btn").addEventListener("click", async () => {
       const data = await API.load();
-      if (data) { state = { ...state, ...data, ui: state.ui || {} }; }
+      if (data) { state = { ...state, ...data, ui: { ...state.ui, ...(state.ui || {}) } }; }
       state.ui.selectedContractorId ??= state.contractors[0]?.id || null;
       state.ui.selectedJobId ??= state.contractors[0]?.jobs[0]?.id || null;
       renderAll();
       toast("Reloaded");
-    });
-
-    $("settings-btn").addEventListener("click", () => {
-      document.getElementById("settings-section").scrollIntoView({ behavior: "smooth", block: "start" });
-      toast("Settings");
     });
   }
 
