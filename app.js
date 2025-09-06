@@ -1,4 +1,4 @@
-/* app.js v3.9 */
+/* app.js v3.10 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
@@ -118,7 +118,7 @@
         if (val !== c.name) { c.name = val; save(); renderContractors(); }
       });
 
-      // Open on double‑click anywhere in the card
+      // Open on double‑click
       box.addEventListener("dblclick", () => { state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll(); });
 
       box.appendChild(nameInput);
@@ -221,6 +221,7 @@
   function renderPanel() {
     const landing = $("placeholder-landing"); const companyLogoImg = $("company-logo"); const companyLogoEmpty = $("company-logo-empty");
     const contractorPanel = $("contractor-logo-panel"); const contractorLogo = $("contractor-logo");
+    const contractorControls = $("contractor-controls");
     const contractorLogoFile = $("contractor-logo-file"); const deleteContractorBtn = $("delete-contractor");
     const jobFields = $("job-fields"); const jobActions = $("job-actions");
 
@@ -228,7 +229,7 @@
 
     if (!c) {
       // Landing
-      jobFields.style.display = "none"; contractorPanel.style.display = "none"; landing.style.display = "flex";
+      jobFields.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; landing.style.display = "flex";
       if (state.companyLogoDataUrl) { companyLogoImg.src = state.companyLogoDataUrl; companyLogoImg.style.display = "block"; companyLogoEmpty.style.display = "none"; }
       else { companyLogoImg.style.display = "none"; companyLogoEmpty.style.display = "block"; }
       return;
@@ -237,7 +238,7 @@
     if (!j) {
       // Contractor selected, no job
       landing.style.display = "none"; jobFields.style.display = "none";
-      contractorPanel.style.display = "flex";
+      contractorPanel.style.display = "flex"; contractorControls.style.display = "flex";
       contractorLogo.src = c.logoDataUrl || state.companyLogoDataUrl || "";
       // Wire logo picker
       contractorLogoFile.onchange = () => {
@@ -257,7 +258,7 @@
     }
 
     // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
 
     // Fields
     $("job-name").value = j?.name || "";
@@ -314,7 +315,7 @@
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 14 };
+    const payload = { ...state, version: 15 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");

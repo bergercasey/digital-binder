@@ -42,7 +42,6 @@
     .contractor { display:flex; gap:6px; align-items:center; padding:4px 6px; border:1px solid var(--line); border-radius: 8px; cursor:pointer; }
     .contractor.active { outline: 2px solid var(--accent); }
     .contractor input[type="text"] { width: 100%; border:none; outline:none; font-size: 14px; padding: 4px 6px; }
-    .contractor-tools { display:none; }
     section.content { padding: var(--pad); }
     .top-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom: 10px; }
     /* Notebook Tabs */
@@ -80,13 +79,13 @@
     .placeholder {
       display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center;
       height: 60vh; color: var(--muted); border: 2px dashed var(--line); border-radius: 12px;
-      background: #fafafa; padding:16px;
+      background: #fafafa; padding:0;
     }
-    .placeholder img { max-width: 85vw; max-height: 48vh; width: auto; height: auto; object-fit: contain; }
+    .placeholder img { width: 100%; height: 100%; object-fit: cover; }
     /* Contractor "home" panel */
-    .logo-panel { position: relative; display:flex; align-items:center; justify-content:center; height: 280px; border: 2px dashed var(--line); border-radius: 12px; background:#fafafa; margin-top:12px; }
-    .logo-panel img { max-height: 240px; max-width: 90%; object-fit: contain; }
-    .logo-controls { position: absolute; right: 10px; bottom: 10px; display:flex; gap:6px; align-items:center; background:#ffffffcc; padding:6px; border:1px solid var(--line); border-radius:8px; }
+    .logo-panel { display:flex; align-items:center; justify-content:center; height: 320px; border: 2px dashed var(--line); border-radius: 12px; background:#fafafa; margin-top:12px; }
+    .logo-panel img { max-height: 280px; max-width: 90%; object-fit: contain; }
+    .logo-controls { display:flex; gap:8px; align-items:center; margin-top: 10px; }
     /* Notes */
     .note-item { padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
     .note-date { font-size:12px; color:var(--muted); margin-bottom:4px; }
@@ -132,16 +131,20 @@
         <div class="placeholder" id="placeholder-landing">
           <img id="company-logo" alt="Company logo" style="display:none;"/>
           <div id="company-logo-empty">Upload a company logo in Settings.</div>
-          <div class="muted" style="font-size:12px;">Use the header search to jump to a job.</div>
+          <div class="muted" style="font-size:12px; padding:8px;">Use the header search to jump to a job.</div>
         </div>
+
+        <!-- Contractor home: logo only, controls BELOW -->
         <div class="logo-panel" id="contractor-logo-panel" style="display:none;">
           <img id="contractor-logo" alt="Contractor logo"/>
-          <div class="logo-controls">
-            <label class="muted" style="font-size:12px;">Logo:</label>
-            <input type="file" id="contractor-logo-file" accept="image/*"/>
-            <button class="danger" id="delete-contractor">Delete Contractor</button>
-          </div>
         </div>
+        <div class="logo-controls" id="contractor-controls" style="display:none;">
+          <label class="muted" style="font-size:12px;">Logo:</label>
+          <input type="file" id="contractor-logo-file" accept="image/*"/>
+          <button class="danger" id="delete-contractor">Delete Contractor</button>
+        </div>
+
+        <!-- Job fields -->
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
             <div class="row"><div class="archive-toggle"><input type="checkbox" id="show-archived"/><label for="show-archived">Show archived</label></div><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
