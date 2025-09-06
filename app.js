@@ -398,6 +398,8 @@
     let x = escapeHtml(s);
     // bold **text**
     x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>');
+    // highlight ==text==
+    x = x.replace(/==(.+?)==/g, '<mark>$1<\/mark>');
     // underline __text__
     x = x.replace(/__(.+?)__/g, '<u>$1<\/u>');
     // italic _text_ (avoid __)
@@ -444,6 +446,7 @@ function renderAll() {
     const boldBtn = $("note-bold"); if (boldBtn) boldBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "**"); });
     const italicBtn = $("note-italic"); if (italicBtn) italicBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "_"); });
     const underlineBtn = $("note-underline"); if (underlineBtn) underlineBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "__"); });
+    const highlightBtn = $("note-highlight"); if (highlightBtn) highlightBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "=="); });
     const bulletBtn = $("note-bullet"); if (bulletBtn) bulletBtn.addEventListener("click", () => {
       const el = $("new-note"); if (!el) return;
       const start = el.selectionStart; const end = el.selectionEnd;
@@ -718,6 +721,7 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     const boldBtn = $("note-bold"); if (boldBtn) boldBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "**"); });
     const italicBtn = $("note-italic"); if (italicBtn) italicBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "_"); });
     const underlineBtn = $("note-underline"); if (underlineBtn) underlineBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "__"); });
+    const highlightBtn = $("note-highlight"); if (highlightBtn) highlightBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "=="); });
     const bulletBtn = $("note-bullet"); if (bulletBtn) bulletBtn.addEventListener("click", () => {
       const el = $("new-note"); if (!el) return;
       const start = el.selectionStart; const end = el.selectionEnd;

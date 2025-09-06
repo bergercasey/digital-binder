@@ -100,6 +100,8 @@
   .note-text { white-space: pre-wrap; }
   .note-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin: 4px 0 6px; }
   .note-toolbar button { padding: 4px 8px; font-size: 12px; cursor: pointer; }
+
+  #new-note { min-height: 140px; font-size: 14px; line-height: 1.35; padding: 8px; }
 </style>
 </head>
 <body>
@@ -168,9 +170,10 @@
   <button id="note-italic" title="Italic (wrap _ _)"><em>I</em></button>
   <button id="note-underline" title="Underline (wrap __ __)"><u>U</u></button>
   <button id="note-bullet" title="Bullet list (insert - )">• List</button>
+  <button id="note-highlight" title="Highlight (wrap == ==)">HL</button>
 </div>
 <div class="muted" style="font-size:11px;margin-bottom:4px;">Enter=new line · Tab=indent · Shift+Tab=outdent · Supports **bold**, _italic_, __underline__</div>
-<textarea id="new-note" placeholder="What changed? Materials, inspections, dates..."></textarea></div>
+\1 rows="6"></textarea></div>
             <div class="row"><button id="add-note" class="primary">Add Note</button><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
             <h3 style="margin:14px 0 6px;">Log</h3><div id="notes-list" class="list"></div>
           </div>
