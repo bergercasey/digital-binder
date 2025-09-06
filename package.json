@@ -1,8 +1,1 @@
-{
-  "name": "digital-binder",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@netlify/blobs": "^6.3.0"
-  }
-}
+{"name": "digital-binder", "private": true, "type": "module", "dependencies": {"@netlify/blobs": "^6.3.0"}}
