@@ -102,6 +102,13 @@
   .note-toolbar button { padding: 4px 8px; font-size: 12px; cursor: pointer; }
 
   #new-note { min-height: 140px; font-size: 14px; line-height: 1.35; padding: 8px; }
+
+  /* Make Add Note controls span the wide column in the .field grid */
+  #add-note-field .note-toolbar,
+  #add-note-field #new-note,
+  #add-note-field .note-hint { grid-column: 2 / -1; width: 100%; }
+  #add-note-field #new-note { min-height: 160px; }
+
 </style>
 </head>
 <body>
