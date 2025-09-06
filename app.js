@@ -278,7 +278,9 @@
     }
 
     // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block"; (function(){ const fieldsEl = document.querySelector("#job-fields .fields"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block"; (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
+    // Sync Edit label
+    (function(){ const b=$("edit-job"); if(b){ b.textContent = state.ui.editing ? "Done" : "Edit Job"; } })();
 
     // Fields
     $("job-name").value = j?.name || "";
