@@ -166,7 +166,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { state.ui.editing = false; state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { state.ui.editing = false; state.ui.editing = false; state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -278,7 +278,7 @@
     }
 
     // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = state.ui.editing ? "block" : "none"; jobActions.style.display = "block"; renderJobSummary(j);
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block"; (function(){ const fieldsEl = document.querySelector("#job-fields .fields"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
 
     // Fields
     $("job-name").value = j?.name || "";
@@ -506,7 +506,7 @@ function renderAll() {
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      state.ui.editing = true; renderTabs(); renderPanel(); save();
+      state.ui.editing = true; state.ui.editing = true; renderTabs(); renderPanel(); save();
       toast("Job created");
     });
 
