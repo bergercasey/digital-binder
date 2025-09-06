@@ -120,7 +120,9 @@
 
       // Open on SINGLE CLICK (ignore clicks on the input)
       box.addEventListener("click", (ev) => {
-        if (ev.target === nameInput) return;
+        // Allow opening even when clicking the name input
+        // (Editing still works via Enter or blur)
+        // Previously: if (ev.target === nameInput) return;
         finishInit();
         state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
       });
