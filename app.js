@@ -404,6 +404,10 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
+    // Archives button (top toolbar)
+    const btnArchTop = $("open-archives-top");
+    if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
+
     $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
     $("to-main").addEventListener("click", () => { finishInit(); showView("main"); });
 
