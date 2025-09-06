@@ -1,4 +1,4 @@
-/* app.js v3.10 */
+/* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
@@ -65,8 +65,8 @@
     contractors: [
       { id: uuid(), name: "Acme Mechanical", logoDataUrl: "", jobs: [
         { id: uuid(), name: "101 - 123 Main St", po: "PO-1001", address: "123 Main St, Springfield", stage: "Rough-in", crew: ["Alice","Bob"], notes: [
-          { d: ymd(), text: "Ducts delivered. Rough inspection Fri." }
-        ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          { d: ymd(), text: "Created" }
+        ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: true }
       ]}
     ],
     ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false }
@@ -111,15 +111,19 @@
       box.className = "contractor" + (c.id === state.ui.selectedContractorId ? " active" : "");
 
       const nameInput = document.createElement("input");
-      nameInput.type = "text"; nameInput.value = c.name; nameInput.title = "Double‑click card to open";
+      nameInput.type = "text"; nameInput.value = c.name; nameInput.title = "Click card to open";
       nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
       nameInput.addEventListener("blur", (e) => {
         const val = e.target.value.trim() || "Untitled Contractor";
         if (val !== c.name) { c.name = val; save(); renderContractors(); }
       });
 
-      // Open on double‑click
-      box.addEventListener("dblclick", () => { state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll(); });
+      // Open on SINGLE CLICK (ignore clicks on the input)
+      box.addEventListener("click", (ev) => {
+        if (ev.target === nameInput) return;
+        finishInit();
+        state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
+      });
 
       box.appendChild(nameInput);
       list.appendChild(box);
@@ -161,7 +165,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -184,6 +188,12 @@
     else { prev.style.display = "none"; }
   }
 
+  function finishInit() {
+    const j = currentJob();
+    if (j && !j.initComplete) { j.initComplete = true; save(); }
+  }
+
+  // Search now includes PO#
   function searchAndOpen(q) {
     const query = (q || "").trim().toLowerCase();
     if (!query) return;
@@ -194,16 +204,26 @@
       c.jobs.forEach(j => {
         const name = (j.name || "").toLowerCase();
         const addr = (j.address || "").toLowerCase();
+        const po = (j.po || "").toLowerCase();
         const leading = parseLeadingNumber(j.name);
         let score = -1;
+        // Name
         if (name === query) score = 100;
-        else if (name.startsWith(query)) score = 85;
-        else if (name.includes(query)) score = 70;
+        else if (name.startsWith(query)) score = Math.max(score, 85);
+        else if (name.includes(query)) score = Math.max(score, 70);
+        // Address
         if (addr) {
           if (addr === query) score = Math.max(score, 100);
           else if (addr.startsWith(query)) score = Math.max(score, 88);
           else if (addr.includes(query)) score = Math.max(score, 72);
         }
+        // PO
+        if (po) {
+          if (po === query) score = Math.max(score, 100);
+          else if (po.startsWith(query)) score = Math.max(score, 95);
+          else if (po.includes(query)) score = Math.max(score, 80);
+        }
+        // Leading job #
         if (num !== null && leading === num) score = Math.max(score, 92);
         if (score >= 0) candidates.push({ c, j, score });
       });
@@ -211,6 +231,7 @@
     if (!candidates.length) { toast("No job found"); return; }
     candidates.sort((a,b) => b.score - a.score);
     const best = candidates[0];
+    finishInit();
     state.ui.selectedContractorId = best.c.id;
     state.ui.selectedJobId = best.j.id;
     showView("main");
@@ -240,14 +261,12 @@
       landing.style.display = "none"; jobFields.style.display = "none";
       contractorPanel.style.display = "flex"; contractorControls.style.display = "flex";
       contractorLogo.src = c.logoDataUrl || state.companyLogoDataUrl || "";
-      // Wire logo picker
       contractorLogoFile.onchange = () => {
         const f = contractorLogoFile.files?.[0]; if (!f) return;
         const reader = new FileReader();
         reader.onload = () => { c.logoDataUrl = reader.result; contractorLogo.src = c.logoDataUrl; save(); toast("Contractor logo updated"); };
         reader.readAsDataURL(f);
       };
-      // Delete button
       deleteContractorBtn.onclick = () => {
         if (!confirm("Delete contractor and all jobs?")) return;
         state.contractors = state.contractors.filter(x => x.id !== c.id);
@@ -280,8 +299,8 @@
         if (!j) return;
         if (cb.checked) { if (!j.crew.includes(name)) j.crew.push(name); }
         else { j.crew = j.crew.filter(x => x !== name); }
-        pushNote(j, `Crew updated: ${j.crew.join(", ")}`);
-        markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); toast("Crew updated");
+        // Crew changes NEVER logged
+        markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       });
       const txt = document.createElement("span"); txt.textContent = name;
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
@@ -315,7 +334,7 @@
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 15 };
+    const payload = { ...state, version: 17 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");
@@ -327,8 +346,8 @@
   function wire() {
     statusEl = $("status");
 
-    $("to-settings").addEventListener("click", () => { renderSettings(); showView("settings"); });
-    $("to-main").addEventListener("click", () => { showView("main"); });
+    $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
+    $("to-main").addEventListener("click", () => { finishInit(); showView("main"); });
 
     $("save-settings").addEventListener("click", () => {
       const roster = $("roster-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
@@ -353,6 +372,7 @@
     });
 
     $("add-contractor").addEventListener("click", () => {
+      finishInit();
       const c = { id: uuid(), name: "New Contractor", logoDataUrl: "", jobs: [] };
       state.contractors.unshift(c);
       state.ui.selectedContractorId = c.id;
@@ -362,8 +382,9 @@
     });
 
     $("add-job").addEventListener("click", () => {
-      const c = currentContractor(); if (!c) { alert("Open a contractor first (double‑click a name)."); return; }
-      const j = { id: uuid(), name: "New Job", po: "", address: "", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const c = currentContractor(); if (!c) { alert("Open a contractor first (click a name)."); return; }
+      finishInit();
+      const j = { id: uuid(), name: "New Job", po: "", address: "", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: false };
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
@@ -373,6 +394,7 @@
 
     $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
+      finishInit();
       j.archived = !j.archived;
       pushNote(j, j.archived ? "Archived" : "Un-archived");
       markUpdated(j); save(); renderAll();
@@ -388,12 +410,13 @@
       toast("Job deleted");
     });
 
+    // Name / PO / Address edits — only log after initComplete
     $("job-name").addEventListener("blur", (e) => {
       const j = currentJob(); if (!j) return;
       const val = e.target.value.trim();
-      if (val && val !== j.name) {
-        pushNote(j, `Job renamed: "${j.name}" → "${val}"`);
+      if (val !== j.name) {
         j.name = val;
+        if (j.initComplete) pushNote(j, `Job renamed to "${val || "Untitled"}"`);
         markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       }
     });
@@ -402,9 +425,9 @@
     $("job-po").addEventListener("blur", (e) => {
       const j = currentJob(); if (!j) return;
       const val = e.target.value.trim();
-      if ((j.po || "") !== val) {
-        pushNote(j, `PO# updated: ${j.po || "—"} → ${val || "—"}`);
+      if (val !== (j.po || "")) {
         j.po = val;
+        if (j.initComplete) pushNote(j, `PO# changed to ${val || "—"}`);
         markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       }
     });
@@ -413,9 +436,9 @@
     $("job-address").addEventListener("blur", (e) => {
       const j = currentJob(); if (!j) return;
       const val = e.target.value.trim();
-      if ((j.address || "") !== val) {
-        pushNote(j, `Address updated: ${j.address || "—"} → ${val || "—"}`);
+      if (val !== (j.address || "")) {
         j.address = val;
+        if (j.initComplete) pushNote(j, `Address changed`);
         markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       }
     });
@@ -423,14 +446,17 @@
 
     $("job-stage").addEventListener("change", e => {
       const j = currentJob(); if (!j) return;
-      j.stage = e.target.value;
-      pushNote(j, `Stage changed to ${j.stage}`);
-      markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); renderTabs(); toast("Stage updated");
+      const newStage = e.target.value;
+      const prev = j.stage;
+      j.stage = newStage;
+      if (j.initComplete && newStage !== prev) pushNote(j, `Stage changed to ${j.stage}`);
+      markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); renderTabs(); if (j.initComplete) toast("Stage updated");
     });
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       const txt = $("new-note").value.trim(); if (!txt) return;
+      if (!j.initComplete) j.initComplete = true; // first manual note ends setup
       pushNote(j, txt); $("new-note").value = "";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
@@ -438,7 +464,8 @@
     $("refresh-btn").addEventListener("click", async () => {
       const data = await API.load();
       if (data) { state = { ...state, ...data, ui: { ...state.ui, ...(state.ui || {}) } }; }
-      // Always force MAIN view and clear selections after reload
+      // Always force MAIN view and clear selections after reload; also finish init for current job
+      finishInit();
       state.ui.view = "main";
       state.ui.selectedContractorId = null;
       state.ui.selectedJobId = null;
