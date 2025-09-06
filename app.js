@@ -406,6 +406,29 @@
     x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2<\/em>');
     return x;
   }
+
+  function sanitizeHtml(input) {
+    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P"]);
+    const wrap = document.createElement("div");
+    wrap.innerHTML = input || "";
+    (function walk(node){
+      for (let i=node.childNodes.length-1; i>=0; i--) {
+        const ch = node.childNodes[i];
+        if (ch.nodeType === 1) { // element
+          if (!allowed.has(ch.tagName)) {
+            // unwrap unknown elements but keep their children
+            while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
+            node.removeChild(ch);
+          } else {
+            // strip attributes
+            for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
+            walk(ch);
+          }
+        }
+      }
+    })(wrap);
+    return wrap.innerHTML;
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -433,6 +456,40 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
+
+    // WYSIWYG toolbar for contenteditable editor
+    const ed = $("new-note");
+    function focusEd(){ if (ed) ed.focus(); }
+    function surround(tag) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      try {
+        const el = document.createElement(tag);
+        range.surroundContents(el);
+      } catch (e) {
+        // Fallback: insertHTML
+        const tmp = document.createElement("div");
+        tmp.appendChild(range.cloneContents());
+        document.execCommand('insertHTML', false, `<${tag}>${tmp.innerHTML}</${tag}>`);
+      }
+    }
+    const bBtn = $("note-bold"); if (bBtn) bBtn.addEventListener("click", () => { focusEd(); document.execCommand('bold'); });
+    const iBtn = $("note-italic"); if (iBtn) iBtn.addEventListener("click", () => { focusEd(); document.execCommand('italic'); });
+    const uBtn = $("note-underline"); if (uBtn) uBtn.addEventListener("click", () => { focusEd(); document.execCommand('underline'); });
+    const hlBtn = $("note-highlight"); if (hlBtn) hlBtn.addEventListener("click", () => { focusEd(); surround('mark'); });
+    const listBtn = $("note-bullet"); if (listBtn) listBtn.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
+    // Tab to indent/outdent within editor
+    if (ed) {
+      ed.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          if (e.shiftKey) document.execCommand('outdent');
+          else document.execCommand('indent');
+        }
+      });
+    }
+
 
     // Notes toolbar actions
     function wrapSelection(el, left, right) {
@@ -663,7 +720,7 @@ function renderAll() {
       const j = currentJob(); if (!j) return;
       const txt = $("new-note").value.trim(); if (!txt) return;
       if (!j.initComplete) j.initComplete = true; // first manual note ends setup
-      pushNote(j, txt); $("new-note").value = "";
+      pushNote(j, txt); if ($("new-note")) $("new-note").innerHTML = "";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
 
@@ -708,6 +765,40 @@ function renderAll() {
     renderPanel();
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+
+    // WYSIWYG toolbar for contenteditable editor
+    const ed = $("new-note");
+    function focusEd(){ if (ed) ed.focus(); }
+    function surround(tag) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      try {
+        const el = document.createElement(tag);
+        range.surroundContents(el);
+      } catch (e) {
+        // Fallback: insertHTML
+        const tmp = document.createElement("div");
+        tmp.appendChild(range.cloneContents());
+        document.execCommand('insertHTML', false, `<${tag}>${tmp.innerHTML}</${tag}>`);
+      }
+    }
+    const bBtn = $("note-bold"); if (bBtn) bBtn.addEventListener("click", () => { focusEd(); document.execCommand('bold'); });
+    const iBtn = $("note-italic"); if (iBtn) iBtn.addEventListener("click", () => { focusEd(); document.execCommand('italic'); });
+    const uBtn = $("note-underline"); if (uBtn) uBtn.addEventListener("click", () => { focusEd(); document.execCommand('underline'); });
+    const hlBtn = $("note-highlight"); if (hlBtn) hlBtn.addEventListener("click", () => { focusEd(); surround('mark'); });
+    const listBtn = $("note-bullet"); if (listBtn) listBtn.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
+    // Tab to indent/outdent within editor
+    if (ed) {
+      ed.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          if (e.shiftKey) document.execCommand('outdent');
+          else document.execCommand('indent');
+        }
+      });
+    }
+
 
     // Notes toolbar actions
     function wrapSelection(el, left, right) {

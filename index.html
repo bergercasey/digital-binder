@@ -116,6 +116,10 @@
 
   textarea { width: 100%; display:block; }
   #new-note { width: 100%; box-sizing: border-box; }
+
+  .note-editor { width: 100%; min-height: 160px; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .note-editor:focus { outline: 2px solid var(--accent-200); }
+  .note-editor:empty:before { content: attr(data-placeholder); color: var(--muted); }
 </style>
 </head>
 <body>
@@ -186,7 +190,7 @@
   <button id="note-highlight" title="Highlight (wrap == ==)">HL</button>
   <button id="note-bullet" title="Bullet list (insert - )">• List</button>
 </div>
-<textarea id="new-note" rows="6" placeholder="What changed? Materials, inspections, dates..."></textarea>
+<div id="new-note" class="note-editor" contenteditable="true" data-placeholder="What changed? Materials, inspections, dates..."></div>
 
 
 <div class="muted" style="font-size:11px;margin-bottom:4px;">Enter=new line · Tab=indent · Shift+Tab=outdent · Supports **bold**, _italic_, __underline__</div></div>
