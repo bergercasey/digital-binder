@@ -390,6 +390,20 @@
     `;
     box.style.display = state.ui.editing ? "none" : "block";
   }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function formatMarkdownLite(s) {
+    let x = escapeHtml(s);
+    // bold **text**
+    x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>');
+    // underline __text__
+    x = x.replace(/__(.+?)__/g, '<u>$1<\/u>');
+    // italic _text_ (avoid __)
+    x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2<\/em>');
+    return x;
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -417,6 +431,75 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
+
+    // Notes toolbar actions
+    function wrapSelection(el, left, right) {
+      right = right ?? left;
+      const start = el.selectionStart; const end = el.selectionEnd;
+      const value = el.value; const sel = value.slice(start, end);
+      const next = value.slice(0, start) + left + sel + right + value.slice(end);
+      el.value = next; el.focus();
+      el.selectionStart = start + left.length; el.selectionEnd = end + left.length;
+    }
+    const boldBtn = $("note-bold"); if (boldBtn) boldBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "**"); });
+    const italicBtn = $("note-italic"); if (italicBtn) italicBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "_"); });
+    const underlineBtn = $("note-underline"); if (underlineBtn) underlineBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "__"); });
+    const bulletBtn = $("note-bullet"); if (bulletBtn) bulletBtn.addEventListener("click", () => {
+      const el = $("new-note"); if (!el) return;
+      const start = el.selectionStart; const end = el.selectionEnd;
+      const value = el.value;
+      // Affect full lines in selection
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+      const lineEnd = value.indexOf("\n", end); const endIdx = lineEnd === -1 ? value.length : lineEnd;
+      const region = value.slice(lineStart, endIdx);
+      const listed = region.replace(/^/gm, "- ");
+      el.value = value.slice(0, lineStart) + listed + value.slice(endIdx);
+      const added = listed.length - region.length;
+      el.selectionStart = lineStart;
+      el.selectionEnd = endIdx + added;
+      el.focus();
+    });
+
+
+    // Tab indent/outdent for notes textarea
+    const newNote = $("new-note");
+    if (newNote) {
+      newNote.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const el = e.target;
+          const start = el.selectionStart;
+          const end = el.selectionEnd;
+          const value = el.value;
+          // Determine affected lines
+          const before = value.slice(0, start);
+          const sel = value.slice(start, end);
+          const after = value.slice(end);
+          const lineStart = before.lastIndexOf("\n") + 1;
+          const lineEnd = end + (value.slice(end).indexOf("\n") === -1 ? 0 : value.slice(end).indexOf("\n"));
+          const block = value.slice(lineStart, end);
+          const isMultiLine = sel.includes("\n") || start > lineStart;
+          if (!e.shiftKey) {
+            // indent: add two spaces at each line start
+            const region = value.slice(lineStart, end);
+            const indented = region.replace(/^/gm, "  ");
+            el.value = value.slice(0, lineStart) + indented + value.slice(end);
+            const added = indented.length - region.length;
+            el.selectionStart = start + (start == lineStart ? 2 : 0);
+            el.selectionEnd = end + added;
+          } else {
+            // outdent: remove up to two leading spaces at each line start
+            const region = value.slice(lineStart, end);
+            const outdented = region.replace(/^( {1,2})/gm, "");
+            el.value = value.slice(0, lineStart) + outdented + value.slice(end);
+            const removed = region.length - outdented.length;
+            el.selectionStart = Math.max(lineStart, start - (start == lineStart ? Math.min(2, removed) : 0));
+            el.selectionEnd = end - removed;
+          }
+        }
+      });
+    }
+
     // Edit Job toggle
     const editBtn = $("edit-job");
     if (editBtn) {
@@ -622,6 +705,75 @@ function renderAll() {
     renderPanel();
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+
+    // Notes toolbar actions
+    function wrapSelection(el, left, right) {
+      right = right ?? left;
+      const start = el.selectionStart; const end = el.selectionEnd;
+      const value = el.value; const sel = value.slice(start, end);
+      const next = value.slice(0, start) + left + sel + right + value.slice(end);
+      el.value = next; el.focus();
+      el.selectionStart = start + left.length; el.selectionEnd = end + left.length;
+    }
+    const boldBtn = $("note-bold"); if (boldBtn) boldBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "**"); });
+    const italicBtn = $("note-italic"); if (italicBtn) italicBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "_"); });
+    const underlineBtn = $("note-underline"); if (underlineBtn) underlineBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "__"); });
+    const bulletBtn = $("note-bullet"); if (bulletBtn) bulletBtn.addEventListener("click", () => {
+      const el = $("new-note"); if (!el) return;
+      const start = el.selectionStart; const end = el.selectionEnd;
+      const value = el.value;
+      // Affect full lines in selection
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+      const lineEnd = value.indexOf("\n", end); const endIdx = lineEnd === -1 ? value.length : lineEnd;
+      const region = value.slice(lineStart, endIdx);
+      const listed = region.replace(/^/gm, "- ");
+      el.value = value.slice(0, lineStart) + listed + value.slice(endIdx);
+      const added = listed.length - region.length;
+      el.selectionStart = lineStart;
+      el.selectionEnd = endIdx + added;
+      el.focus();
+    });
+
+
+    // Tab indent/outdent for notes textarea
+    const newNote = $("new-note");
+    if (newNote) {
+      newNote.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const el = e.target;
+          const start = el.selectionStart;
+          const end = el.selectionEnd;
+          const value = el.value;
+          // Determine affected lines
+          const before = value.slice(0, start);
+          const sel = value.slice(start, end);
+          const after = value.slice(end);
+          const lineStart = before.lastIndexOf("\n") + 1;
+          const lineEnd = end + (value.slice(end).indexOf("\n") === -1 ? 0 : value.slice(end).indexOf("\n"));
+          const block = value.slice(lineStart, end);
+          const isMultiLine = sel.includes("\n") || start > lineStart;
+          if (!e.shiftKey) {
+            // indent: add two spaces at each line start
+            const region = value.slice(lineStart, end);
+            const indented = region.replace(/^/gm, "  ");
+            el.value = value.slice(0, lineStart) + indented + value.slice(end);
+            const added = indented.length - region.length;
+            el.selectionStart = start + (start == lineStart ? 2 : 0);
+            el.selectionEnd = end + added;
+          } else {
+            // outdent: remove up to two leading spaces at each line start
+            const region = value.slice(lineStart, end);
+            const outdented = region.replace(/^( {1,2})/gm, "");
+            el.value = value.slice(0, lineStart) + outdented + value.slice(end);
+            const removed = region.length - outdented.length;
+            el.selectionStart = Math.max(lineStart, start - (start == lineStart ? Math.min(2, removed) : 0));
+            el.selectionEnd = end - removed;
+          }
+        }
+      });
+    }
+
     // Edit Job toggle
     const editBtn = $("edit-job");
     if (editBtn) {

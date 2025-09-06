@@ -96,7 +96,11 @@
     .errbar { position: fixed; top: 0; left: 0; right: 0; background: #fee2e2; color: #991b1b; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #fecaca; z-index: 10000; display: none; }
     @media (max-width: 1100px) { .fields { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 700px) { main { grid-template-columns: 1fr; } aside { border-right: none; border-bottom: 1px solid var(--line); } .fields { grid-template-columns: 1fr; } }
-  </style>
+  
+  .note-text { white-space: pre-wrap; }
+  .note-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin: 4px 0 6px; }
+  .note-toolbar button { padding: 4px 8px; font-size: 12px; cursor: pointer; }
+</style>
 </head>
 <body>
   <div class="errbar" id="errbar"></div>
@@ -159,7 +163,14 @@
             <div class="field"><label>Crew</label><div id="crew-box" class="chips"></div></div>
           </div>
           <div style="margin-top:14px;">
-            <div class="field"><label>Add Note</label><textarea id="new-note" placeholder="What changed? Materials, inspections, dates..."></textarea></div>
+            \1<div class="note-toolbar">
+  <button id="note-bold" title="Bold (wrap ** **)"><strong>B</strong></button>
+  <button id="note-italic" title="Italic (wrap _ _)"><em>I</em></button>
+  <button id="note-underline" title="Underline (wrap __ __)"><u>U</u></button>
+  <button id="note-bullet" title="Bullet list (insert - )">• List</button>
+</div>
+<div class="muted" style="font-size:11px;margin-bottom:4px;">Enter=new line · Tab=indent · Shift+Tab=outdent · Supports **bold**, _italic_, __underline__</div>
+<textarea\2id="new-note" placeholder="What changed? Materials, inspections, dates..."></textarea></div>
             <div class="row"><button id="add-note" class="primary">Add Note</button><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
             <h3 style="margin:14px 0 6px;">Log</h3><div id="notes-list" class="list"></div>
           </div>
