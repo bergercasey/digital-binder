@@ -1,4 +1,4 @@
-/* app.js v3.6 */
+/* app.js v3.7 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
@@ -18,8 +18,7 @@
     return `${y}-${m}-${day}`;
   };
 
-  // Convert hex (#rrggbb) to rgba with alpha 0.25
-  function hexToRGBA(hex, alpha=0.25) {
+  function hexToRGBA(hex, alpha=0.28) {
     if (!hex) return `rgba(0,0,0,${alpha})`;
     const m = hex.replace('#','');
     const bigint = parseInt(m.length === 3 ? m.split('').map(c=>c+c).join('') : m, 16);
@@ -65,7 +64,7 @@
     stageColors: { "Bid": "#60a5fa", "Rough-in": "#f59e0b", "Trim": "#a78bfa", "Complete": "#34d399" },
     contractors: [
       { id: uuid(), name: "Acme Mechanical", logoDataUrl: "", jobs: [
-        { id: uuid(), name: "101 - 123 Main St", stage: "Rough-in", crew: ["Alice","Bob"], notes: [
+        { id: uuid(), name: "101 - 123 Main St", po: "PO-1001", address: "123 Main St, Springfield", stage: "Rough-in", crew: ["Alice","Bob"], notes: [
           { d: ymd(), text: "Ducts delivered. Rough inspection Fri." }
         ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       ]}
@@ -89,8 +88,8 @@
     $("to-main").style.display = name === "settings" ? "inline-block" : "none";
   }
 
-  function currentContractor() { return state.contractors.find(c => c.id === state.ui.selectedContractorId) || null; }
-  function currentJob() { const c = currentContractor(); if (!c) return null; return c.jobs.find(j => j.id === state.ui.selectedJobId) || null; }
+  const currentContractor = () => state.contractors.find(c => c.id === state.ui.selectedContractorId) || null;
+  const currentJob = () => { const c = currentContractor(); if (!c) return null; return c.jobs.find(j => j.id === state.ui.selectedJobId) || null; };
 
   function parseLeadingNumber(name) {
     if (!name) return null;
@@ -117,7 +116,7 @@
       nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
       nameInput.addEventListener("blur", (e) => {
         const val = e.target.value.trim() || "Untitled Contractor";
-        if (val !== c.name) { c.name = val; save(); renderContractors(); } // re-render to keep alphabetical
+        if (val !== c.name) { c.name = val; save(); renderContractors(); }
       });
 
       const openBtn = document.createElement("button"); openBtn.textContent = "Open";
@@ -183,7 +182,11 @@
       el.style.borderColor = "#d1d5db";
 
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = state.stageColors[j.stage] || "#9ca3af";
-      const label = document.createElement("span"); label.className = "label"; label.textContent = j.name || "Untitled Job";
+
+      const label = document.createElement("div"); label.className = "label";
+      const line1 = document.createElement("div"); line1.className = "line1"; line1.textContent = (j.address || "").split("\n")[0] || j.address || "—";
+      const line2 = document.createElement("div"); line2.className = "line2"; line2.textContent = j.name || "Untitled Job";
+      label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(dot); el.appendChild(label);
       el.addEventListener("click", () => { state.ui.selectedJobId = j.id; renderAll(); });
@@ -204,18 +207,12 @@
       row.appendChild(label); row.appendChild(picker); wrap.appendChild(row);
     });
 
-    // Company logo preview
     const prev = $("company-logo-preview");
     if (state.companyLogoDataUrl) { prev.src = state.companyLogoDataUrl; prev.style.display = "block"; }
     else { prev.style.display = "none"; }
   }
 
-  // Search: try best match (exact, startsWith, contains). Also match leading number.
-  function parseLeadingNumber(name) {
-    if (!name) return null;
-    const m = String(name).trim().match(/^(\d+)/);
-    return m ? parseInt(m[1], 10) : null;
-  }
+  // Search: try best match (exact, startsWith, contains). Also match leading number and address.
   function searchAndOpen(q) {
     const query = (q || "").trim().toLowerCase();
     if (!query) return;
@@ -225,12 +222,21 @@
     state.contractors.forEach(c => {
       c.jobs.forEach(j => {
         const name = (j.name || "").toLowerCase();
+        const addr = (j.address || "").toLowerCase();
         const leading = parseLeadingNumber(j.name);
         let score = -1;
+        // Name matching
         if (name === query) score = 100;
-        else if (name.startsWith(query)) score = 80;
-        else if (name.includes(query)) score = 60;
-        if (num !== null && leading === num) score = Math.max(score, 90);
+        else if (name.startsWith(query)) score = 85;
+        else if (name.includes(query)) score = 70;
+        // Address matching
+        if (addr) {
+          if (addr === query) score = Math.max(score, 100);
+          else if (addr.startsWith(query)) score = Math.max(score, 88);
+          else if (addr.includes(query)) score = Math.max(score, 72);
+        }
+        // Leading number
+        if (num !== null && leading === num) score = Math.max(score, 92);
         if (score >= 0) candidates.push({ c, j, score });
       });
     });
@@ -272,6 +278,8 @@
 
     // Fields
     $("job-name").value = j?.name || "";
+    $("job-po").value = j?.po || "";
+    $("job-address").value = j?.address || "";
 
     const stageSel = $("job-stage"); stageSel.innerHTML = "";
     state.stages.forEach(s => { const opt = document.createElement("option"); opt.value = s; opt.textContent = s; stageSel.appendChild(opt); });
@@ -323,7 +331,7 @@
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 12 };
+    const payload = { ...state, version: 13 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");
@@ -343,7 +351,6 @@
       const stages = $("stages-input").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
       if (roster.length) state.roster = roster;
       if (stages.length) state.stages = stages;
-      // Refresh stage colors for new/removed stages
       const existing = { ...state.stageColors };
       const defaults = ["#60a5fa","#34d399","#fbbf24","#f87171","#a78bfa","#f472b6","#f59e0b","#22d3ee","#93c5fd","#86efac"];
       state.stages.slice(0,10).forEach((s,i) => { if (!existing[s]) existing[s] = defaults[i % defaults.length]; });
@@ -372,8 +379,7 @@
 
     $("add-job").addEventListener("click", () => {
       const c = currentContractor(); if (!c) { alert("Open a contractor first."); return; }
-      const j = { id: uuid(), name: "New Job", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-      // initial dated creation note
+      const j = { id: uuid(), name: "New Job", po: "", address: "", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
@@ -408,6 +414,28 @@
       }
     });
     $("job-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+
+    $("job-po").addEventListener("blur", (e) => {
+      const j = currentJob(); if (!j) return;
+      const val = e.target.value.trim();
+      if ((j.po || "") !== val) {
+        pushNote(j, `PO# updated: ${j.po || "—"} → ${val || "—"}`);
+        j.po = val;
+        markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+      }
+    });
+    $("job-po").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+
+    $("job-address").addEventListener("blur", (e) => {
+      const j = currentJob(); if (!j) return;
+      const val = e.target.value.trim();
+      if ((j.address || "") !== val) {
+        pushNote(j, `Address updated: ${j.address || "—"} → ${val || "—"}`);
+        j.address = val;
+        markUpdated(j); save(); renderTabs(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
+      }
+    });
+    $("job-address").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 
     $("job-stage").addEventListener("change", e => {
       const j = currentJob(); if (!j) return;

@@ -48,11 +48,11 @@
     section.content { padding: var(--pad); }
     .top-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom: 10px; }
     /* Notebook Tabs */
-    .tabs-wrap { width:100%; border-bottom: 2px solid var(--line); padding-bottom: 4px; min-height: 42px; }
+    .tabs-wrap { width:100%; border-bottom: 2px solid var(--line); padding-bottom: 4px; min-height: 52px; }
     .tabs { display:flex; gap:4px; flex-wrap:wrap; align-items:flex-end; }
     .tab {
       position: relative;
-      padding: 8px 12px;
+      padding: 6px 10px;
       border:1px solid var(--line);
       border-bottom: none;
       border-top-left-radius: 10px;
@@ -62,12 +62,16 @@
       cursor: pointer;
       transform: translateY(2px);
       box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+      min-width: 160px;
     }
     .tab.active { background: #fff; transform: translateY(0); z-index: 2; }
-    .tab .label { font-weight: 600; }
+    .tab .label { display:flex; flex-direction:column; line-height:1.15; }
+    .tab .line1 { font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tab .line2 { font-weight: 500; font-size: 11px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
-    .fields { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .fields { display:grid; grid-template-columns: 1fr 1fr 1.5fr; gap:12px; align-items:end; }
     .field { display:flex; flex-direction:column; gap:6px; }
+    .field.small input { width: 100%; }
     label { font-size: 12px; color: var(--muted); }
     textarea { min-height: 120px; resize: vertical; }
     .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -96,7 +100,8 @@
     .toast { pointer-events: auto; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-size: 14px; min-width: 200px; text-align: center; }
     /* Error banner */
     .errbar { position: fixed; top: 0; left: 0; right: 0; background: #fee2e2; color: #991b1b; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #fecaca; z-index: 10000; display: none; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { border-right: none; border-bottom: 1px solid var(--line); } .fields { grid-template-columns: 1fr; } }
+    @media (max-width: 1100px) { .fields { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 700px) { main { grid-template-columns: 1fr; } aside { border-right: none; border-bottom: 1px solid var(--line); } .fields { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -138,7 +143,7 @@
       </div>
 
       <div id="job-panel">
-        <!-- Landing: company logo only + optional search note -->
+        <!-- Landing: company logo only -->
         <div class="placeholder" id="placeholder-landing">
           <img id="company-logo" alt="Company logo" style="display:none;"/>
           <div id="company-logo-empty">Upload a company logo in Settings.</div>
@@ -164,10 +169,19 @@
           </div>
 
           <div class="fields">
-            <div class="field">
+            <div class="field small">
               <label>Job Name</label>
-              <input type="text" id="job-name" placeholder="e.g., 123 Main St Buildout" />
+              <input type="text" id="job-name" placeholder="e.g., Main St Remodel" />
             </div>
+            <div class="field small">
+              <label>PO #</label>
+              <input type="text" id="job-po" placeholder="e.g., PO-10452" />
+            </div>
+            <div class="field">
+              <label>Address</label>
+              <input type="text" id="job-address" placeholder="e.g., 123 Main St, Springfield" />
+            </div>
+
             <div class="field">
               <label>Stage</label>
               <select id="job-stage"></select>
