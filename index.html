@@ -34,21 +34,19 @@
     button.danger { background: #ef4444; color: #fff; border-color: #ef4444; cursor:pointer; }
     button.ghost { background: transparent; border-color: var(--line); cursor:pointer; }
     .status { text-align:center; font-size:12px; color: var(--muted); margin-top: 6px; }
-    main { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 100px); }
+    main { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 100px); }
     aside { border-right: 1px solid var(--line); padding: var(--pad); }
     .aside-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; }
     .list { display:flex; flex-direction:column; gap:6px; }
-    .contractor { display:flex; flex-direction:column; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius: 8px; }
+    /* Contractor card: compact */
+    .contractor { display:flex; gap:6px; align-items:center; padding:4px 6px; border:1px solid var(--line); border-radius: 8px; cursor:pointer; }
     .contractor.active { outline: 2px solid var(--accent); }
-    .contractor .row { display:flex; gap:6px; align-items:center; }
-    .contractor input[type="text"] { width: 100%; border:none; outline:none; }
-    .logo-field { display:none; }
-    .contractor.active .logo-field { display:flex; flex-direction:column; gap:4px; }
-    .contractor .logo-preview { max-height: 60px; max-width: 100%; object-fit: contain; }
+    .contractor input[type="text"] { width: 100%; border:none; outline:none; font-size: 14px; padding: 4px 6px; }
+    .contractor-tools { display:none; }
     section.content { padding: var(--pad); }
     .top-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom: 10px; }
     /* Notebook Tabs */
-    .tabs-wrap { width:100%; border-bottom: 2px solid var(--line); padding-bottom: 4px; min-height: 46px; }
+    .tabs-wrap { width:100%; border-bottom: 2px solid var(--line); padding-bottom: 4px; min-height: 44px; }
     .tabs { display:flex; gap:4px; flex-wrap:wrap; align-items:flex-end; }
     .tab {
       position: relative;
@@ -65,7 +63,7 @@
     .tab .label { display:flex; flex-direction:column; line-height:1.15; }
     .tab .line1 { font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tab .line2 { font-weight: 500; font-size: 11px; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fields { display:grid; grid-template-columns: 1.5fr 0.7fr 1fr; gap:12px; align-items:end; }
+    .fields { display:grid; grid-template-columns: 1.5fr 0.8fr 1fr; gap:12px; align-items:end; }
     .field { display:flex; flex-direction:column; gap:6px; }
     .field.small input { width: 100%; }
     label { font-size: 12px; color: var(--muted); }
@@ -78,12 +76,17 @@
     .chip { padding: 4px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; }
     .view { display:none; }
     .view.active { display:block; }
-    .placeholder { display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; height: 50vh; color: var(--muted); border: 2px dashed var(--line); border-radius: 12px; background: #fafafa; padding:16px; }
-    .placeholder img { max-width: 420px; opacity: .85; }
-    .searchbar { display:flex; gap:8px; align-items:center; }
-    .searchbar input { flex:1; min-width: 220px; }
-    .logo-panel { display:flex; align-items:center; justify-content:center; height: 220px; border: 2px dashed var(--line); border-radius: 12px; background:#fafafa; margin-top:12px; }
-    .logo-panel img { max-height: 200px; max-width: 90%; object-fit: contain; }
+    /* Landing */
+    .placeholder {
+      display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center;
+      height: 60vh; color: var(--muted); border: 2px dashed var(--line); border-radius: 12px;
+      background: #fafafa; padding:16px;
+    }
+    .placeholder img { max-width: 85vw; max-height: 48vh; width: auto; height: auto; object-fit: contain; }
+    /* Contractor "home" panel */
+    .logo-panel { position: relative; display:flex; align-items:center; justify-content:center; height: 280px; border: 2px dashed var(--line); border-radius: 12px; background:#fafafa; margin-top:12px; }
+    .logo-panel img { max-height: 240px; max-width: 90%; object-fit: contain; }
+    .logo-controls { position: absolute; right: 10px; bottom: 10px; display:flex; gap:6px; align-items:center; background:#ffffffcc; padding:6px; border:1px solid var(--line); border-radius:8px; }
     /* Notes */
     .note-item { padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
     .note-date { font-size:12px; color:var(--muted); margin-bottom:4px; }
@@ -120,6 +123,7 @@
     <aside>
       <div class="aside-head"><strong>Contractors</strong><span class="muted" id="contractor-count"></span></div>
       <div class="list" id="contractor-list"></div>
+      <div class="muted" style="font-size:11px; margin-top:8px;">Tip: Double‑click a contractor to open</div>
     </aside>
 
     <section class="content view active" id="view-main">
@@ -128,9 +132,16 @@
         <div class="placeholder" id="placeholder-landing">
           <img id="company-logo" alt="Company logo" style="display:none;"/>
           <div id="company-logo-empty">Upload a company logo in Settings.</div>
-          <div class="muted" style="font-size:12px;">Tip: use the search bar in the header to jump to any job.</div>
+          <div class="muted" style="font-size:12px;">Use the header search to jump to a job.</div>
         </div>
-        <div class="logo-panel" id="contractor-logo-panel" style="display:none;"><img id="contractor-logo" alt="Contractor logo"/></div>
+        <div class="logo-panel" id="contractor-logo-panel" style="display:none;">
+          <img id="contractor-logo" alt="Contractor logo"/>
+          <div class="logo-controls">
+            <label class="muted" style="font-size:12px;">Logo:</label>
+            <input type="file" id="contractor-logo-file" accept="image/*"/>
+            <button class="danger" id="delete-contractor">Delete Contractor</button>
+          </div>
+        </div>
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
             <div class="row"><div class="archive-toggle"><input type="checkbox" id="show-archived"/><label for="show-archived">Show archived</label></div><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
@@ -154,7 +165,7 @@
     <section class="content view" id="view-settings">
       <h2>Settings</h2>
       <div class="fields">
-        <div class="field"><label>Company Logo (PNG/JPG)</label><input type="file" id="company-logo-file" accept="image/*"/><img id="company-logo-preview" alt="Preview" style="max-height:120px; display:none; margin-top:6px;"/></div>
+        <div class="field"><label>Company Logo (PNG/JPG)</label><input type="file" id="company-logo-file" accept="image/*"/><img id="company-logo-preview" alt="Preview" style="max-height:160px; display:none; margin-top:6px;"/></div>
         <div class="field"><label>Roster (one per line)</label><textarea id="roster-input"></textarea></div>
         <div class="field"><label>Stages (one per line)</label><textarea id="stages-input"></textarea></div>
       </div>
