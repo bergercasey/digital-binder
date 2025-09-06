@@ -148,9 +148,11 @@
         <!-- Job fields -->
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
-            <div class="row"><div class="row"><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
+            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
+<div class="row"><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
           </div>
-          <div class="fields">
+          <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
+            <div class="fields">
             <div class="field small"><label>Job Name</label><input type="text" id="job-name" placeholder="e.g., Main St Remodel"/></div>
             <div class="field"><label>Address</label><input type="text" id="job-address" placeholder="e.g., 123 Main St, Springfield"/></div>
             <div class="field small"><label>PO #</label><input type="text" id="job-po" placeholder="e.g., PO-10452"/></div>
@@ -168,7 +170,8 @@
 
     <section class="content view" id="view-settings">
       <h2>Settings</h2>
-      <div class="fields">
+      <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
+            <div class="fields">
         <div class="field"><label>Company Logo (PNG/JPG)</label><input type="file" id="company-logo-file" accept="image/*"/><img id="company-logo-preview" alt="Preview" style="max-height:160px; display:none; margin-top:6px;"/></div>
         <div class="field"><label>Roster (one per line)</label><textarea id="roster-input"></textarea></div>
         <div class="field"><label>Stages (one per line)</label><textarea id="stages-input"></textarea></div>

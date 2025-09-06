@@ -69,7 +69,7 @@
         ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: true }
       ]}
     ],
-    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {} }
+    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
@@ -166,7 +166,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -278,7 +278,7 @@
     }
 
     // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = state.ui.editing ? "block" : "none"; jobActions.style.display = "block"; renderJobSummary(j);
 
     // Fields
     $("job-name").value = j?.name || "";
@@ -367,6 +367,27 @@
     const any = Object.values(state.ui.archiveSelected||{}).some(Boolean);
     const btn = $("archive-delete-selected"); if (btn) btn.disabled = !any;
   }
+
+  function renderJobSummary(j) {
+    const box = $("job-summary"); if (!box) return;
+    if (!j) { box.style.display = "none"; box.innerHTML = ""; return; }
+    const crew = (j.crew || []).join(", ") || "—";
+    const po = j.po || "—";
+    const addr = j.address || "—";
+    const stage = j.stage || "—";
+    const updated = j.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
+    box.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div style="font-size:18px; font-weight:700;">${j.name || "Untitled"}</div>
+        <span class="chip">Stage: ${stage}</span>
+        <span class="chip">PO: ${po}</span>
+        <span class="chip">Crew: ${crew}</span>
+      </div>
+      <div class="muted" style="margin-top:6px;">${addr}</div>
+      <div class="muted" style="font-size:12px; margin-top:4px;">Last updated: ${updated}</div>
+    `;
+    box.style.display = state.ui.editing ? "none" : "block";
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -394,6 +415,21 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
+    // Edit Job toggle
+    const editBtn = $("edit-job");
+    if (editBtn) {
+      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
+      setLabel();
+      editBtn.addEventListener("click", () => {
+        const j = currentJob(); if (!j) return;
+        // If turning OFF editing for the first time, mark setup complete so later changes log
+        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
+        state.ui.editing = !state.ui.editing;
+        setLabel();
+        renderPanel();
+      });
+    }
+
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
     if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
@@ -574,6 +610,21 @@ function renderAll() {
   }
 
   window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+    // Edit Job toggle
+    const editBtn = $("edit-job");
+    if (editBtn) {
+      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
+      setLabel();
+      editBtn.addEventListener("click", () => {
+        const j = currentJob(); if (!j) return;
+        // If turning OFF editing for the first time, mark setup complete so later changes log
+        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
+        state.ui.editing = !state.ui.editing;
+        setLabel();
+        renderPanel();
+      });
+    }
+
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
     if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
