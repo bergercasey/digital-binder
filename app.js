@@ -1,4 +1,4 @@
-/* app.js v3.5 (full) */
+/* app.js v3.6 */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
@@ -104,7 +104,10 @@
     const count = state.contractors.length;
     $("contractor-count").textContent = count === 1 ? "1 contractor" : count + " contractors";
 
-    state.contractors.forEach(c => {
+    // Sort A → Z by name for display
+    const sorted = state.contractors.slice().sort((a,b)=> String(a.name||"").localeCompare(String(b.name||"")));
+
+    sorted.forEach(c => {
       const box = document.createElement("div");
       box.className = "contractor" + (c.id === state.ui.selectedContractorId ? " active" : "");
 
@@ -114,7 +117,7 @@
       nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
       nameInput.addEventListener("blur", (e) => {
         const val = e.target.value.trim() || "Untitled Contractor";
-        if (val !== c.name) { c.name = val; save(); }
+        if (val !== c.name) { c.name = val; save(); renderContractors(); } // re-render to keep alphabetical
       });
 
       const openBtn = document.createElement("button"); openBtn.textContent = "Open";
@@ -208,6 +211,11 @@
   }
 
   // Search: try best match (exact, startsWith, contains). Also match leading number.
+  function parseLeadingNumber(name) {
+    if (!name) return null;
+    const m = String(name).trim().match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  }
   function searchAndOpen(q) {
     const query = (q || "").trim().toLowerCase();
     if (!query) return;
@@ -248,16 +256,6 @@
       jobFields.style.display = "none"; contractorPanel.style.display = "none"; landing.style.display = "flex";
       if (state.companyLogoDataUrl) { companyLogoImg.src = state.companyLogoDataUrl; companyLogoImg.style.display = "block"; companyLogoEmpty.style.display = "none"; }
       else { companyLogoImg.style.display = "none"; companyLogoEmpty.style.display = "block"; }
-      // Wire search inputs each render to be safe
-      const input = $("global-search"); const btn = $("global-search-btn");
-      if (input && !input.dataset.wired) {
-        input.dataset.wired = "1";
-        input.addEventListener("keydown", (e) => { if (e.key === "Enter") searchAndOpen(input.value); });
-      }
-      if (btn && !btn.dataset.wired) {
-        btn.dataset.wired = "1";
-        btn.addEventListener("click", () => searchAndOpen($("global-search").value));
-      }
       return;
     }
 
@@ -325,7 +323,7 @@
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 11 };
+    const payload = { ...state, version: 12 };
     try {
       const res = await API.save(payload);
       status(res.local ? "Saved locally (offline)" : "Saved");
@@ -428,20 +426,29 @@
     $("refresh-btn").addEventListener("click", async () => {
       const data = await API.load();
       if (data) { state = { ...state, ...data, ui: { ...state.ui, ...(state.ui || {}) } }; }
-      // Always force MAIN view after reload
+      // Always force MAIN view and clear selections after reload
       state.ui.view = "main";
+      state.ui.selectedContractorId = null;
+      state.ui.selectedJobId = null;
       renderAll();
       toast("Reloaded");
     });
+
+    // Header search wiring
+    const headerInput = $("header-search");
+    const headerBtn = $("header-search-btn");
+    headerInput?.addEventListener("keydown", (e)=>{ if (e.key === "Enter") searchAndOpen(headerInput.value); });
+    headerBtn?.addEventListener("click", ()=> searchAndOpen(headerInput.value));
   }
 
   async function boot() {
     status("Loading…");
     const data = await API.load();
     if (data) state = { ...state, ...data };
-    // Always land on MAIN view, even if state had "settings"
+    // Always land on MAIN and clear selected contractor & job
     state.ui.view = "main";
-    state.ui.selectedContractorId ??= null; state.ui.selectedJobId = null;
+    state.ui.selectedContractorId = null;
+    state.ui.selectedJobId = null;
     renderAll();
   }
 
