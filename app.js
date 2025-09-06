@@ -403,6 +403,46 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
+    // Archives view controls
+    const backArch = $("back-from-archives");
+    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
+
+    const searchArch = $("archive-search");
+    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
+
+    const selAll = $("archive-select-all");
+    if (selAll) selAll.addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
+      const map = state.ui.archiveSelected || {};
+      cards.forEach(card => {
+        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
+        cb.checked = checked;
+        const id = card.getAttribute("data-id");
+        if (id) map[id] = checked;
+      });
+      state.ui.archiveSelected = map;
+      updateDeleteBtn();
+    });
+
+    const delBtn = $("archive-delete-selected");
+    if (delBtn) delBtn.addEventListener("click", () => {
+      const ids = Object.entries(state.ui.archiveSelected || {}).filter(([,v]) => v).map(([k]) => k);
+      if (!ids.length) return;
+      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
+      // Remove archived jobs with those IDs across contractors
+      state.contractors.forEach(c => {
+        c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id)));
+      });
+      state.ui.archiveSelected = {}; // clear selection
+      save();
+      renderArchives();
+      renderContractors();
+      renderTabs();
+      renderPanel();
+      toast("Deleted selected archived jobs");
+    });
+
 
     // Archives button (top toolbar)
     const btnArchTop = $("open-archives-top");
@@ -553,6 +593,46 @@ function renderAll() {
     renderAll();
   }
 
-  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status"); wire(); boot(); });
+  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+    // Archives view controls
+    const backArch = $("back-from-archives");
+    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
+
+    const searchArch = $("archive-search");
+    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
+
+    const selAll = $("archive-select-all");
+    if (selAll) selAll.addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
+      const map = state.ui.archiveSelected || {};
+      cards.forEach(card => {
+        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
+        cb.checked = checked;
+        const id = card.getAttribute("data-id");
+        if (id) map[id] = checked;
+      });
+      state.ui.archiveSelected = map;
+      updateDeleteBtn();
+    });
+
+    const delBtn = $("archive-delete-selected");
+    if (delBtn) delBtn.addEventListener("click", () => {
+      const ids = Object.entries(state.ui.archiveSelected || {}).filter(([,v]) => v).map(([k]) => k);
+      if (!ids.length) return;
+      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
+      // Remove archived jobs with those IDs across contractors
+      state.contractors.forEach(c => {
+        c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id)));
+      });
+      state.ui.archiveSelected = {}; // clear selection
+      save();
+      renderArchives();
+      renderContractors();
+      renderTabs();
+      renderPanel();
+      toast("Deleted selected archived jobs");
+    });
+ wire(); boot(); });
 })();
   
