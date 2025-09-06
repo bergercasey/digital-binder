@@ -69,7 +69,7 @@
         ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: true }
       ]}
     ],
-    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false }
+    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {} }
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
@@ -85,6 +85,7 @@
     state.ui.view = name;
     $("view-main").classList.toggle("active", name === "main");
     $("view-settings").classList.toggle("active", name === "settings");
+    $("view-archives").classList.toggle("active", name === "archives");
     $("to-main").style.display = name === "settings" ? "inline-block" : "none";
   }
 
@@ -144,7 +145,7 @@
     if (!c) return;
 
     const jobs = c.jobs
-      .filter(j => state.ui.showArchived ? true : !j.archived)
+      .filter(j => !j.archived)
       .slice()
       .sort((a,b) => {
         const na = parseLeadingNumber(a.name);
@@ -320,7 +321,62 @@
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
-  function renderAll() {
+  
+  function renderArchives() {
+    const list = $("archive-list"); const count = $("archive-count");
+    if (!list) return;
+    const q = ($("archive-search")?.value || "").trim().toLowerCase();
+    // Build flat list of archived jobs across contractors
+    const rows = [];
+    state.contractors.forEach(c => {
+      c.jobs.forEach(j => {
+        if (j.archived) {
+          const text = [j.name||"", j.po||"", c.name||"", j.address||""].join(" ").toLowerCase();
+          if (!q || text.includes(q)) {
+            rows.push({ cId: c.id, cName: c.name||"—", id: j.id, name: j.name||"(Untitled)", po: j.po||"", updated: j.updatedAt||"", stage: j.stage||"" });
+          }
+        }
+      });
+    });
+    rows.sort((a,b) => String(a.name).localeCompare(String(b.name)));
+    // Render
+    list.innerHTML = "";
+    const selected = state.ui.archiveSelected || {};
+    rows.forEach(r => {
+      const item = document.createElement("div");
+      item.className = "card"; item.setAttribute("data-id", r.id);
+      item.style.padding = "8px 10px";
+      item.style.border = "1px solid var(--line)";
+      item.style.borderRadius = "8px";
+      item.style.display = "grid";
+      item.style.gridTemplateColumns = "24px 1fr auto";
+      item.style.gap = "8px";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!selected[r.id];
+      cb.addEventListener("change", () => { selected[r.id] = cb.checked; updateDeleteBtn(); });
+      const main = document.createElement("div");
+      const title = document.createElement("div"); title.style.fontWeight = "600"; title.textContent = r.name + (r.po ? `  ·  PO ${r.po}` : "");
+      const sub = document.createElement("div"); sub.className = "muted"; sub.style.fontSize = "12px"; sub.textContent = `${r.cName}  ·  Updated ${r.updated ? ymd(new Date(r.updated)) : "—"}`;
+      main.appendChild(title); main.appendChild(sub);
+      const openBtn = document.createElement("button"); openBtn.className = "ghost"; openBtn.textContent = "Open";
+      openBtn.addEventListener("click", () => {
+        // Jump to contractor and job, switch to main view
+        state.ui.selectedContractorId = r.cId; state.ui.selectedJobId = r.id;
+        showView("main"); renderAll();
+      });
+      item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
+      list.appendChild(item);
+    });
+    count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
+    state.ui.archiveSelected = selected;
+    updateDeleteBtn();
+  }
+
+  function updateDeleteBtn() {
+    const btn = $("archive-delete-selected"); if (!btn) return;
+    const any = Object.values(state.ui.archiveSelected||{}).some(Boolean);
+    btn.disabled = !any;
+  }
+function renderAll() {
     showView(state.ui.view);
     renderContractors();
     renderTabs();
@@ -495,3 +551,31 @@
 
   window.addEventListener("DOMContentLoaded", () => { statusEl = $("status"); wire(); boot(); });
 })();
+  document.addEventListener("DOMContentLoaded", () => {
+    const btnArch = $("open-archives"); if (btnArch) btnArch.addEventListener("click", () => { showView("archives"); renderArchives(); });
+    const backArch = $("back-from-archives"); if (backArch) backArch.addEventListener("click", () => { showView("main"); renderAll(); });
+    const searchArch = $("archive-search"); if (searchArch) searchArch.addEventListener("input", renderArchives);
+    const selAll = $("archive-select-all"); if (selAll) selAll.addEventListener("change", () => {
+      const selected = {}; if (selAll.checked) {
+        // Select all currently visible items
+        const boxes = document.querySelectorAll("#archive-list input[type=checkbox]");
+        boxes.forEach(b => { const id = b.closest(".card")?.querySelector("button.ghost") ? null : null; });
+      }
+      // rebuild selection map by reading DOM
+      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
+      const map = {};
+      cards.forEach(card => {
+        const cb = card.querySelector('input[type=checkbox]');
+        const title = card.querySelector('div'); // not robust; selection map maintained elsewhere
+      });
+    });
+    const delBtn = $("archive-delete-selected");
+    if (delBtn) delBtn.addEventListener("click", () => {
+      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
+      if (!ids.length) return;
+      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
+      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
+      save(); renderArchives(); renderContractors(); renderTabs();
+      toast("Deleted selected archived jobs");
+    });
+  });
