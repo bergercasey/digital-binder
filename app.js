@@ -166,7 +166,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { state.ui.editing = false; state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -506,7 +506,7 @@ function renderAll() {
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      renderTabs(); renderPanel(); save();
+      state.ui.editing = true; renderTabs(); renderPanel(); save();
       toast("Job created");
     });
 
