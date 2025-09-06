@@ -551,31 +551,4 @@ function renderAll() {
 
   window.addEventListener("DOMContentLoaded", () => { statusEl = $("status"); wire(); boot(); });
 })();
-  document.addEventListener("DOMContentLoaded", () => {
-    const btnArch = $("open-archives"); if (btnArch) btnArch.addEventListener("click", () => { showView("archives"); renderArchives(); });
-    const backArch = $("back-from-archives"); if (backArch) backArch.addEventListener("click", () => { showView("main"); renderAll(); });
-    const searchArch = $("archive-search"); if (searchArch) searchArch.addEventListener("input", renderArchives);
-    const selAll = $("archive-select-all"); if (selAll) selAll.addEventListener("change", () => {
-      const selected = {}; if (selAll.checked) {
-        // Select all currently visible items
-        const boxes = document.querySelectorAll("#archive-list input[type=checkbox]");
-        boxes.forEach(b => { const id = b.closest(".card")?.querySelector("button.ghost") ? null : null; });
-      }
-      // rebuild selection map by reading DOM
-      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
-      const map = {};
-      cards.forEach(card => {
-        const cb = card.querySelector('input[type=checkbox]');
-        const title = card.querySelector('div'); // not robust; selection map maintained elsewhere
-      });
-    });
-    const delBtn = $("archive-delete-selected");
-    if (delBtn) delBtn.addEventListener("click", () => {
-      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
-      if (!ids.length) return;
-      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
-      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
-      save(); renderArchives(); renderContractors(); renderTabs();
-      toast("Deleted selected archived jobs");
-    });
-  });
+  
