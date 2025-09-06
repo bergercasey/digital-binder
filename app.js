@@ -611,7 +611,17 @@ function renderAll() {
     renderAll();
   }
 
-  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+  
+  // Global delegated handler for Edit Job (more reliable on iPad/touch)
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target && (ev.target.id === "edit-job" ? ev.target : ev.target.closest && ev.target.closest("#edit-job"));
+    if (!btn) return;
+    const j = currentJob(); if (!j) return;
+    if (state.ui.editing && !j.initComplete) j.initComplete = true;
+    state.ui.editing = !state.ui.editing;
+    renderPanel();
+  }, { passive: true });
+window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     // Edit Job toggle
     const editBtn = $("edit-job");
     if (editBtn) {
