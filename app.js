@@ -314,7 +314,7 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.textContent = obj.text || String(n);
+      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
