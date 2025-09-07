@@ -1,3 +1,90 @@
+
+// ===== Bootstrap: define cloudLoad/cloudSave early & login modal hooks =====
+(function(){
+  const w = (typeof window !== 'undefined') ? window : globalThis;
+
+  // Modal elements are added in index.html; guard if not present yet.
+  function sbw(){ try { return Math.max(0, window.innerWidth - document.documentElement.clientWidth); } catch { return 0; } }
+  function openModal(){
+    const modal = document.getElementById('loginModal');
+    if (!modal) return; // if modal not in DOM yet, skip
+    document.documentElement.style.setProperty('--sbw', sbw() + 'px');
+    document.documentElement.classList.add('modal-open');
+    document.body.classList.add('modal-open');
+    modal.setAttribute('open','');
+    modal.setAttribute('aria-hidden','false');
+    const userEl = document.getElementById('loginUser');
+    setTimeout(()=> userEl && userEl.focus(), 0);
+  }
+  function closeModal(){
+    const modal = document.getElementById('loginModal');
+    if (!modal) return;
+    modal.removeAttribute('open');
+    modal.setAttribute('aria-hidden','true');
+    document.documentElement.classList.remove('modal-open');
+    document.body.classList.remove('modal-open');
+    const errEl = document.getElementById('loginError');
+    if (errEl) errEl.textContent='';
+  }
+  async function doLogin(username, password, remember){
+    try {
+      const r = await fetch('/.netlify/functions/auth-login', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username, password, remember: !!remember })
+      });
+      if (!r.ok) return false;
+      const j = await r.json().catch(()=>({}));
+      return !!j.ok;
+    } catch { return false; }
+  }
+
+  // Install submit handler if form exists later
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('loginForm');
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const u = document.getElementById('loginUser').value.trim();
+        const p = document.getElementById('loginPass').value;
+        const r = document.getElementById('rememberMe').checked;
+        const err = document.getElementById('loginError');
+        err.textContent='';
+        const ok = await doLogin(u,p,r);
+        if (!ok) { err.textContent = 'Invalid username or password'; return; }
+        closeModal();
+        if (w.cloudLoad) { try { const data = await w.cloudLoad(); if (w.hydrate && data) w.hydrate(data); } catch{} }
+      });
+    }
+  });
+
+  // Define core helpers if not already defined
+  w.cloudLoad = w.cloudLoad || (async function(){
+    try {
+      const res = await fetch('/.netlify/functions/load', { headers:{'cache-control':'no-cache'} });
+      if (res.status === 401) return 401;
+      if (!res.ok) throw new Error('load ' + res.status);
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  });
+  w.cloudSave = w.cloudSave || (async function(data){
+    try {
+      const res = await fetch('/.netlify/functions/save', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data||{})
+      });
+      if (res.status === 401) return 401;
+      return res.ok;
+    } catch (e) { return false; }
+  });
+
+  // Wrap with auth-detection to auto-open modal on 401
+  const _cl = w.cloudLoad; w.cloudLoad = async function(){ const r = await _cl(); if (r === 401) { openModal(); return null; } return r; };
+  const _cs = w.cloudSave; w.cloudSave = async function(d){ const ok = await _cs(d); if (ok === 401) { openModal(); return false; } return ok; };
+})();
+// ===== End Bootstrap =====
+
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
