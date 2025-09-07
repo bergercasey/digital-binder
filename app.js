@@ -504,8 +504,57 @@ function renderAll() {
       const b = $("note-bold"); if (b) b.addEventListener("click", (e)=>{ e.preventDefault(); cmd("bold"); });
       const i = $("note-italic"); if (i) i.addEventListener("click", (e)=>{ e.preventDefault(); cmd("italic"); });
       const u = $("note-underline"); if (u) u.addEventListener("click", (e)=>{ e.preventDefault(); cmd("underline"); });
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); cmd("insertUnorderedList"); });
-      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{
+      
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{
+        e.preventDefault(); focusEd();
+        // Try native toggle first
+        try { document.execCommand('insertUnorderedList'); } catch(e) {}
+        // If still not in a list, or to force toggle, do manual wrap/unwrap
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) { refresh(); saveSel(); return; }
+        function nearest(node, tag){
+          let n = node && (node.nodeType===1 ? node : node.parentElement);
+          tag = String(tag || "").toUpperCase();
+          while (n) { if (n.tagName === tag) return n; n = n.parentElement; }
+          return null;
+        }
+        function unwrapList(ul){
+          if (!ul || !ul.parentNode) return;
+          const frag = document.createDocumentFragment();
+          const lis = Array.from(ul.children);
+          lis.forEach((li, idx) => {
+            while (li.firstChild) frag.appendChild(li.firstChild);
+            if (idx < lis.length - 1) frag.appendChild(document.createElement("br"));
+          });
+          ul.parentNode.replaceChild(frag, ul);
+        }
+        function wrapSelectionWithList(range){
+          const ul = document.createElement("ul");
+          const li = document.createElement("li");
+          const contents = range.extractContents();
+          if (!contents || !contents.firstChild) {
+            li.appendChild(document.createTextNode("\\u00A0"));
+          } else {
+            li.appendChild(contents);
+          }
+          ul.appendChild(li);
+          range.insertNode(ul);
+          // place caret inside the li
+          const r2 = document.createRange();
+          r2.selectNodeContents(li);
+          r2.collapse(true);
+          sel.removeAllRanges(); sel.addRange(r2);
+        }
+        const r = sel.getRangeAt(0);
+        const li = nearest(sel.anchorNode, "LI");
+        if (li) { const ul = nearest(li, "UL"); unwrapList(ul); }
+        else {
+          // If native execCommand didn't create a list, fall back to manual
+          if (!nearest(sel.anchorNode, "LI")) wrapSelectionWithList(r);
+        }
+        refresh(); saveSel();
+      });
+     $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{
         e.preventDefault(); focusEd();
         // Toggle: if selection is inside <mark>, unwrap; otherwise apply
         const sel = window.getSelection && window.getSelection();
