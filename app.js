@@ -645,16 +645,15 @@ function renderAll() {
 
     $("add-job").addEventListener("click", () => {
       const c = currentContractor(); if (!c) return;
-      // Create job exactly as before
       const j = { id: uuid(), name: "New Job", stage: "Bid", crew: [], notes: [], createdAt: Date.now(), updatedAt: null, po: "", address: "", ready: false, archived: false };
       c.jobs = c.jobs || []; c.jobs.push(j);
       state.ui.selectedJobId = j.id;
-      // Always jump back to the main view and open the new job
-      showView("main");
-      save();
-      renderAll();
-      // Focus the note editor (or textarea) for quick entry
-      setTimeout(() => { const ed = $("new-note-editor") || $("new-note"); if (ed && ed.focus) ed.focus(); }, 0);
+      // Switch to edit mode for brand-new jobs so fields are visible
+      state.ui.editing = true;
+      // Jump back to main view and render
+      showView("main"); save(); renderAll();
+      // Focus the Job Name field so you can type immediately
+      setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
     $("archive-job").addEventListener("click", () => {
