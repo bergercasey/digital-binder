@@ -69,7 +69,7 @@
         ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: true }
       ]}
     ],
-    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
+    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false }
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
@@ -85,7 +85,6 @@
     state.ui.view = name;
     $("view-main").classList.toggle("active", name === "main");
     $("view-settings").classList.toggle("active", name === "settings");
-    $("view-archives").classList.toggle("active", name === "archives");
     $("to-main").style.display = name === "settings" ? "inline-block" : "none";
   }
 
@@ -121,7 +120,7 @@
 
       // Open on SINGLE CLICK (ignore clicks on the input)
       box.addEventListener("click", (ev) => {
-        // allow clicking nameInput to open
+        if (ev.target === nameInput) return;
         finishInit();
         state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
       });
@@ -166,7 +165,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -279,9 +278,6 @@
 
     // Job selected
     landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
-    (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })();
-    renderJobSummary(j);
-    (function(){ const b=$("edit-job"); if (b) b.textContent = state.ui.editing ? "Done" : "Edit Job"; })();
 
     // Fields
     $("job-name").value = j?.name || "";
@@ -315,106 +311,14 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : (formatMarkdownLite ? formatMarkdownLite(obj.text || "") : (obj.text || ""));
+      const body = document.createElement("div"); body.textContent = obj.text || String(n);
       item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
-  
-  function renderJobSummary(j) {
-    const box = $("job-summary"); if (!box) return;
-    if (!j) { box.style.display = "none"; box.innerHTML = ""; return; }
-    const crew = (j.crew || []).join(", ") || "—";
-    const po = j.po || "—";
-    const addr = j.address || "—";
-    const stage = j.stage || "—";
-    const updated = j.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
-    box.innerHTML = `
-      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <div style="font-size:18px; font-weight:700;">${j.name || "Untitled"}</div>
-        <span class="chip">Stage: ${stage}</span>
-        <span class="chip">PO: ${po}</span>
-        <span class="chip">Crew: ${crew}</span>
-      </div>
-      <div class="muted" style="margin-top:6px;">${addr}</div>
-      <div class="muted" style="font-size:12px; margin-top:4px;">Last updated: ${updated}</div>
-    `;
-    box.style.display = state.ui.editing ? "none" : "block";
-  }
-
-  function renderArchives() {
-    const list = $("archive-list"); const count = $("archive-count");
-    if (!list) return;
-    const q = ($("archive-search")?.value || "").trim().toLowerCase();
-    const rows = [];
-    state.contractors.forEach(c => {
-      c.jobs.forEach(j => {
-        if (j.archived) {
-          const text = [j.name||"", j.po||"", c.name||"", j.address||""].join(" ").toLowerCase();
-          if (!q || text.includes(q)) rows.push({ cId: c.id, cName: c.name||"—", id: j.id, name: j.name||"(Untitled)", po: j.po||"", updated: j.updatedAt||"", stage: j.stage||"" });
-        }
-      });
-    });
-    rows.sort((a,b) => String(a.name).localeCompare(String(b.name)));
-    list.innerHTML = "";
-    const selected = state.ui.archiveSelected || {};
-    rows.forEach(r => {
-      const item = document.createElement("div");
-      item.className = "card"; item.setAttribute("data-id", r.id);
-      item.style.padding = "8px 10px"; item.style.border = "1px solid var(--line)"; item.style.borderRadius = "8px";
-      item.style.display = "grid"; item.style.gridTemplateColumns = "24px 1fr auto"; item.style.gap = "8px";
-      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!selected[r.id];
-      cb.addEventListener("change", () => { selected[r.id] = cb.checked; updateDeleteBtn(); });
-      const main = document.createElement("div");
-      const title = document.createElement("div"); title.style.fontWeight = "600"; title.textContent = r.name + (r.po ? `  ·  PO ${r.po}` : "");
-      const sub = document.createElement("div"); sub.className = "muted"; sub.style.fontSize = "12px"; sub.textContent = `${r.cName}  ·  Updated ${r.updated ? new Date(r.updated).toLocaleString() : "—"}`;
-      main.appendChild(title); main.appendChild(sub);
-      const openBtn = document.createElement("button"); openBtn.className = "ghost"; openBtn.textContent = "Open";
-      openBtn.addEventListener("click", () => { state.ui.selectedContractorId = r.cId; state.ui.selectedJobId = r.id; showView("main"); renderAll(); });
-      item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
-      list.appendChild(item);
-    });
-    count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
-    state.ui.archiveSelected = selected;
-    updateDeleteBtn();
-  }
-  function updateDeleteBtn(){ const any = Object.values(state.ui.archiveSelected||{}).some(Boolean); const btn = $("archive-delete-selected"); if (btn) btn.disabled = !any; }
-
-  function sanitizeHtml(input) {
-    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P"]);
-    const wrap = document.createElement("div");
-    wrap.innerHTML = input || "";
-    (function walk(node){
-      for (let i=node.childNodes.length-1; i>=0; i--) {
-        const ch = node.childNodes[i];
-        if (ch.nodeType === 1) {
-          if (!allowed.has(ch.tagName)) {
-            while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
-            node.removeChild(ch);
-          } else {
-            for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
-            walk(ch);
-          }
-        }
-      }
-    })(wrap);
-    return wrap.innerHTML;
-  }
-
-  function escapeHtml(s) {
-    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  }
-  function formatMarkdownLite(s) {
-    let x = escapeHtml(String(s || ""));
-    x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    x = x.replace(/__(.+?)__/g, '<u>$1</u>');
-    x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2</em>');
-    x = x.replace(/==(.+?)==/g, '<mark>$1</mark>');
-    return x.replace(/\n/g, '<br>');
-  }
-function renderAll() {
+  function renderAll() {
     showView(state.ui.view);
     renderContractors();
     renderTabs();
@@ -423,10 +327,9 @@ function renderAll() {
   }
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
-  function pushNote(job, payload) {
+  function pushNote(job, text) {
     job.notes = job.notes || [];
-    if (typeof payload === "string") job.notes.push({ d: ymd(), text: payload });
-    else job.notes.push({ d: ymd(), ...(payload || {}) });
+    job.notes.push({ d: ymd(), text });
   }
 
   const save = debounce(async () => {
@@ -442,105 +345,6 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
-
-    // Enable WYSIWYG toolbar for contenteditable notes
-    (function(){
-      const ed = $("new-note");
-      function focusEd(){ if (ed) ed.focus(); }
-      function surround(tag){
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const r = sel.getRangeAt(0);
-        try { const el = document.createElement(tag); r.surroundContents(el); }
-        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
-      }
-      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
-      Object.entries(map).forEach(([id,cmd]) => {
-        const b = $(id); if (!b) return;
-        b.addEventListener("click", () => { focusEd(); document.execCommand(cmd); });
-      });
-      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", () => { focusEd(); surround('mark'); });
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
-      if (ed) {
-        ed.addEventListener("keydown", (e) => {
-          if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); }
-        });
-      }
-      // Active-state feedback
-      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
-      function refresh(){
-        Object.entries(map).forEach(([id,cmd]) => { const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(cmd); }catch(e){} b.classList.toggle("active", !!on); });
-        const sel = window.getSelection && window.getSelection(); const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1? sel.anchorNode : sel.anchorNode.parentElement) : null;
-        if (hl) hl.classList.toggle("active", !!(node && hasMark(node)));
-      }
-      document.addEventListener("selectionchange", refresh);
-      if (ed) ed.addEventListener("keyup", refresh);
-      refresh();
-    })();
-
-
-    // Archives: toolbar button + view controls
-    const btnArchTop = $("open-archives-top");
-    if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
-
-    const backArch = $("back-from-archives");
-    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
-
-    const searchArch = $("archive-search");
-    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
-
-    const selAll = $("archive-select-all");
-    if (selAll) selAll.addEventListener("change", (e) => {
-      const checked = e.target.checked;
-      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
-      const map = state.ui.archiveSelected || {};
-      cards.forEach(card => {
-        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
-        cb.checked = checked;
-        const id = card.getAttribute("data-id"); if (id) map[id] = checked;
-      });
-      state.ui.archiveSelected = map; updateDeleteBtn();
-    });
-
-    const delBtn = $("archive-delete-selected");
-    if (delBtn) delBtn.addEventListener("click", () => {
-      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
-      if (!ids.length) return;
-      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
-      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
-      state.ui.archiveSelected = {};
-      save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
-    });
-
-    // Edit Job toggle
-    const editBtn = $("edit-job");
-    if (editBtn) {
-      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
-      setLabel();
-      editBtn.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
-        state.ui.editing = !state.ui.editing;
-        setLabel();
-        renderPanel();
-      });
-    }
-
-    // WYSIWYG toolbar (contenteditable)
-    (function(){
-      const ids=["note-bold","note-italic","note-underline","note-highlight","note-bullet"];
-      ids.forEach(id=>{const el=$(id); if(!el) return; const clone=el.cloneNode(true); el.parentNode.replaceChild(clone, el);});
-      const ed = $("new-note");
-      function focusEd(){ if(ed) ed.focus(); }
-      function surround(tag){ const sel=window.getSelection && window.getSelection(); if(!sel||sel.rangeCount===0) return; const range=sel.getRangeAt(0); try{ const el=document.createElement(tag); range.surroundContents(el);}catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`);}}
-      const b=$("note-bold"); if(b) b.addEventListener("click", ()=>{ focusEd(); document.execCommand('bold'); });
-      const i=$("note-italic"); if(i) i.addEventListener("click", ()=>{ focusEd(); document.execCommand('italic'); });
-      const u=$("note-underline"); if(u) u.addEventListener("click", ()=>{ focusEd(); document.execCommand('underline'); });
-      const hl=$("note-highlight"); if(hl) hl.addEventListener("click", ()=>{ focusEd(); surround('mark'); });
-      const bl=$("note-bullet"); if(bl) bl.addEventListener("click", ()=>{ focusEd(); document.execCommand('insertUnorderedList'); });
-      if (ed) { ed.addEventListener("keydown", (e)=>{ if(e.key==="Tab"){ e.preventDefault(); if(e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } }); }
-    })();
-
 
     $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
     $("to-main").addEventListener("click", () => { finishInit(); showView("main"); });
@@ -584,7 +388,7 @@ function renderAll() {
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      state.ui.editing = true; renderTabs(); renderPanel(); save();
+      renderTabs(); renderPanel(); save();
       toast("Job created");
     });
 
@@ -651,18 +455,9 @@ function renderAll() {
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
-      const ed = $("new-note");
-      const html = (ed && ed.innerHTML ? ed.innerHTML.trim() : "");
-      const txt  = (ed && ed.innerText ? ed.innerText.trim() : "");
-      if (!html && !txt) return;
-      if (!j.initComplete) j.initComplete = true;
-      pushNote(j, { text: txt, html });
-      if (ed) ed.innerHTML = "";
-      markUpdated(j); save(); renderPanel();
-    });
-      if (ed) ed.innerHTML = "";
-      markUpdated(j); save(); renderPanel();
-    }); if(ed) ed.innerHTML="";
+      const txt = $("new-note").value.trim(); if (!txt) return;
+      if (!j.initComplete) j.initComplete = true; // first manual note ends setup
+      pushNote(j, txt); $("new-note").value = "";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
 
@@ -696,104 +491,5 @@ function renderAll() {
     renderAll();
   }
 
-  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
-
-    // Enable WYSIWYG toolbar for contenteditable notes
-    (function(){
-      const ed = $("new-note");
-      function focusEd(){ if (ed) ed.focus(); }
-      function surround(tag){
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const r = sel.getRangeAt(0);
-        try { const el = document.createElement(tag); r.surroundContents(el); }
-        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
-      }
-      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
-      Object.entries(map).forEach(([id,cmd]) => {
-        const b = $(id); if (!b) return;
-        b.addEventListener("click", () => { focusEd(); document.execCommand(cmd); });
-      });
-      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", () => { focusEd(); surround('mark'); });
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
-      if (ed) {
-        ed.addEventListener("keydown", (e) => {
-          if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); }
-        });
-      }
-      // Active-state feedback
-      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
-      function refresh(){
-        Object.entries(map).forEach(([id,cmd]) => { const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(cmd); }catch(e){} b.classList.toggle("active", !!on); });
-        const sel = window.getSelection && window.getSelection(); const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1? sel.anchorNode : sel.anchorNode.parentElement) : null;
-        if (hl) hl.classList.toggle("active", !!(node && hasMark(node)));
-      }
-      document.addEventListener("selectionchange", refresh);
-      if (ed) ed.addEventListener("keyup", refresh);
-      refresh();
-    })();
-
-
-    // Archives: toolbar button + view controls
-    const btnArchTop = $("open-archives-top");
-    if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
-
-    const backArch = $("back-from-archives");
-    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
-
-    const searchArch = $("archive-search");
-    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
-
-    const selAll = $("archive-select-all");
-    if (selAll) selAll.addEventListener("change", (e) => {
-      const checked = e.target.checked;
-      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
-      const map = state.ui.archiveSelected || {};
-      cards.forEach(card => {
-        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
-        cb.checked = checked;
-        const id = card.getAttribute("data-id"); if (id) map[id] = checked;
-      });
-      state.ui.archiveSelected = map; updateDeleteBtn();
-    });
-
-    const delBtn = $("archive-delete-selected");
-    if (delBtn) delBtn.addEventListener("click", () => {
-      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
-      if (!ids.length) return;
-      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
-      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
-      state.ui.archiveSelected = {};
-      save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
-    });
-
-    // Edit Job toggle
-    const editBtn = $("edit-job");
-    if (editBtn) {
-      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
-      setLabel();
-      editBtn.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
-        state.ui.editing = !state.ui.editing;
-        setLabel();
-        renderPanel();
-      });
-    }
-
-    // WYSIWYG toolbar (contenteditable)
-    (function(){
-      const ids=["note-bold","note-italic","note-underline","note-highlight","note-bullet"];
-      ids.forEach(id=>{const el=$(id); if(!el) return; const clone=el.cloneNode(true); el.parentNode.replaceChild(clone, el);});
-      const ed = $("new-note");
-      function focusEd(){ if(ed) ed.focus(); }
-      function surround(tag){ const sel=window.getSelection && window.getSelection(); if(!sel||sel.rangeCount===0) return; const range=sel.getRangeAt(0); try{ const el=document.createElement(tag); range.surroundContents(el);}catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`);}}
-      const b=$("note-bold"); if(b) b.addEventListener("click", ()=>{ focusEd(); document.execCommand('bold'); });
-      const i=$("note-italic"); if(i) i.addEventListener("click", ()=>{ focusEd(); document.execCommand('italic'); });
-      const u=$("note-underline"); if(u) u.addEventListener("click", ()=>{ focusEd(); document.execCommand('underline'); });
-      const hl=$("note-highlight"); if(hl) hl.addEventListener("click", ()=>{ focusEd(); surround('mark'); });
-      const bl=$("note-bullet"); if(bl) bl.addEventListener("click", ()=>{ focusEd(); document.execCommand('insertUnorderedList'); });
-      if (ed) { ed.addEventListener("keydown", (e)=>{ if(e.key==="Tab"){ e.preventDefault(); if(e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } }); }
-    })();
- wire(); boot(); });
+  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status"); wire(); boot(); });
 })();
