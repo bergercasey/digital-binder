@@ -644,14 +644,17 @@ function renderAll() {
     });
 
     $("add-job").addEventListener("click", () => {
-      const c = currentContractor(); if (!c) { alert("Open a contractor first (click a name)."); return; }
-      finishInit();
-      const j = { id: uuid(), name: "New Job", po: "", address: "", stage: state.stages[0] || "", crew: [], notes: [], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: false };
-      pushNote(j, "Created");
-      c.jobs.unshift(j);
+      const c = currentContractor(); if (!c) return;
+      // Create job exactly as before
+      const j = { id: nanoid(), name: "New Job", stage: "Bid", crew: [], notes: [], createdAt: Date.now(), updatedAt: null, po: "", address: "", ready: false, archived: false };
+      c.jobs = c.jobs || []; c.jobs.push(j);
       state.ui.selectedJobId = j.id;
-      state.ui.editing = true; state.ui.editing = true; renderTabs(); renderPanel(); save();
-      toast("Job created");
+      // Always jump back to the main view and open the new job
+      showView("main");
+      save();
+      renderAll();
+      // Focus the note editor (or textarea) for quick entry
+      setTimeout(() => { const ed = $("new-note-editor") || $("new-note"); if (ed && ed.focus) ed.focus(); }, 0);
     });
 
     $("archive-job").addEventListener("click", () => {
