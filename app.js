@@ -406,6 +406,14 @@
   function escapeHtml(s) {
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
+  function formatMarkdownLite(s) {
+    let x = escapeHtml(String(s || ""));
+    x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    x = x.replace(/__(.+?)__/g, '<u>$1</u>');
+    x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2</em>');
+    x = x.replace(/==(.+?)==/g, '<mark>$1</mark>');
+    return x.replace(/\n/g, '<br>');
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -415,7 +423,11 @@ function renderAll() {
   }
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
-  function pushNote(job, payload){ job.notes = job.notes || []; if (typeof payload === "string") job.notes.push({ d: ymd(), text: payload }); else job.notes.push({ d: ymd(), ...(payload||{}) }); }
+  function pushNote(job, payload) {
+    job.notes = job.notes || [];
+    if (typeof payload === "string") job.notes.push({ d: ymd(), text: payload });
+    else job.notes.push({ d: ymd(), ...(payload || {}) });
+  }
 
   const save = debounce(async () => {
     status("Saving…");
@@ -430,6 +442,42 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
+
+    // Enable WYSIWYG toolbar for contenteditable notes
+    (function(){
+      const ed = $("new-note");
+      function focusEd(){ if (ed) ed.focus(); }
+      function surround(tag){
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const r = sel.getRangeAt(0);
+        try { const el = document.createElement(tag); r.surroundContents(el); }
+        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
+      }
+      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
+      Object.entries(map).forEach(([id,cmd]) => {
+        const b = $(id); if (!b) return;
+        b.addEventListener("click", () => { focusEd(); document.execCommand(cmd); });
+      });
+      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", () => { focusEd(); surround('mark'); });
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
+      if (ed) {
+        ed.addEventListener("keydown", (e) => {
+          if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); }
+        });
+      }
+      // Active-state feedback
+      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
+      function refresh(){
+        Object.entries(map).forEach(([id,cmd]) => { const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(cmd); }catch(e){} b.classList.toggle("active", !!on); });
+        const sel = window.getSelection && window.getSelection(); const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1? sel.anchorNode : sel.anchorNode.parentElement) : null;
+        if (hl) hl.classList.toggle("active", !!(node && hasMark(node)));
+      }
+      document.addEventListener("selectionchange", refresh);
+      if (ed) ed.addEventListener("keyup", refresh);
+      refresh();
+    })();
+
 
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
@@ -608,7 +656,10 @@ function renderAll() {
       const txt  = (ed && ed.innerText ? ed.innerText.trim() : "");
       if (!html && !txt) return;
       if (!j.initComplete) j.initComplete = true;
-      pushNote(j, { text: txt, html: sanitizeHtml(html) });
+      pushNote(j, { text: txt, html });
+      if (ed) ed.innerHTML = "";
+      markUpdated(j); save(); renderPanel();
+    });
       if (ed) ed.innerHTML = "";
       markUpdated(j); save(); renderPanel();
     }); if(ed) ed.innerHTML="";
@@ -646,6 +697,42 @@ function renderAll() {
   }
 
   window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+
+    // Enable WYSIWYG toolbar for contenteditable notes
+    (function(){
+      const ed = $("new-note");
+      function focusEd(){ if (ed) ed.focus(); }
+      function surround(tag){
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const r = sel.getRangeAt(0);
+        try { const el = document.createElement(tag); r.surroundContents(el); }
+        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
+      }
+      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
+      Object.entries(map).forEach(([id,cmd]) => {
+        const b = $(id); if (!b) return;
+        b.addEventListener("click", () => { focusEd(); document.execCommand(cmd); });
+      });
+      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", () => { focusEd(); surround('mark'); });
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
+      if (ed) {
+        ed.addEventListener("keydown", (e) => {
+          if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); }
+        });
+      }
+      // Active-state feedback
+      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
+      function refresh(){
+        Object.entries(map).forEach(([id,cmd]) => { const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(cmd); }catch(e){} b.classList.toggle("active", !!on); });
+        const sel = window.getSelection && window.getSelection(); const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1? sel.anchorNode : sel.anchorNode.parentElement) : null;
+        if (hl) hl.classList.toggle("active", !!(node && hasMark(node)));
+      }
+      document.addEventListener("selectionchange", refresh);
+      if (ed) ed.addEventListener("keyup", refresh);
+      refresh();
+    })();
+
 
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
