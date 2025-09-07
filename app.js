@@ -314,7 +314,7 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.textContent = obj.text || String(n);
+      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = formatMarkdownLite(obj.text || String(n)).replace(/\n/g,"<br>");
       item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
@@ -390,6 +390,19 @@
     `;
     box.style.display = state.ui.editing ? "none" : "block";
   }
+
+  // --- Notes formatting helpers (minimal) ---
+  function escapeHtml(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+  function formatMarkdownLite(s) {
+    let x = escapeHtml(String(s || ""));
+    x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    x = x.replace(/__(.+?)__/g, '<u>$1</u>');
+    x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2</em>');
+    x = x.replace(/==(.+?)==/g, '<mark>$1</mark>');
+    return x;
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -417,6 +430,37 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
+
+    // Notes toolbar (textarea markers)
+    (function(){
+      const ta = $("new-note"); if (!ta) return;
+      function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
+      const map = { "note-bold":"**", "note-italic":"_", "note-underline":"__", "note-highlight":"=="};
+      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); }); });
+      ta.addEventListener("keydown", (e)=>{
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const st = ta.selectionStart, en = ta.selectionEnd, val = ta.value;
+          const ls = val.lastIndexOf("\n", st-1) + 1;
+          if (!e.shiftKey) {
+            const region = val.slice(ls, en);
+            const ind = region.replace(/^/gm, "  ");
+            ta.value = val.slice(0, ls) + ind + val.slice(en);
+            const delta = ind.length - region.length;
+            ta.selectionStart = st + (st === ls ? 2 : 0);
+            ta.selectionEnd = en + delta;
+          } else {
+            const region = val.slice(ls, en);
+            const out = region.replace(/^( {1,2})/gm, "");
+            ta.value = val.slice(0, ls) + out + val.slice(en);
+            const delta = region.length - out.length;
+            ta.selectionStart = Math.max(ls, st - (st === ls ? Math.min(2, delta) : 0));
+            ta.selectionEnd = en - delta;
+          }
+        }
+      });
+    })();
+
     // Edit Job toggle
     const editBtn = $("edit-job");
     if (editBtn) {
@@ -622,6 +666,37 @@ function renderAll() {
     renderPanel();
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+
+    // Notes toolbar (textarea markers)
+    (function(){
+      const ta = $("new-note"); if (!ta) return;
+      function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
+      const map = { "note-bold":"**", "note-italic":"_", "note-underline":"__", "note-highlight":"=="};
+      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); }); });
+      ta.addEventListener("keydown", (e)=>{
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const st = ta.selectionStart, en = ta.selectionEnd, val = ta.value;
+          const ls = val.lastIndexOf("\n", st-1) + 1;
+          if (!e.shiftKey) {
+            const region = val.slice(ls, en);
+            const ind = region.replace(/^/gm, "  ");
+            ta.value = val.slice(0, ls) + ind + val.slice(en);
+            const delta = ind.length - region.length;
+            ta.selectionStart = st + (st === ls ? 2 : 0);
+            ta.selectionEnd = en + delta;
+          } else {
+            const region = val.slice(ls, en);
+            const out = region.replace(/^( {1,2})/gm, "");
+            ta.value = val.slice(0, ls) + out + val.slice(en);
+            const delta = region.length - out.length;
+            ta.selectionStart = Math.max(ls, st - (st === ls ? Math.min(2, delta) : 0));
+            ta.selectionEnd = en - delta;
+          }
+        }
+      });
+    })();
+
     // Edit Job toggle
     const editBtn = $("edit-job");
     if (editBtn) {
