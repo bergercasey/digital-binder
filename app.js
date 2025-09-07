@@ -646,7 +646,7 @@ function renderAll() {
     $("add-job").addEventListener("click", () => {
       const c = currentContractor(); if (!c) return;
       // Create job exactly as before
-      const j = { id: nanoid(), name: "New Job", stage: "Bid", crew: [], notes: [], createdAt: Date.now(), updatedAt: null, po: "", address: "", ready: false, archived: false };
+      const j = { id: uuid(), name: "New Job", stage: "Bid", crew: [], notes: [], createdAt: Date.now(), updatedAt: null, po: "", address: "", ready: false, archived: false };
       c.jobs = c.jobs || []; c.jobs.push(j);
       state.ui.selectedJobId = j.id;
       // Always jump back to the main view and open the new job
