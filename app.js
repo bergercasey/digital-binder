@@ -424,6 +424,27 @@
     })(wrap);
     return wrap.innerHTML.replace(/\n/g,"");
   }
+
+  // --- Printing helpers ---
+  function buildPrintSheet(job, idx) {
+    const el = $("print-sheet"); if (!el) return;
+    const title = escapeHtml(job.name || "Job");
+    const crew = (job.crew || []).join(", ");
+    const meta = [
+      job.stage ? "Stage: " + escapeHtml(job.stage) : null,
+      job.po ? "PO: " + escapeHtml(job.po) : null,
+      crew ? "Crew: " + escapeHtml(crew) : null,
+      job.address ? "Address: " + escapeHtml(job.address) : null
+    ].filter(Boolean).join(" \u2022 ");
+    let notes = job.notes || [];
+    if (typeof idx === "number" && idx >= 0 && idx < notes.length) notes = [notes[idx]];
+    const body = notes.map(n => {
+      const inner = n.html ? sanitizeHtml(n.html) : formatMarkdownLite(n.text || "").replace(/\n/g,"<br>");
+      return `<div class="print-note"><div class="print-date">${escapeHtml(n.d||"")}</div><div class="print-body">${inner}</div></div>`;
+    }).join("");
+    el.innerHTML = `<div class="print-head"><div class="print-title">${title}</div><div class="print-meta">${meta}</div></div>` + body;
+  }
+
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -656,7 +677,14 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    $("archive-job").addEventListener("click", () => {
+    $("print-job").addEventListener("click", () => {
+  const j = currentJob(); if (!j) return;
+  const idx = (state.ui && typeof state.ui.selectedNoteIndex === "number") ? state.ui.selectedNoteIndex : null;
+  buildPrintSheet(j, idx);
+  window.print();
+});
+
+$("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
       j.archived = !j.archived;
