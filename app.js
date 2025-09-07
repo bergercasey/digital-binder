@@ -402,6 +402,10 @@
     })(wrap);
     return wrap.innerHTML;
   }
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -411,10 +415,7 @@ function renderAll() {
   }
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
-  function pushNote(job, text) {
-    job.notes = job.notes || [];
-    job.notes.push({ d: ymd(), text });
-  }
+  function pushNote(job, payload){ job.notes = job.notes || []; if (typeof payload === "string") job.notes.push({ d: ymd(), text: payload }); else job.notes.push({ d: ymd(), ...(payload||{}) }); }
 
   const save = debounce(async () => {
     status("Saving…");
@@ -602,9 +603,15 @@ function renderAll() {
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
-      const ed=$("new-note"); const html=(ed&&ed.innerHTML?ed.innerHTML.trim():""); const txt=(ed&&ed.innerText?ed.innerText.trim():""); if(!txt&&!html) return;
-      if (!j.initComplete) j.initComplete = true; // first manual note ends setup
-      pushNote(j, { text: txt, html: sanitizeHtml(html) }); if(ed) ed.innerHTML="";
+      const ed = $("new-note");
+      const html = (ed && ed.innerHTML ? ed.innerHTML.trim() : "");
+      const txt  = (ed && ed.innerText ? ed.innerText.trim() : "");
+      if (!html && !txt) return;
+      if (!j.initComplete) j.initComplete = true;
+      pushNote(j, { text: txt, html: sanitizeHtml(html) });
+      if (ed) ed.innerHTML = "";
+      markUpdated(j); save(); renderPanel();
+    }); if(ed) ed.innerHTML="";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
 
