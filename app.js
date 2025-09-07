@@ -314,7 +314,8 @@
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
-      if (state.ui && state.ui.selectedNoteIndex === i) item.classList.add("selected");
+      const isSel = (state.ui && state.ui.selectedNoteIndex === i);
+      if (isSel) item.classList.add("selected");
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
