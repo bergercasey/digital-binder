@@ -391,52 +391,34 @@
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  // --- Notes helpers (HTML + minimal markdown fallback) ---
-  function escapeHtml(s) {
-    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  }
+  // --- Notes helpers (HTML + markdown-lite fallback) ---
+  function escapeHtml(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function inlineFmt(s) {
-    let x = s;
-    x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    let x = s; x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     x = x.replace(/__(.+?)__/g, '<u>$1</u>');
     x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2</em>');
     x = x.replace(/==(.+?)==/g, '<mark>$1</mark>');
     return x;
   }
   function formatMarkdownLite(s) {
-    const lines = String(s || "").split(/\n/);
-    const out = [];
-    let inList = false;
+    const lines = String(s || "").split(/\n/); const out = []; let inList = false;
     for (const raw of lines) {
       const line = escapeHtml(raw);
-      if (/^\s*-\s+/.test(line)) {
-        if (!inList) { out.push("<ul>"); inList = true; }
-        const item = line.replace(/^\s*-\s+/, "");
-        out.push("<li>" + inlineFmt(item) + "</li>");
-      } else {
-        if (inList) { out.push("</ul>"); inList = false; }
-        out.push(inlineFmt(line) + "<br>");
-      }
+      if (/^\s*-\s+/.test(line)) { if (!inList) { out.push("<ul>"); inList = true; }
+        const item = line.replace(/^\s*-\s+/, ""); out.push("<li>" + inlineFmt(item) + "</li>");
+      } else { if (inList) { out.push("</ul>"); inList = false; } out.push(inlineFmt(line) + "<br>"); }
     }
-    if (inList) out.push("</ul>");
-    return out.join("");
+    if (inList) out.push("</ul>"); return out.join("");
   }
   function sanitizeHtml(input) {
     const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN"]);
-    const wrap = document.createElement("div");
-    wrap.innerHTML = input || "";
+    const wrap = document.createElement("div"); wrap.innerHTML = input || "";
     (function walk(node){
       for (let i=node.childNodes.length-1; i>=0; i--) {
         const ch = node.childNodes[i];
-        if (ch.nodeType === 1) { // element
-          if (!allowed.has(ch.tagName)) {
-            while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
-            node.removeChild(ch);
-          } else {
-            // strip attributes
-            for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
-            walk(ch);
-          }
+        if (ch.nodeType === 1) {
+          if (!allowed.has(ch.tagName)) { while (ch.firstChild) node.insertBefore(ch.firstChild, ch); node.removeChild(ch); }
+          else { for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name); walk(ch); }
         }
       }
     })(wrap);
@@ -471,33 +453,86 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
-    // WYSIWYG toolbar for contenteditable editor
+    // WYSIWYG toolbar with selection restore and highlight toggle
     (function(){
       const ed = $("new-note-editor"); if (!ed) return;
-      function focusEd(){ ed.focus(); }
+      let savedRange = null;
+      function saveSel() {
+        const sel = window.getSelection && window.getSelection();
+        if (sel && sel.rangeCount > 0) savedRange = sel.getRangeAt(0);
+      }
+      function restoreSel() {
+        if (!savedRange) return;
+        const sel = window.getSelection && window.getSelection();
+        if (!sel) return;
+        sel.removeAllRanges(); sel.addRange(savedRange);
+      }
+      // Keep selection when clicking toolbar
+      ["note-bold","note-italic","note-underline","note-highlight","note-bullet"].forEach(id => {
+        const b = $(id); if (!b) return;
+        b.addEventListener("mousedown", (e)=>{ e.preventDefault(); restoreSel(); });
+      });
+      ed.addEventListener("mouseup", saveSel);
+      ed.addEventListener("keyup", saveSel);
+      ed.addEventListener("mouseleave", saveSel);
+      function focusEd(){ ed.focus(); restoreSel(); }
       function surround(tag){
         const sel = window.getSelection && window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
         const r = sel.getRangeAt(0);
-        try { const el = document.createElement(tag); r.surroundContents(el); }
-        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
+        try { const el = document.createElement(tag); r.surroundContents(el); saveSel(); }
+        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); saveSel(); }
       }
-      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
-      Object.entries(map).forEach(([id, cmd]) => {
-        const b = $(id); if (!b) return;
-        b.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand(cmd); refresh(); });
+      function unwrapTag(tag) {
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const r = sel.getRangeAt(0);
+        const container = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+        const marks = Array.from(container.querySelectorAll(tag));
+        marks.forEach(m => {
+          const range = document.createRange();
+          range.selectNodeContents(m);
+          if (r.intersectsNode(m)) {
+            while (m.firstChild) m.parentNode.insertBefore(m.firstChild, m);
+            m.parentNode.removeChild(m);
+          }
+        });
+        saveSel();
+      }
+      // Commands
+      const cmd = (name) => { focusEd(); document.execCommand(name); refresh(); saveSel(); };
+      const b = $("note-bold"); if (b) b.addEventListener("click", (e)=>{ e.preventDefault(); cmd("bold"); });
+      const i = $("note-italic"); if (i) i.addEventListener("click", (e)=>{ e.preventDefault(); cmd("italic"); });
+      const u = $("note-underline"); if (u) u.addEventListener("click", (e)=>{ e.preventDefault(); cmd("underline"); });
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); cmd("insertUnorderedList"); });
+      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{
+        e.preventDefault(); focusEd();
+        // Toggle: if selection is inside <mark>, unwrap; otherwise apply
+        const sel = window.getSelection && window.getSelection();
+        let insideMark = false;
+        if (sel && sel.anchorNode) {
+          let n = sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement;
+          while (n) { if (n.tagName === "MARK") { insideMark = true; break; } n = n.parentElement; }
+        }
+        if (insideMark) { unwrapTag("mark"); } else { surround("mark"); }
+        refresh(); saveSel();
       });
-      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); surround('mark'); refresh(); });
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand('insertUnorderedList'); refresh(); });
-      // Tab indent/outdent
-      ed.addEventListener("keydown", (e)=>{ if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } });
-      // Active state
-      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
+      // Active-state
+      function hasAncestor(node, tagName){
+        let n = node && (node.nodeType===1 ? node : node.parentElement);
+        while (n) { if (n.tagName === tagName) return true; n = n.parentElement; }
+        return false;
+      }
       function refresh(){
-        ["note-bold","note-italic","note-underline"].forEach((id)=>{ const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(map[id]); }catch(e){} b.classList.toggle("active", !!on); });
+        let onB=false,onI=false,onU=false,onHL=false;
+        try { onB=document.queryCommandState("bold"); onI=document.queryCommandState("italic"); onU=document.queryCommandState("underline"); } catch(e){}
         const sel = window.getSelection && window.getSelection();
         const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
-        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!(node && hasMark(node)));
+        onHL = !!(node && hasAncestor(node,"MARK"));
+        if ($("note-bold")) $("note-bold").classList.toggle("active", !!onB);
+        if ($("note-italic")) $("note-italic").classList.toggle("active", !!onI);
+        if ($("note-underline")) $("note-underline").classList.toggle("active", !!onU);
+        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!onHL);
       }
       document.addEventListener("selectionchange", refresh);
       ed.addEventListener("keyup", refresh);
@@ -714,33 +749,86 @@ function renderAll() {
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
-    // WYSIWYG toolbar for contenteditable editor
+    // WYSIWYG toolbar with selection restore and highlight toggle
     (function(){
       const ed = $("new-note-editor"); if (!ed) return;
-      function focusEd(){ ed.focus(); }
+      let savedRange = null;
+      function saveSel() {
+        const sel = window.getSelection && window.getSelection();
+        if (sel && sel.rangeCount > 0) savedRange = sel.getRangeAt(0);
+      }
+      function restoreSel() {
+        if (!savedRange) return;
+        const sel = window.getSelection && window.getSelection();
+        if (!sel) return;
+        sel.removeAllRanges(); sel.addRange(savedRange);
+      }
+      // Keep selection when clicking toolbar
+      ["note-bold","note-italic","note-underline","note-highlight","note-bullet"].forEach(id => {
+        const b = $(id); if (!b) return;
+        b.addEventListener("mousedown", (e)=>{ e.preventDefault(); restoreSel(); });
+      });
+      ed.addEventListener("mouseup", saveSel);
+      ed.addEventListener("keyup", saveSel);
+      ed.addEventListener("mouseleave", saveSel);
+      function focusEd(){ ed.focus(); restoreSel(); }
       function surround(tag){
         const sel = window.getSelection && window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
         const r = sel.getRangeAt(0);
-        try { const el = document.createElement(tag); r.surroundContents(el); }
-        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
+        try { const el = document.createElement(tag); r.surroundContents(el); saveSel(); }
+        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); saveSel(); }
       }
-      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
-      Object.entries(map).forEach(([id, cmd]) => {
-        const b = $(id); if (!b) return;
-        b.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand(cmd); refresh(); });
+      function unwrapTag(tag) {
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const r = sel.getRangeAt(0);
+        const container = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+        const marks = Array.from(container.querySelectorAll(tag));
+        marks.forEach(m => {
+          const range = document.createRange();
+          range.selectNodeContents(m);
+          if (r.intersectsNode(m)) {
+            while (m.firstChild) m.parentNode.insertBefore(m.firstChild, m);
+            m.parentNode.removeChild(m);
+          }
+        });
+        saveSel();
+      }
+      // Commands
+      const cmd = (name) => { focusEd(); document.execCommand(name); refresh(); saveSel(); };
+      const b = $("note-bold"); if (b) b.addEventListener("click", (e)=>{ e.preventDefault(); cmd("bold"); });
+      const i = $("note-italic"); if (i) i.addEventListener("click", (e)=>{ e.preventDefault(); cmd("italic"); });
+      const u = $("note-underline"); if (u) u.addEventListener("click", (e)=>{ e.preventDefault(); cmd("underline"); });
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); cmd("insertUnorderedList"); });
+      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{
+        e.preventDefault(); focusEd();
+        // Toggle: if selection is inside <mark>, unwrap; otherwise apply
+        const sel = window.getSelection && window.getSelection();
+        let insideMark = false;
+        if (sel && sel.anchorNode) {
+          let n = sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement;
+          while (n) { if (n.tagName === "MARK") { insideMark = true; break; } n = n.parentElement; }
+        }
+        if (insideMark) { unwrapTag("mark"); } else { surround("mark"); }
+        refresh(); saveSel();
       });
-      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); surround('mark'); refresh(); });
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand('insertUnorderedList'); refresh(); });
-      // Tab indent/outdent
-      ed.addEventListener("keydown", (e)=>{ if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } });
-      // Active state
-      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
+      // Active-state
+      function hasAncestor(node, tagName){
+        let n = node && (node.nodeType===1 ? node : node.parentElement);
+        while (n) { if (n.tagName === tagName) return true; n = n.parentElement; }
+        return false;
+      }
       function refresh(){
-        ["note-bold","note-italic","note-underline"].forEach((id)=>{ const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(map[id]); }catch(e){} b.classList.toggle("active", !!on); });
+        let onB=false,onI=false,onU=false,onHL=false;
+        try { onB=document.queryCommandState("bold"); onI=document.queryCommandState("italic"); onU=document.queryCommandState("underline"); } catch(e){}
         const sel = window.getSelection && window.getSelection();
         const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
-        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!(node && hasMark(node)));
+        onHL = !!(node && hasAncestor(node,"MARK"));
+        if ($("note-bold")) $("note-bold").classList.toggle("active", !!onB);
+        if ($("note-italic")) $("note-italic").classList.toggle("active", !!onI);
+        if ($("note-underline")) $("note-underline").classList.toggle("active", !!onU);
+        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!onHL);
       }
       document.addEventListener("selectionchange", refresh);
       ed.addEventListener("keyup", refresh);
