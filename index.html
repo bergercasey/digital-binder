@@ -166,7 +166,10 @@ body.modal-open { padding-right: var(--sbw); } /* compensate removed scrollbar *
       <button class="ghost" id="to-settings">Settings</button>
       <button class="ghost" id="open-archives-top">Archives</button>
       <button class="ghost" id="to-main" style="display:none;">Back to Jobs</button>
-      <button class="ghost" id="refresh-btn">Home</button>
+      <button class="ghost" id="refresh-btn">Home<
+<span id="authBadge" class="pill" style="margin-left:8px;display:none;">Auth</span>
+<button id="loginLink" class="btn" style="margin-left:6px;">Login</button>
+/button>
       <div class="searchbar" style="margin-left:8px;">
         <input id="header-search" type="text" placeholder="Search job by #, name, or address…"/>
         <button id="header-search-btn">Open</button>
@@ -255,7 +258,7 @@ body.modal-open { padding-right: var(--sbw); } /* compensate removed scrollbar *
 </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
-  <script defer src="app.js"></script>
+  
 <div id="print-sheet" style="display:none;"></div>
 
   <!-- Login Modal -->
@@ -284,5 +287,6 @@ body.modal-open { padding-right: var(--sbw); } /* compensate removed scrollbar *
     </div>
   </div>
 
+<script defer src="/app.js"></script>
 </body>
 </html>

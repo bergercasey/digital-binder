@@ -1135,3 +1135,33 @@ document.addEventListener('keydown', (ev) => {
     }
   } catch {}
 });
+
+
+// Visible Login button hook + auth badge
+document.addEventListener('DOMContentLoaded', async () => {
+  const btn = document.getElementById('loginLink');
+  const badge = document.getElementById('authBadge');
+  if (btn) btn.addEventListener('click', () => {
+    if (typeof window.binderOpenModal === 'function') window.binderOpenModal();
+  });
+  try {
+    const r = await fetch('/.netlify/functions/auth-check', { headers:{'cache-control':'no-cache'} });
+    if (badge) {
+      if (r.status === 200) {
+        badge.style.display = 'inline-block';
+        badge.textContent = 'Authed';
+        badge.style.background = '#e0f2fe'; // light blue
+        badge.style.border = '1px solid #bae6fd';
+        badge.style.padding = '2px 6px'; badge.style.borderRadius = '999px'; badge.style.fontSize = '12px';
+        badge.style.color = '#0369a1';
+      } else {
+        badge.style.display = 'inline-block';
+        badge.textContent = 'Login required';
+        badge.style.background = '#fee2e2'; // light red
+        badge.style.border = '1px solid #fecaca';
+        badge.style.padding = '2px 6px'; badge.style.borderRadius = '999px'; badge.style.fontSize = '12px';
+        badge.style.color = '#991b1b';
+      }
+    }
+  } catch {}
+});
