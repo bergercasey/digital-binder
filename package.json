@@ -1,8 +1,8 @@
 {
-  "name": "hvac-digital-binder",
-  "version": "1.0.0",
+  "name": "digital-binder",
   "private": true,
+  "type": "module",
   "dependencies": {
-    "@netlify/blobs": "^6.5.0"
+    "@netlify/blobs": "^6.3.0"
   }
 }
