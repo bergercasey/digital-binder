@@ -83,6 +83,10 @@
   const _cl = w.cloudLoad; w.cloudLoad = async function(){ const r = await _cl(); if (r === 401) { openModal(); return null; } return r; };
   const _cs = w.cloudSave; w.cloudSave = async function(d){ const ok = await _cs(d); if (ok === 401) { openModal(); return false; } return ok; };
 })();
+  // expose modal helpers globally
+  w.binderOpenModal = openModal;
+  w.binderCloseModal = closeModal;
+})();
 // ===== End Bootstrap =====
 
 /* app.js v3.12 */
@@ -1094,3 +1098,17 @@ cloudSave = async function(data) {
   return ok;
 };
 // ===== End Login Modal =====
+
+
+// Ensure auth at startup; if required and missing, show modal immediately
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const r = await fetch('/.netlify/functions/auth-check', { headers: { 'cache-control': 'no-cache' } });
+    if (r.status === 401) {
+      // open modal; cloudLoad wrapper will also handle later calls
+      try { if (typeof window.binderOpenModal === 'function') window.binderOpenModal(); } catch {}
+    } else {
+      // proceed as normal; nothing else to do
+    }
+  } catch {}
+});
