@@ -234,5 +234,18 @@
   <div class="toast-wrap" id="toast-wrap"></div>
   <script defer src="app.js"></script>
 <div id="print-sheet" style="display:none;"></div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const r = await fetch('/.netlify/functions/auth-check', { headers:{'cache-control':'no-cache'} });
+      if (r.status === 401) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        location.href = '/login.html?next=' + next;
+      }
+    } catch {}
+  });
+</script>
+
 </body>
 </html>

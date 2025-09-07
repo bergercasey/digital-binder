@@ -1,7 +1,9 @@
 // /.netlify/functions/save
 import { getStore } from '@netlify/blobs';
+import { checkAuth, needAuth } from './_auth.js';
 
-export async function handler(event) {
+export async function handler(event){
+  if (needAuth()) { const auth = checkAuth(event); if (!auth.ok) return { statusCode: 401, body: 'Unauthorized' }; }
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
