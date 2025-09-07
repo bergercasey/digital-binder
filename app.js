@@ -69,7 +69,7 @@
         ], archived: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), initComplete: true }
       ]}
     ],
-    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false }
+    ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
@@ -85,6 +85,7 @@
     state.ui.view = name;
     $("view-main").classList.toggle("active", name === "main");
     $("view-settings").classList.toggle("active", name === "settings");
+    $("view-archives").classList.toggle("active", name === "archives");
     $("to-main").style.display = name === "settings" ? "inline-block" : "none";
   }
 
@@ -120,7 +121,7 @@
 
       // Open on SINGLE CLICK (ignore clicks on the input)
       box.addEventListener("click", (ev) => {
-        if (ev.target === nameInput) return;
+        // allow click on nameInput to open (was guarded before)
         finishInit();
         state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
       });
@@ -142,7 +143,7 @@
     if (!c) return;
 
     const jobs = c.jobs
-      .filter(j => state.ui.showArchived ? true : !j.archived)
+      .filter(j => !j.archived)
       .slice()
       .sort((a,b) => {
         const na = parseLeadingNumber(a.name);
@@ -165,7 +166,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { state.ui.editing = false; state.ui.editing = false; state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -277,7 +278,9 @@
     }
 
     // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block"; (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
+    // Sync Edit label
+    (function(){ const b=$("edit-job"); if(b){ b.textContent = state.ui.editing ? "Done" : "Edit Job"; } })();
 
     // Fields
     $("job-name").value = j?.name || "";
@@ -318,7 +321,76 @@
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
-  function renderAll() {
+  
+  function renderArchives() {
+    const list = $("archive-list"); const count = $("archive-count");
+    if (!list) return;
+    const q = ($("archive-search")?.value || "").trim().toLowerCase();
+    const rows = [];
+    state.contractors.forEach(c => {
+      c.jobs.forEach(j => {
+        if (j.archived) {
+          const text = [j.name||"", j.po||"", c.name||"", j.address||""].join(" ").toLowerCase();
+          if (!q || text.includes(q)) {
+            rows.push({ cId: c.id, cName: c.name||"—", id: j.id, name: j.name||"(Untitled)", po: j.po||"", updated: j.updatedAt||"", stage: j.stage||"" });
+          }
+        }
+      });
+    });
+    rows.sort((a,b) => String(a.name).localeCompare(String(b.name)));
+    list.innerHTML = "";
+    const selected = state.ui.archiveSelected || {};
+    rows.forEach(r => {
+      const item = document.createElement("div");
+      item.className = "card"; item.setAttribute("data-id", r.id);
+      item.style.padding = "8px 10px";
+      item.style.border = "1px solid var(--line)";
+      item.style.borderRadius = "8px";
+      item.style.display = "grid";
+      item.style.gridTemplateColumns = "24px 1fr auto";
+      item.style.gap = "8px";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!selected[r.id];
+      cb.addEventListener("change", () => { selected[r.id] = cb.checked; updateDeleteBtn(); });
+      const main = document.createElement("div");
+      const title = document.createElement("div"); title.style.fontWeight = "600"; title.textContent = r.name + (r.po ? `  ·  PO ${r.po}` : "");
+      const sub = document.createElement("div"); sub.className = "muted"; sub.style.fontSize = "12px"; sub.textContent = `${r.cName}  ·  Updated ${r.updated ? new Date(r.updated).toLocaleString() : "—"}`;
+      main.appendChild(title); main.appendChild(sub);
+      const openBtn = document.createElement("button"); openBtn.className = "ghost"; openBtn.textContent = "Open";
+      openBtn.addEventListener("click", () => { state.ui.selectedContractorId = r.cId; state.ui.selectedJobId = r.id; showView("main"); renderAll(); });
+      item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
+      list.appendChild(item);
+    });
+    count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
+    state.ui.archiveSelected = selected;
+    updateDeleteBtn();
+  }
+
+  function updateDeleteBtn() {
+    const any = Object.values(state.ui.archiveSelected||{}).some(Boolean);
+    const btn = $("archive-delete-selected"); if (btn) btn.disabled = !any;
+  }
+
+  function renderJobSummary(j) {
+    const box = $("job-summary"); if (!box) return;
+    if (!j) { box.style.display = "none"; box.innerHTML = ""; return; }
+    const crew = (j.crew || []).join(", ") || "—";
+    const po = j.po || "—";
+    const addr = j.address || "—";
+    const stage = j.stage || "—";
+    const updated = j.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
+    box.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div style="font-size:18px; font-weight:700;">${j.name || "Untitled"}</div>
+        <span class="chip">Stage: ${stage}</span>
+        <span class="chip">PO: ${po}</span>
+        <span class="chip">Crew: ${crew}</span>
+      </div>
+      <div class="muted" style="margin-top:6px;">${addr}</div>
+      <div class="muted" style="font-size:12px; margin-top:4px;">Last updated: ${updated}</div>
+    `;
+    box.style.display = state.ui.editing ? "none" : "block";
+  }
+function renderAll() {
     showView(state.ui.view);
     renderContractors();
     renderTabs();
@@ -345,6 +417,54 @@
 
   function wire() {
     statusEl = $("status");
+    // Edit Job toggle
+    const editBtn = $("edit-job");
+    if (editBtn) {
+      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
+      setLabel();
+      editBtn.addEventListener("click", () => {
+        const j = currentJob(); if (!j) return;
+        // If turning OFF editing for the first time, mark setup complete so later changes log
+        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
+        state.ui.editing = !state.ui.editing;
+        setLabel();
+        renderPanel();
+      });
+    }
+
+    // Archives: toolbar button + view controls
+    const btnArchTop = $("open-archives-top");
+    if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
+
+    const backArch = $("back-from-archives");
+    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
+
+    const searchArch = $("archive-search");
+    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
+
+    const selAll = $("archive-select-all");
+    if (selAll) selAll.addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
+      const map = state.ui.archiveSelected || {};
+      cards.forEach(card => {
+        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
+        cb.checked = checked;
+        const id = card.getAttribute("data-id"); if (id) map[id] = checked;
+      });
+      state.ui.archiveSelected = map; updateDeleteBtn();
+    });
+
+    const delBtn = $("archive-delete-selected");
+    if (delBtn) delBtn.addEventListener("click", () => {
+      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
+      if (!ids.length) return;
+      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
+      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
+      state.ui.archiveSelected = {};
+      save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
+    });
+
 
     $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
     $("to-main").addEventListener("click", () => { finishInit(); showView("main"); });
@@ -388,7 +508,7 @@
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      renderTabs(); renderPanel(); save();
+      state.ui.editing = true; state.ui.editing = true; renderTabs(); renderPanel(); save();
       toast("Job created");
     });
 
@@ -491,5 +611,63 @@
     renderAll();
   }
 
-  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status"); wire(); boot(); });
+  
+  // Global delegated handler for Edit Job (more reliable on iPad/touch)
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target && (ev.target.id === "edit-job" ? ev.target : ev.target.closest && ev.target.closest("#edit-job"));
+    if (!btn) return;
+    const j = currentJob(); if (!j) return;
+    if (state.ui.editing && !j.initComplete) j.initComplete = true;
+    state.ui.editing = !state.ui.editing;
+    renderPanel();
+  }, { passive: true });
+window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
+    // Edit Job toggle
+    const editBtn = $("edit-job");
+    if (editBtn) {
+      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
+      setLabel();
+      editBtn.addEventListener("click", () => {
+        const j = currentJob(); if (!j) return;
+        // If turning OFF editing for the first time, mark setup complete so later changes log
+        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
+        state.ui.editing = !state.ui.editing;
+        setLabel();
+        renderPanel();
+      });
+    }
+
+    // Archives: toolbar button + view controls
+    const btnArchTop = $("open-archives-top");
+    if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
+
+    const backArch = $("back-from-archives");
+    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
+
+    const searchArch = $("archive-search");
+    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
+
+    const selAll = $("archive-select-all");
+    if (selAll) selAll.addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
+      const map = state.ui.archiveSelected || {};
+      cards.forEach(card => {
+        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
+        cb.checked = checked;
+        const id = card.getAttribute("data-id"); if (id) map[id] = checked;
+      });
+      state.ui.archiveSelected = map; updateDeleteBtn();
+    });
+
+    const delBtn = $("archive-delete-selected");
+    if (delBtn) delBtn.addEventListener("click", () => {
+      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
+      if (!ids.length) return;
+      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
+      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
+      state.ui.archiveSelected = {};
+      save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
+    });
+ wire(); boot(); });
 })();
