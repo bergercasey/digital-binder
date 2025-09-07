@@ -430,58 +430,6 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
-    // Live toolbar state (bold/italic/underline/list/highlight)
-    (function(){
-      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline", "note-bullet":"insertUnorderedList" };
-      function hasMarkAncestor(node){
-        while (node && node.nodeType === 1) { if (node.tagName === "MARK") return true; node = node.parentElement; }
-        return false;
-      }
-      function refresh(){
-        const ed = $("new-note"); if (!ed) return;
-        for (const id in map) {
-          const b = $(id); if (!b) continue;
-          let on = false;
-          try { on = document.queryCommandState(map[id]); } catch(e) { on = false; }
-          b.classList.toggle("active", !!on);
-        }
-        const hl = $("note-highlight");
-        if (hl) {
-          const sel = window.getSelection && window.getSelection();
-          let on = false;
-          if (sel && sel.anchorNode) {
-            let n = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
-            on = hasMarkAncestor(n);
-          }
-          hl.classList.toggle("active", !!on);
-        }
-      }
-      document.addEventListener("selectionchange", refresh);
-      const ed = $("new-note");
-      if (ed) ed.addEventListener("keyup", refresh);
-      refresh();
-    })();
-
-
-    // Rewire Add Note button for contenteditable editor
-    (function(){
-      const btn = $("add-note");
-      if (!btn) return;
-      const clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        const ed = $("new-note");
-        const rawHtml = (ed && ed.innerHTML) ? ed.innerHTML.trim() : "";
-        const plain = (ed && ed.innerText) ? ed.innerText.trim() : "";
-        if (!plain && !rawHtml) return;
-        pushNote(j, { text: plain, html: sanitizeHtml(rawHtml) });
-        if (ed) ed.innerHTML = "";
-        save(); renderPanel();
-      });
-    })();
-
-
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
     if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
@@ -654,9 +602,9 @@ function renderAll() {
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
-      const txt = (($("new-note")&&$("new-note").innerText)||""); if (!txt) return;
+      const ed=$("new-note"); const html=(ed&&ed.innerHTML?ed.innerHTML.trim():""); const txt=(ed&&ed.innerText?ed.innerText.trim():""); if(!txt&&!html) return;
       if (!j.initComplete) j.initComplete = true; // first manual note ends setup
-      pushNote(j, txt); (($("new-note")&&$("new-note").innerText)||"") = "";
+      pushNote(j, { text: txt, html: sanitizeHtml(html) }); if(ed) ed.innerHTML="";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
 
@@ -691,58 +639,6 @@ function renderAll() {
   }
 
   window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
-
-    // Live toolbar state (bold/italic/underline/list/highlight)
-    (function(){
-      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline", "note-bullet":"insertUnorderedList" };
-      function hasMarkAncestor(node){
-        while (node && node.nodeType === 1) { if (node.tagName === "MARK") return true; node = node.parentElement; }
-        return false;
-      }
-      function refresh(){
-        const ed = $("new-note"); if (!ed) return;
-        for (const id in map) {
-          const b = $(id); if (!b) continue;
-          let on = false;
-          try { on = document.queryCommandState(map[id]); } catch(e) { on = false; }
-          b.classList.toggle("active", !!on);
-        }
-        const hl = $("note-highlight");
-        if (hl) {
-          const sel = window.getSelection && window.getSelection();
-          let on = false;
-          if (sel && sel.anchorNode) {
-            let n = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
-            on = hasMarkAncestor(n);
-          }
-          hl.classList.toggle("active", !!on);
-        }
-      }
-      document.addEventListener("selectionchange", refresh);
-      const ed = $("new-note");
-      if (ed) ed.addEventListener("keyup", refresh);
-      refresh();
-    })();
-
-
-    // Rewire Add Note button for contenteditable editor
-    (function(){
-      const btn = $("add-note");
-      if (!btn) return;
-      const clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        const ed = $("new-note");
-        const rawHtml = (ed && ed.innerHTML) ? ed.innerHTML.trim() : "";
-        const plain = (ed && ed.innerText) ? ed.innerText.trim() : "";
-        if (!plain && !rawHtml) return;
-        pushNote(j, { text: plain, html: sanitizeHtml(rawHtml) });
-        if (ed) ed.innerHTML = "";
-        save(); renderPanel();
-      });
-    })();
-
 
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
