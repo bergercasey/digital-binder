@@ -554,7 +554,8 @@ function renderAll() {
         }
         refresh(); saveSel();
       });
-     $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{
+     $("note-highlight"); const hl = $("note-highlight");
+      if (hl) hl.addEventListener("click", (e)=>{
         e.preventDefault(); focusEd();
         // Toggle: if selection is inside <mark>, unwrap; otherwise apply
         const sel = window.getSelection && window.getSelection();
