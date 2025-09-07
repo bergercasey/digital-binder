@@ -108,7 +108,7 @@
   @media print {
     body * { visibility: hidden !important; }
     #print-sheet, #print-sheet * { visibility: visible !important; }
-    #print-sheet { position: absolute; inset: 0; padding: 24px; }
+    #print-sheet { position: absolute; inset: 0; padding: 24px; display: block !important; }
     .print-head { margin-bottom: 16px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
     .print-title { font-size: 20px; font-weight: 600; }
     .print-meta { margin-top: 6px; font-size: 12px; color: #555; }
@@ -118,6 +118,8 @@
   }
   /* Selection highlight for note card */
   .note-card.selected { outline: 2px solid var(--accent-200); }
+
+  .note-item.selected{ outline: 2px solid var(--accent-200); }
 </style>
 </head>
 <body>

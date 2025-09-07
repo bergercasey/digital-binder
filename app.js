@@ -310,12 +310,15 @@
     });
 
     const list = $("notes-list"); list.innerHTML = "";
-    (j.notes || []).forEach(n => {
+    (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
+      if (state.ui && state.ui.selectedNoteIndex === i) item.classList.add("selected");
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
-      item.appendChild(d); item.appendChild(body); list.appendChild(item);
+      item.appendChild(d); item.appendChild(body);
+      item.addEventListener("click", () => { state.ui.selectedNoteIndex = (state.ui.selectedNoteIndex === i ? null : i); renderPanel(); });
+      list.appendChild(item);
     });
 
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
