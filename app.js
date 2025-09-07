@@ -315,7 +315,7 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const isSel = (state.ui && state.ui.selectedNoteIndex === i);
-      if (isSel) item.classList.add("selected");
+      if (isSel) { item.classList.add("selected"); try { item.style.border="3px solid var(--accent-300)"; item.style.borderRadius="10px"; item.style.background="var(--accent-25)"; } catch(e){} }
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
