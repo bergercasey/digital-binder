@@ -151,7 +151,7 @@
       <div class="spacer"></div>
     </div>
     <div class="status" id="status">Loaded</div>
-  </header>
+  <button id="logoutBtn" class="ghost" style="position:absolute;right:12px;top:12px;">Logout</button></header>
 
   <main>
     <aside>
@@ -244,6 +244,20 @@
         location.href = '/login.html?next=' + next;
       }
     } catch {}
+  });
+</script>
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('logoutBtn');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        try { await fetch('/.netlify/functions/auth-logout'); } catch {}
+        const next = encodeURIComponent('/');
+        location.href = '/login.html?next=' + next;
+      });
+    }
   });
 </script>
 
