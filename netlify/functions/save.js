@@ -6,7 +6,7 @@ export async function handler(event) {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
   try {
-    const store = getStore({ name: 'binder-store' });
+    const store = getStore({ name: 'binder-store', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
     const body = event.body || '{}';
     await store.setJSON('data', JSON.parse(body));
     return {

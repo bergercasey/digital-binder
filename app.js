@@ -1,33 +1,3 @@
-
-// --- Cloud persistence with dual endpoints ---
-async function cloudLoad() {
-  // Try Functions first
-  try {
-    const r = await fetch('/.netlify/functions/load', { headers: { 'cache-control': 'no-cache' } });
-    if (r.ok) return await r.json();
-  } catch {}
-  // Fallback to Edge Function
-  try {
-    const r = await fetch('/api/binder', { headers: { 'cache-control': 'no-cache' } });
-    if (r.ok) return await r.json();
-  } catch {}
-  return null;
-}
-async function cloudSave(data) {
-  // Try Functions first
-  try {
-    const r = await fetch('/.netlify/functions/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data||{}) });
-    if (r.ok) return true;
-  } catch {}
-  // Fallback to Edge Function
-  try {
-    const r = await fetch('/api/binder', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data||{}) });
-    if (r.ok) return true;
-  } catch {}
-  return false;
-}
-// --- end cloud helpers ---
-
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -500,7 +470,7 @@ function renderAll() {
     const payload = { ...state, version: 17 };
     try {
       const res = await API.save(payload);
-      status(res.local ? "Saved (offline)" : "Saved");
+      status(res.local ? "Saved (no network)" : "Saved");
     } catch (e) {
       status("Error saving (stored locally)");
     }
