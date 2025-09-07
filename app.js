@@ -391,7 +391,7 @@
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  // --- Notes formatting helpers (inline + bullet lists) ---
+  // --- Notes formatter with inline styles + bullet lists ---
   function escapeHtml(s) {
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
@@ -449,7 +449,7 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
-    // Notes toolbar (textarea markers) with List and active-state
+    // Notes toolbar (textarea markers) + List + active-state
     (function(){
       const ta = $("new-note"); if (!ta) return;
       function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
@@ -466,8 +466,8 @@ function renderAll() {
         ta.selectionStart = ls; ta.selectionEnd = ls + region.length;
         ta.focus(); refresh();
       });
-      // Active state: highlight buttons if caret is inside markers
-      function rangesOf(pattern, leftLen, rightLen){
+      // Active-state: toggle button styles based on caret position within markers
+      function rangesOf(pattern, leftLen){
         const res = []; const val = ta.value||""; let m;
         while ((m = pattern.exec(val)) !== null) {
           const innerStart = m.index + leftLen;
@@ -479,16 +479,16 @@ function renderAll() {
       function isIn(ranges, pos){ return ranges.some(([a,b]) => pos >= a && pos <= b); }
       function refresh(){
         const pos = ta.selectionStart||0;
-        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2, 2);
-        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1, 1).map(([a,b])=>[a,b]); // approx
-        const uR    = rangesOf(/__(.+?)__/g, 2, 2);
-        const hR    = rangesOf(/==(.+?)==/g, 2, 2);
+        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2);
+        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1).map(([a,b])=>[a,b]);
+        const uR    = rangesOf(/__(.+?)__/g, 2);
+        const hR    = rangesOf(/==(.+?)==/g, 2);
         const sets = { "note-bold": boldR, "note-italic": itR, "note-underline": uR, "note-highlight": hR };
         Object.entries(sets).forEach(([id, rs]) => { const b=$(id); if (!b) return; b.classList.toggle("active", isIn(rs, pos)); });
       }
       ["keyup","mouseup","input","click"].forEach(ev => ta.addEventListener(ev, refresh));
       refresh();
-      // Tab indent/outdent
+      // Tab indent/outdent behavior
       ta.addEventListener("keydown", (e)=>{
         if (e.key === "Tab") {
           e.preventDefault();
@@ -720,7 +720,7 @@ function renderAll() {
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
-    // Notes toolbar (textarea markers) with List and active-state
+    // Notes toolbar (textarea markers) + List + active-state
     (function(){
       const ta = $("new-note"); if (!ta) return;
       function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
@@ -737,8 +737,8 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
         ta.selectionStart = ls; ta.selectionEnd = ls + region.length;
         ta.focus(); refresh();
       });
-      // Active state: highlight buttons if caret is inside markers
-      function rangesOf(pattern, leftLen, rightLen){
+      // Active-state: toggle button styles based on caret position within markers
+      function rangesOf(pattern, leftLen){
         const res = []; const val = ta.value||""; let m;
         while ((m = pattern.exec(val)) !== null) {
           const innerStart = m.index + leftLen;
@@ -750,16 +750,16 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       function isIn(ranges, pos){ return ranges.some(([a,b]) => pos >= a && pos <= b); }
       function refresh(){
         const pos = ta.selectionStart||0;
-        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2, 2);
-        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1, 1).map(([a,b])=>[a,b]); // approx
-        const uR    = rangesOf(/__(.+?)__/g, 2, 2);
-        const hR    = rangesOf(/==(.+?)==/g, 2, 2);
+        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2);
+        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1).map(([a,b])=>[a,b]);
+        const uR    = rangesOf(/__(.+?)__/g, 2);
+        const hR    = rangesOf(/==(.+?)==/g, 2);
         const sets = { "note-bold": boldR, "note-italic": itR, "note-underline": uR, "note-highlight": hR };
         Object.entries(sets).forEach(([id, rs]) => { const b=$(id); if (!b) return; b.classList.toggle("active", isIn(rs, pos)); });
       }
       ["keyup","mouseup","input","click"].forEach(ev => ta.addEventListener(ev, refresh));
       refresh();
-      // Tab indent/outdent
+      // Tab indent/outdent behavior
       ta.addEventListener("keydown", (e)=>{
         if (e.key === "Tab") {
           e.preventDefault();
