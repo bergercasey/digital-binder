@@ -15,14 +15,9 @@ export async function handler(event) {
   if (!valid) return { statusCode: 401, headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ok:false }) };
 
   const token = signToken(username, password, secret);
-  const cookie = [
-    `binder_auth=${token}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    'Secure',
-    `Max-Age=${remember ? '1209600' : '0'}`
-  ].join('; ');
+  const parts = [`binder_auth=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Secure'];
+  if (remember) parts.push('Max-Age=1209600');
+  const cookie = parts.join('; ');
 
   return { statusCode: 200, headers: { 'Set-Cookie': cookie, 'Content-Type':'application/json', 'Cache-Control':'no-store' }, body: JSON.stringify({ ok:true, user: username }) };
 }
