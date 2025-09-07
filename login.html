@@ -19,7 +19,26 @@
     button{padding:10px 14px;border:1px solid var(--b);border-radius:8px;background:#fff;cursor:pointer;appearance:none;-webkit-appearance:none;font-weight:600;white-space:nowrap}
     .err{color:#b91c1c;font-size:12px;min-height:16px;margin-top:8px}
     .muted{color:var(--muted);font-size:12px}
-  </style>
+  
+/* Robust submit button sizing for iPad Safari */
+#loginBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  height: 38px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  flex: 0 0 auto;
+}
+.row { gap: 12px; }
+.row .muted { flex: 1 1 auto; }
+.row #loginBtn { flex: 0 0 auto; }
+    </style>
 </head>
 <body>
   <div class="wrap">
