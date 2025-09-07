@@ -1100,10 +1100,33 @@ cloudSave = async function(data) {
 // ===== End Login Modal =====
 
 
+
 // Ensure auth at startup; if required and missing, show modal immediately
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    // Force by querystring (?login=1)
+    const qp = new URLSearchParams(window.location.search);
+    if (qp.get('login') === '1' && typeof window.binderOpenModal === 'function') {
+      window.binderOpenModal();
+      return;
+    }
     const r = await fetch('/.netlify/functions/auth-check', { headers: { 'cache-control': 'no-cache' } });
+    if (r.status !== 200) {
+      if (typeof window.binderOpenModal === 'function') window.binderOpenModal();
+      return;
+    }
+    // if 200, do nothing (already authed or auth not required)
+  } catch (e) {
+    // network error -> try opening modal; harmless if auth isn't required
+    if (typeof window.binderOpenModal === 'function') window.binderOpenModal();
+  }
+});
+// Keyboard shortcut: Shift+L opens login modal
+document.addEventListener('keydown', (ev) => {
+  if (ev.shiftKey && (ev.key === 'L' || ev.key === 'l')) {
+    if (typeof window.binderOpenModal === 'function') window.binderOpenModal();
+  }
+});
     if (r.status === 401) {
       // open modal; cloudLoad wrapper will also handle later calls
       try { if (typeof window.binderOpenModal === 'function') window.binderOpenModal(); } catch {}
