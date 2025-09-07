@@ -100,26 +100,12 @@
   .note-text { white-space: pre-wrap; }
   .note-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin: 4px 0 6px; }
   .note-toolbar button { padding: 4px 8px; font-size: 12px; cursor: pointer; }
-
-  #new-note { min-height: 140px; font-size: 14px; line-height: 1.35; padding: 8px; }
-
-  /* Make Add Note controls span the wide column in the .field grid */
-  #add-note-field .note-toolbar,
-  #add-note-field #new-note,
-  #add-note-field .note-hint { grid-column: 2 / -1; width: 100%; }
-  #add-note-field #new-note { min-height: 160px; }
-
-
-  /* Make the whole Add Note field span the full grid width */
-  #add-note-field { grid-column: 1 / -1; width: 100%; }
-
-
-  textarea { width: 100%; display:block; }
-  #new-note { width: 100%; box-sizing: border-box; }
-
   .note-editor { width: 100%; min-height: 160px; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
   .note-editor:focus { outline: 2px solid var(--accent-200); }
   .note-editor:empty:before { content: attr(data-placeholder); color: var(--muted); }
+  #add-note-field { grid-column: 1 / -1; width: 100%; }
+  textarea { width: 100%; display:block; }
+  #new-note { width: 100%; box-sizing: border-box; }
 </style>
 </head>
 <body>
@@ -173,7 +159,7 @@
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
             <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
-            </div>
+</div>
           <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
             <div class="fields" id="job-fields-inner">
             <div class="field small"><label>Job Name</label><input type="text" id="job-name" placeholder="e.g., Main St Remodel"/></div>
@@ -183,17 +169,20 @@
             <div class="field"><label>Crew</label><div id="crew-box" class="chips"></div></div>
           </div>
           <div style="margin-top:14px;">
-            <div class="note-toolbar">
-  <button id="note-bold" title="Bold (wrap ** **)"><strong>B</strong></button>
-  <button id="note-italic" title="Italic (wrap _ _)"><em>I</em></button>
-  <button id="note-underline" title="Underline (wrap __ __)"><u>U</u></button>
-  <button id="note-highlight" title="Highlight (wrap == ==)">HL</button>
-  <button id="note-bullet" title="Bullet list (insert - )">• List</button>
-</div>
-<div id="new-note" class="note-editor" contenteditable="true" data-placeholder="What changed? Materials, inspections, dates..."></div>
-
-
-<div class="muted" style="font-size:11px;margin-bottom:4px;">Enter=new line · Tab=indent · Shift+Tab=outdent · Supports **bold**, _italic_, __underline__</div></div>
+            
+    <div class="field" id="add-note-field">
+      <label>Add Note</label>
+      <div class="note-toolbar">
+        <button id="note-bold" title="Bold (B)"><strong>B</strong></button>
+        <button id="note-italic" title="Italic (I)"><em>I</em></button>
+        <button id="note-underline" title="Underline (U)"><u>U</u></button>
+        <button id="note-highlight" title="Highlight (HL)">HL</button>
+        <button id="note-bullet" title="Bullet list">• List</button>
+      </div>
+      <div id="new-note" class="note-editor" contenteditable="true" data-placeholder="What changed? Materials, inspections, dates..."></div>
+      <div class="muted note-hint" style="font-size:11px;margin-top:6px;">Enter=new line · Tab=indent · Shift+Tab=outdent</div>
+    </div>
+    
             <div class="row"><button id="add-note" class="primary">Add Note</button><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
             <h3 style="margin:14px 0 6px;">Log</h3><div id="notes-list" class="list"></div>
           </div>

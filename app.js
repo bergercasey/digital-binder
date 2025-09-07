@@ -121,7 +121,7 @@
 
       // Open on SINGLE CLICK (ignore clicks on the input)
       box.addEventListener("click", (ev) => {
-        // allow click on nameInput to open (was guarded before)
+        // allow clicking nameInput to open
         finishInit();
         state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
       });
@@ -143,7 +143,7 @@
     if (!c) return;
 
     const jobs = c.jobs
-      .filter(j => !j.archived)
+      .filter(j => state.ui.showArchived ? true : !j.archived)
       .slice()
       .sort((a,b) => {
         const na = parseLeadingNumber(a.name);
@@ -166,7 +166,7 @@
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { state.ui.editing = false; state.ui.editing = false; state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -278,9 +278,10 @@
     }
 
     // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block"; (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
-    // Sync Edit label
-    (function(){ const b=$("edit-job"); if(b){ b.textContent = state.ui.editing ? "Done" : "Edit Job"; } })();
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
+    (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })();
+    renderJobSummary(j);
+    (function(){ const b=$("edit-job"); if (b) b.textContent = state.ui.editing ? "Done" : "Edit Job"; })();
 
     // Fields
     $("job-name").value = j?.name || "";
@@ -314,7 +315,7 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = formatMarkdownLite(obj.text || String(n));
+      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : (formatMarkdownLite ? formatMarkdownLite(obj.text || "") : (obj.text || ""));
       item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
@@ -322,54 +323,6 @@
   }
 
   
-  function renderArchives() {
-    const list = $("archive-list"); const count = $("archive-count");
-    if (!list) return;
-    const q = ($("archive-search")?.value || "").trim().toLowerCase();
-    const rows = [];
-    state.contractors.forEach(c => {
-      c.jobs.forEach(j => {
-        if (j.archived) {
-          const text = [j.name||"", j.po||"", c.name||"", j.address||""].join(" ").toLowerCase();
-          if (!q || text.includes(q)) {
-            rows.push({ cId: c.id, cName: c.name||"—", id: j.id, name: j.name||"(Untitled)", po: j.po||"", updated: j.updatedAt||"", stage: j.stage||"" });
-          }
-        }
-      });
-    });
-    rows.sort((a,b) => String(a.name).localeCompare(String(b.name)));
-    list.innerHTML = "";
-    const selected = state.ui.archiveSelected || {};
-    rows.forEach(r => {
-      const item = document.createElement("div");
-      item.className = "card"; item.setAttribute("data-id", r.id);
-      item.style.padding = "8px 10px";
-      item.style.border = "1px solid var(--line)";
-      item.style.borderRadius = "8px";
-      item.style.display = "grid";
-      item.style.gridTemplateColumns = "24px 1fr auto";
-      item.style.gap = "8px";
-      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!selected[r.id];
-      cb.addEventListener("change", () => { selected[r.id] = cb.checked; updateDeleteBtn(); });
-      const main = document.createElement("div");
-      const title = document.createElement("div"); title.style.fontWeight = "600"; title.textContent = r.name + (r.po ? `  ·  PO ${r.po}` : "");
-      const sub = document.createElement("div"); sub.className = "muted"; sub.style.fontSize = "12px"; sub.textContent = `${r.cName}  ·  Updated ${r.updated ? new Date(r.updated).toLocaleString() : "—"}`;
-      main.appendChild(title); main.appendChild(sub);
-      const openBtn = document.createElement("button"); openBtn.className = "ghost"; openBtn.textContent = "Open";
-      openBtn.addEventListener("click", () => { state.ui.selectedContractorId = r.cId; state.ui.selectedJobId = r.id; showView("main"); renderAll(); });
-      item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
-      list.appendChild(item);
-    });
-    count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
-    state.ui.archiveSelected = selected;
-    updateDeleteBtn();
-  }
-
-  function updateDeleteBtn() {
-    const any = Object.values(state.ui.archiveSelected||{}).some(Boolean);
-    const btn = $("archive-delete-selected"); if (btn) btn.disabled = !any;
-  }
-
   function renderJobSummary(j) {
     const box = $("job-summary"); if (!box) return;
     if (!j) { box.style.display = "none"; box.innerHTML = ""; return; }
@@ -391,21 +344,43 @@
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function renderArchives() {
+    const list = $("archive-list"); const count = $("archive-count");
+    if (!list) return;
+    const q = ($("archive-search")?.value || "").trim().toLowerCase();
+    const rows = [];
+    state.contractors.forEach(c => {
+      c.jobs.forEach(j => {
+        if (j.archived) {
+          const text = [j.name||"", j.po||"", c.name||"", j.address||""].join(" ").toLowerCase();
+          if (!q || text.includes(q)) rows.push({ cId: c.id, cName: c.name||"—", id: j.id, name: j.name||"(Untitled)", po: j.po||"", updated: j.updatedAt||"", stage: j.stage||"" });
+        }
+      });
+    });
+    rows.sort((a,b) => String(a.name).localeCompare(String(b.name)));
+    list.innerHTML = "";
+    const selected = state.ui.archiveSelected || {};
+    rows.forEach(r => {
+      const item = document.createElement("div");
+      item.className = "card"; item.setAttribute("data-id", r.id);
+      item.style.padding = "8px 10px"; item.style.border = "1px solid var(--line)"; item.style.borderRadius = "8px";
+      item.style.display = "grid"; item.style.gridTemplateColumns = "24px 1fr auto"; item.style.gap = "8px";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!selected[r.id];
+      cb.addEventListener("change", () => { selected[r.id] = cb.checked; updateDeleteBtn(); });
+      const main = document.createElement("div");
+      const title = document.createElement("div"); title.style.fontWeight = "600"; title.textContent = r.name + (r.po ? `  ·  PO ${r.po}` : "");
+      const sub = document.createElement("div"); sub.className = "muted"; sub.style.fontSize = "12px"; sub.textContent = `${r.cName}  ·  Updated ${r.updated ? new Date(r.updated).toLocaleString() : "—"}`;
+      main.appendChild(title); main.appendChild(sub);
+      const openBtn = document.createElement("button"); openBtn.className = "ghost"; openBtn.textContent = "Open";
+      openBtn.addEventListener("click", () => { state.ui.selectedContractorId = r.cId; state.ui.selectedJobId = r.id; showView("main"); renderAll(); });
+      item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
+      list.appendChild(item);
+    });
+    count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
+    state.ui.archiveSelected = selected;
+    updateDeleteBtn();
   }
-  function formatMarkdownLite(s) {
-    let x = escapeHtml(s);
-    // bold **text**
-    x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>');
-    // highlight ==text==
-    x = x.replace(/==(.+?)==/g, '<mark>$1<\/mark>');
-    // underline __text__
-    x = x.replace(/__(.+?)__/g, '<u>$1<\/u>');
-    // italic _text_ (avoid __)
-    x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2<\/em>');
-    return x;
-  }
+  function updateDeleteBtn(){ const any = Object.values(state.ui.archiveSelected||{}).some(Boolean); const btn = $("archive-delete-selected"); if (btn) btn.disabled = !any; }
 
   function sanitizeHtml(input) {
     const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P"]);
@@ -414,13 +389,11 @@
     (function walk(node){
       for (let i=node.childNodes.length-1; i>=0; i--) {
         const ch = node.childNodes[i];
-        if (ch.nodeType === 1) { // element
+        if (ch.nodeType === 1) {
           if (!allowed.has(ch.tagName)) {
-            // unwrap unknown elements but keep their children
             while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
             node.removeChild(ch);
           } else {
-            // strip attributes
             for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
             walk(ch);
           }
@@ -457,124 +430,6 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
-    // WYSIWYG toolbar for contenteditable editor
-    const ed = $("new-note");
-    function focusEd(){ if (ed) ed.focus(); }
-    function surround(tag) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      try {
-        const el = document.createElement(tag);
-        range.surroundContents(el);
-      } catch (e) {
-        // Fallback: insertHTML
-        const tmp = document.createElement("div");
-        tmp.appendChild(range.cloneContents());
-        document.execCommand('insertHTML', false, `<${tag}>${tmp.innerHTML}</${tag}>`);
-      }
-    }
-    const bBtn = $("note-bold"); if (bBtn) bBtn.addEventListener("click", () => { focusEd(); document.execCommand('bold'); });
-    const iBtn = $("note-italic"); if (iBtn) iBtn.addEventListener("click", () => { focusEd(); document.execCommand('italic'); });
-    const uBtn = $("note-underline"); if (uBtn) uBtn.addEventListener("click", () => { focusEd(); document.execCommand('underline'); });
-    const hlBtn = $("note-highlight"); if (hlBtn) hlBtn.addEventListener("click", () => { focusEd(); surround('mark'); });
-    const listBtn = $("note-bullet"); if (listBtn) listBtn.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
-    // Tab to indent/outdent within editor
-    if (ed) {
-      ed.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          if (e.shiftKey) document.execCommand('outdent');
-          else document.execCommand('indent');
-        }
-      });
-    }
-
-
-    // Notes toolbar actions
-    function wrapSelection(el, left, right) {
-      right = right ?? left;
-      const start = el.selectionStart; const end = el.selectionEnd;
-      const value = el.value; const sel = value.slice(start, end);
-      const next = value.slice(0, start) + left + sel + right + value.slice(end);
-      el.value = next; el.focus();
-      el.selectionStart = start + left.length; el.selectionEnd = end + left.length;
-    }
-    const boldBtn = $("note-bold"); if (boldBtn) boldBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "**"); });
-    const italicBtn = $("note-italic"); if (italicBtn) italicBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "_"); });
-    const underlineBtn = $("note-underline"); if (underlineBtn) underlineBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "__"); });
-    const highlightBtn = $("note-highlight"); if (highlightBtn) highlightBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "=="); });
-    const bulletBtn = $("note-bullet"); if (bulletBtn) bulletBtn.addEventListener("click", () => {
-      const el = $("new-note"); if (!el) return;
-      const start = el.selectionStart; const end = el.selectionEnd;
-      const value = el.value;
-      // Affect full lines in selection
-      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
-      const lineEnd = value.indexOf("\n", end); const endIdx = lineEnd === -1 ? value.length : lineEnd;
-      const region = value.slice(lineStart, endIdx);
-      const listed = region.replace(/^/gm, "- ");
-      el.value = value.slice(0, lineStart) + listed + value.slice(endIdx);
-      const added = listed.length - region.length;
-      el.selectionStart = lineStart;
-      el.selectionEnd = endIdx + added;
-      el.focus();
-    });
-
-
-    // Tab indent/outdent for notes textarea
-    const newNote = $("new-note");
-    if (newNote) {
-      newNote.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const el = e.target;
-          const start = el.selectionStart;
-          const end = el.selectionEnd;
-          const value = el.value;
-          // Determine affected lines
-          const before = value.slice(0, start);
-          const sel = value.slice(start, end);
-          const after = value.slice(end);
-          const lineStart = before.lastIndexOf("\n") + 1;
-          const lineEnd = end + (value.slice(end).indexOf("\n") === -1 ? 0 : value.slice(end).indexOf("\n"));
-          const block = value.slice(lineStart, end);
-          const isMultiLine = sel.includes("\n") || start > lineStart;
-          if (!e.shiftKey) {
-            // indent: add two spaces at each line start
-            const region = value.slice(lineStart, end);
-            const indented = region.replace(/^/gm, "  ");
-            el.value = value.slice(0, lineStart) + indented + value.slice(end);
-            const added = indented.length - region.length;
-            el.selectionStart = start + (start == lineStart ? 2 : 0);
-            el.selectionEnd = end + added;
-          } else {
-            // outdent: remove up to two leading spaces at each line start
-            const region = value.slice(lineStart, end);
-            const outdented = region.replace(/^( {1,2})/gm, "");
-            el.value = value.slice(0, lineStart) + outdented + value.slice(end);
-            const removed = region.length - outdented.length;
-            el.selectionStart = Math.max(lineStart, start - (start == lineStart ? Math.min(2, removed) : 0));
-            el.selectionEnd = end - removed;
-          }
-        }
-      });
-    }
-
-    // Edit Job toggle
-    const editBtn = $("edit-job");
-    if (editBtn) {
-      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
-      setLabel();
-      editBtn.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        // If turning OFF editing for the first time, mark setup complete so later changes log
-        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
-        state.ui.editing = !state.ui.editing;
-        setLabel();
-        renderPanel();
-      });
-    }
-
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
     if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
@@ -607,6 +462,35 @@ function renderAll() {
       state.ui.archiveSelected = {};
       save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
     });
+
+    // Edit Job toggle
+    const editBtn = $("edit-job");
+    if (editBtn) {
+      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
+      setLabel();
+      editBtn.addEventListener("click", () => {
+        const j = currentJob(); if (!j) return;
+        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
+        state.ui.editing = !state.ui.editing;
+        setLabel();
+        renderPanel();
+      });
+    }
+
+    // WYSIWYG toolbar (contenteditable)
+    (function(){
+      const ids=["note-bold","note-italic","note-underline","note-highlight","note-bullet"];
+      ids.forEach(id=>{const el=$(id); if(!el) return; const clone=el.cloneNode(true); el.parentNode.replaceChild(clone, el);});
+      const ed = $("new-note");
+      function focusEd(){ if(ed) ed.focus(); }
+      function surround(tag){ const sel=window.getSelection && window.getSelection(); if(!sel||sel.rangeCount===0) return; const range=sel.getRangeAt(0); try{ const el=document.createElement(tag); range.surroundContents(el);}catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`);}}
+      const b=$("note-bold"); if(b) b.addEventListener("click", ()=>{ focusEd(); document.execCommand('bold'); });
+      const i=$("note-italic"); if(i) i.addEventListener("click", ()=>{ focusEd(); document.execCommand('italic'); });
+      const u=$("note-underline"); if(u) u.addEventListener("click", ()=>{ focusEd(); document.execCommand('underline'); });
+      const hl=$("note-highlight"); if(hl) hl.addEventListener("click", ()=>{ focusEd(); surround('mark'); });
+      const bl=$("note-bullet"); if(bl) bl.addEventListener("click", ()=>{ focusEd(); document.execCommand('insertUnorderedList'); });
+      if (ed) { ed.addEventListener("keydown", (e)=>{ if(e.key==="Tab"){ e.preventDefault(); if(e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } }); }
+    })();
 
 
     $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
@@ -651,7 +535,7 @@ function renderAll() {
       pushNote(j, "Created");
       c.jobs.unshift(j);
       state.ui.selectedJobId = j.id;
-      state.ui.editing = true; state.ui.editing = true; renderTabs(); renderPanel(); save();
+      state.ui.editing = true; renderTabs(); renderPanel(); save();
       toast("Job created");
     });
 
@@ -720,7 +604,7 @@ function renderAll() {
       const j = currentJob(); if (!j) return;
       const txt = $("new-note").value.trim(); if (!txt) return;
       if (!j.initComplete) j.initComplete = true; // first manual note ends setup
-      pushNote(j, txt); if ($("new-note")) $("new-note").innerHTML = "";
+      pushNote(j, txt); $("new-note").value = "";
       markUpdated(j); save(); renderPanel(); toast("Note added");
     });
 
@@ -754,135 +638,7 @@ function renderAll() {
     renderAll();
   }
 
-  
-  // Global delegated handler for Edit Job (more reliable on iPad/touch)
-  document.addEventListener("click", (ev) => {
-    const btn = ev.target && (ev.target.id === "edit-job" ? ev.target : ev.target.closest && ev.target.closest("#edit-job"));
-    if (!btn) return;
-    const j = currentJob(); if (!j) return;
-    if (state.ui.editing && !j.initComplete) j.initComplete = true;
-    state.ui.editing = !state.ui.editing;
-    renderPanel();
-  }, { passive: true });
-window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
-
-    // WYSIWYG toolbar for contenteditable editor
-    const ed = $("new-note");
-    function focusEd(){ if (ed) ed.focus(); }
-    function surround(tag) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      try {
-        const el = document.createElement(tag);
-        range.surroundContents(el);
-      } catch (e) {
-        // Fallback: insertHTML
-        const tmp = document.createElement("div");
-        tmp.appendChild(range.cloneContents());
-        document.execCommand('insertHTML', false, `<${tag}>${tmp.innerHTML}</${tag}>`);
-      }
-    }
-    const bBtn = $("note-bold"); if (bBtn) bBtn.addEventListener("click", () => { focusEd(); document.execCommand('bold'); });
-    const iBtn = $("note-italic"); if (iBtn) iBtn.addEventListener("click", () => { focusEd(); document.execCommand('italic'); });
-    const uBtn = $("note-underline"); if (uBtn) uBtn.addEventListener("click", () => { focusEd(); document.execCommand('underline'); });
-    const hlBtn = $("note-highlight"); if (hlBtn) hlBtn.addEventListener("click", () => { focusEd(); surround('mark'); });
-    const listBtn = $("note-bullet"); if (listBtn) listBtn.addEventListener("click", () => { focusEd(); document.execCommand('insertUnorderedList'); });
-    // Tab to indent/outdent within editor
-    if (ed) {
-      ed.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          if (e.shiftKey) document.execCommand('outdent');
-          else document.execCommand('indent');
-        }
-      });
-    }
-
-
-    // Notes toolbar actions
-    function wrapSelection(el, left, right) {
-      right = right ?? left;
-      const start = el.selectionStart; const end = el.selectionEnd;
-      const value = el.value; const sel = value.slice(start, end);
-      const next = value.slice(0, start) + left + sel + right + value.slice(end);
-      el.value = next; el.focus();
-      el.selectionStart = start + left.length; el.selectionEnd = end + left.length;
-    }
-    const boldBtn = $("note-bold"); if (boldBtn) boldBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "**"); });
-    const italicBtn = $("note-italic"); if (italicBtn) italicBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "_"); });
-    const underlineBtn = $("note-underline"); if (underlineBtn) underlineBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "__"); });
-    const highlightBtn = $("note-highlight"); if (highlightBtn) highlightBtn.addEventListener("click", () => { const el=$("new-note"); if (el) wrapSelection(el, "=="); });
-    const bulletBtn = $("note-bullet"); if (bulletBtn) bulletBtn.addEventListener("click", () => {
-      const el = $("new-note"); if (!el) return;
-      const start = el.selectionStart; const end = el.selectionEnd;
-      const value = el.value;
-      // Affect full lines in selection
-      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
-      const lineEnd = value.indexOf("\n", end); const endIdx = lineEnd === -1 ? value.length : lineEnd;
-      const region = value.slice(lineStart, endIdx);
-      const listed = region.replace(/^/gm, "- ");
-      el.value = value.slice(0, lineStart) + listed + value.slice(endIdx);
-      const added = listed.length - region.length;
-      el.selectionStart = lineStart;
-      el.selectionEnd = endIdx + added;
-      el.focus();
-    });
-
-
-    // Tab indent/outdent for notes textarea
-    const newNote = $("new-note");
-    if (newNote) {
-      newNote.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const el = e.target;
-          const start = el.selectionStart;
-          const end = el.selectionEnd;
-          const value = el.value;
-          // Determine affected lines
-          const before = value.slice(0, start);
-          const sel = value.slice(start, end);
-          const after = value.slice(end);
-          const lineStart = before.lastIndexOf("\n") + 1;
-          const lineEnd = end + (value.slice(end).indexOf("\n") === -1 ? 0 : value.slice(end).indexOf("\n"));
-          const block = value.slice(lineStart, end);
-          const isMultiLine = sel.includes("\n") || start > lineStart;
-          if (!e.shiftKey) {
-            // indent: add two spaces at each line start
-            const region = value.slice(lineStart, end);
-            const indented = region.replace(/^/gm, "  ");
-            el.value = value.slice(0, lineStart) + indented + value.slice(end);
-            const added = indented.length - region.length;
-            el.selectionStart = start + (start == lineStart ? 2 : 0);
-            el.selectionEnd = end + added;
-          } else {
-            // outdent: remove up to two leading spaces at each line start
-            const region = value.slice(lineStart, end);
-            const outdented = region.replace(/^( {1,2})/gm, "");
-            el.value = value.slice(0, lineStart) + outdented + value.slice(end);
-            const removed = region.length - outdented.length;
-            el.selectionStart = Math.max(lineStart, start - (start == lineStart ? Math.min(2, removed) : 0));
-            el.selectionEnd = end - removed;
-          }
-        }
-      });
-    }
-
-    // Edit Job toggle
-    const editBtn = $("edit-job");
-    if (editBtn) {
-      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
-      setLabel();
-      editBtn.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        // If turning OFF editing for the first time, mark setup complete so later changes log
-        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
-        state.ui.editing = !state.ui.editing;
-        setLabel();
-        renderPanel();
-      });
-    }
+  window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
     // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
@@ -916,5 +672,34 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       state.ui.archiveSelected = {};
       save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
     });
+
+    // Edit Job toggle
+    const editBtn = $("edit-job");
+    if (editBtn) {
+      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
+      setLabel();
+      editBtn.addEventListener("click", () => {
+        const j = currentJob(); if (!j) return;
+        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
+        state.ui.editing = !state.ui.editing;
+        setLabel();
+        renderPanel();
+      });
+    }
+
+    // WYSIWYG toolbar (contenteditable)
+    (function(){
+      const ids=["note-bold","note-italic","note-underline","note-highlight","note-bullet"];
+      ids.forEach(id=>{const el=$(id); if(!el) return; const clone=el.cloneNode(true); el.parentNode.replaceChild(clone, el);});
+      const ed = $("new-note");
+      function focusEd(){ if(ed) ed.focus(); }
+      function surround(tag){ const sel=window.getSelection && window.getSelection(); if(!sel||sel.rangeCount===0) return; const range=sel.getRangeAt(0); try{ const el=document.createElement(tag); range.surroundContents(el);}catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`);}}
+      const b=$("note-bold"); if(b) b.addEventListener("click", ()=>{ focusEd(); document.execCommand('bold'); });
+      const i=$("note-italic"); if(i) i.addEventListener("click", ()=>{ focusEd(); document.execCommand('italic'); });
+      const u=$("note-underline"); if(u) u.addEventListener("click", ()=>{ focusEd(); document.execCommand('underline'); });
+      const hl=$("note-highlight"); if(hl) hl.addEventListener("click", ()=>{ focusEd(); surround('mark'); });
+      const bl=$("note-bullet"); if(bl) bl.addEventListener("click", ()=>{ focusEd(); document.execCommand('insertUnorderedList'); });
+      if (ed) { ed.addEventListener("keydown", (e)=>{ if(e.key==="Tab"){ e.preventDefault(); if(e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } }); }
+    })();
  wire(); boot(); });
 })();
