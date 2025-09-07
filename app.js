@@ -456,15 +456,17 @@ function renderAll() {
     // WYSIWYG toolbar with selection restore and highlight toggle
     (function(){
       const ed = $("new-note-editor"); if (!ed) return;
+      function isInsideEditor(node){ let n=node; while(n){ if(n===ed) return true; n=n.parentNode; } return false; }
+      function placeCaretAtEnd(){ const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
       let savedRange = null;
       function saveSel() {
         const sel = window.getSelection && window.getSelection();
-        if (sel && sel.rangeCount > 0) savedRange = sel.getRangeAt(0);
+        if (sel && sel.rangeCount > 0 && isInsideEditor(sel.anchorNode)) savedRange = sel.getRangeAt(0);
       }
       function restoreSel() {
-        if (!savedRange) return;
         const sel = window.getSelection && window.getSelection();
         if (!sel) return;
+        if (!savedRange || !isInsideEditor(savedRange.commonAncestorContainer)) { placeCaretAtEnd(); return; }
         sel.removeAllRanges(); sel.addRange(savedRange);
       }
       // Keep selection when clicking toolbar
@@ -475,10 +477,10 @@ function renderAll() {
       ed.addEventListener("mouseup", saveSel);
       ed.addEventListener("keyup", saveSel);
       ed.addEventListener("mouseleave", saveSel);
-      function focusEd(){ ed.focus(); restoreSel(); }
+      function focusEd(){ ed.focus(); restoreSel(); if(!isInsideEditor((window.getSelection()&&window.getSelection().anchorNode))) placeCaretAtEnd(); }
       function surround(tag){
         const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
+        if (!sel || sel.rangeCount === 0 || !isInsideEditor(sel.anchorNode)) { placeCaretAtEnd(); saveSel(); return; }
         const r = sel.getRangeAt(0);
         try { const el = document.createElement(tag); r.surroundContents(el); saveSel(); }
         catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); saveSel(); }
@@ -487,7 +489,7 @@ function renderAll() {
         const sel = window.getSelection && window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
         const r = sel.getRangeAt(0);
-        const container = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+        const container = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement; if (!isInsideEditor(container)) return;
         const marks = Array.from(container.querySelectorAll(tag));
         marks.forEach(m => {
           const range = document.createRange();
@@ -507,51 +509,19 @@ function renderAll() {
       
       const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{
         e.preventDefault(); focusEd();
-        // Try native toggle first
-        try { document.execCommand('insertUnorderedList'); } catch(e) {}
-        // If still not in a list, or to force toggle, do manual wrap/unwrap
         const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) { refresh(); saveSel(); return; }
-        function nearest(node, tag){
-          let n = node && (node.nodeType===1 ? node : node.parentElement);
-          tag = String(tag || "").toUpperCase();
-          while (n) { if (n.tagName === tag) return n; n = n.parentElement; }
-          return null;
-        }
-        function unwrapList(ul){
-          if (!ul || !ul.parentNode) return;
-          const frag = document.createDocumentFragment();
-          const lis = Array.from(ul.children);
-          lis.forEach((li, idx) => {
-            while (li.firstChild) frag.appendChild(li.firstChild);
-            if (idx < lis.length - 1) frag.appendChild(document.createElement("br"));
-          });
-          ul.parentNode.replaceChild(frag, ul);
-        }
-        function wrapSelectionWithList(range){
-          const ul = document.createElement("ul");
-          const li = document.createElement("li");
-          const contents = range.extractContents();
-          if (!contents || !contents.firstChild) {
-            li.appendChild(document.createTextNode("\\u00A0"));
-          } else {
-            li.appendChild(contents);
-          }
-          ul.appendChild(li);
-          range.insertNode(ul);
-          // place caret inside the li
-          const r2 = document.createRange();
-          r2.selectNodeContents(li);
-          r2.collapse(true);
-          sel.removeAllRanges(); sel.addRange(r2);
-        }
-        const r = sel.getRangeAt(0);
-        const li = nearest(sel.anchorNode, "LI");
+        if (!sel || sel.rangeCount === 0 || !isInsideEditor(sel.anchorNode)) { placeCaretAtEnd(); saveSel(); }
+        try { document.execCommand("insertUnorderedList"); } catch(e) {}
+        const sel2 = window.getSelection && window.getSelection();
+        if (!isInsideEditor(sel2.anchorNode)) { placeCaretAtEnd(); }
+        // Fallback manual toggle
+        function nearest(node, tag){ let n = node && (node.nodeType===1 ? node : node.parentElement); tag = String(tag||"").toUpperCase(); while(n){ if(n===ed) break; if(n.tagName===tag) return n; n=n.parentElement;} return null; }
+        function unwrapList(ul){ if(!ul||!ul.parentNode) return; if(!isInsideEditor(ul)) return; const frag=document.createDocumentFragment(); const lis=Array.from(ul.children); lis.forEach((li,idx)=>{ while(li.firstChild) frag.appendChild(li.firstChild); if(idx<lis.length-1) frag.appendChild(document.createElement("br"));}); ul.parentNode.replaceChild(frag, ul); }
+        function wrapSelectionWithList(range){ if(!isInsideEditor(range.commonAncestorContainer)) return; const ul=document.createElement("ul"); const li=document.createElement("li"); const contents=range.extractContents(); if(!contents||!contents.firstChild){ li.appendChild(document.createElement("br")); } else { li.appendChild(contents);} ul.appendChild(li); range.insertNode(ul); const r2=document.createRange(); r2.selectNodeContents(li); r2.collapse(true); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r2); }
+        const r = (window.getSelection() && window.getSelection().getRangeAt(0));
+        const li = nearest((window.getSelection() && window.getSelection().anchorNode), "LI");
         if (li) { const ul = nearest(li, "UL"); unwrapList(ul); }
-        else {
-          // If native execCommand didn't create a list, fall back to manual
-          if (!nearest(sel.anchorNode, "LI")) wrapSelectionWithList(r);
-        }
+        else { if (!nearest((window.getSelection() && window.getSelection().anchorNode), "LI")) wrapSelectionWithList(r); }
         refresh(); saveSel();
       });
      $("note-highlight"); const hl = $("note-highlight");
@@ -560,7 +530,7 @@ function renderAll() {
         // Toggle: if selection is inside <mark>, unwrap; otherwise apply
         const sel = window.getSelection && window.getSelection();
         let insideMark = false;
-        if (sel && sel.anchorNode) {
+        if (sel && sel.anchorNode && isInsideEditor(sel.anchorNode)) {
           let n = sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement;
           while (n) { if (n.tagName === "MARK") { insideMark = true; break; } n = n.parentElement; }
         }
