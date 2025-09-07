@@ -130,8 +130,6 @@
   .note-selected-chip { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--accent-50); border: 1px solid var(--accent-200); }
 
   .note-item.selected { outline: 3px solid var(--accent-300); border-radius: 8px; background: var(--accent-25); }
-
-  .note-user-chip{ display:inline-block; font-size:11px; padding:2px 6px; border-radius:999px; background:var(--accent-50); border:1px solid var(--accent-200); margin-left:6px; }
 </style>
 </head>
 <body>
@@ -153,11 +151,7 @@
       <div class="spacer"></div>
     </div>
     <div class="status" id="status">Loaded</div>
-    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-    <label style="font-size:12px;color:var(--muted);">User</label>
-    <select id="active-user" style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;"></select>
-  </div>
-</header>
+  </header>
 
   <main>
     <aside>
@@ -210,39 +204,6 @@
 
     <section class="content view" id="view-settings">
       <h2>Settings</h2>
-
-<div class="settings-section">
-  <h3>Workspace</h3>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-    <input id="workspace-id" placeholder="Workspace ID" style="min-width:260px; padding:8px 10px; border:1px solid var(--line); border-radius:8px;">
-    <button id="ws-create" class="btn">Create ID</button>
-    <button id="ws-connect" class="btn">Connect</button>
-    <button id="ws-sync" class="btn">Sync now</button>
-    <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
-      <input id="ws-auto" type="checkbox"> Auto-sync
-    </label>
-  </div>
-  <div id="ws-status" style="font-size:12px; color:var(--muted); margin-top:6px;">Not connected</div>
-</div>
-
-<div class="settings-section">
-  <h3>Users</h3>
-  <div id="users-list" class="users-list" style="display:flex;flex-direction:column;gap:8px;margin:8px 0 12px;"></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <input id="new-user-name" placeholder="Name" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
-    <input id="new-user-initials" placeholder="Initials" maxlength="4" style="width:100px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
-    <button id="add-user" class="btn">Add User</button>
-  </div>
-</div>
-<div class="settings-section">
-  <h3>Data</h3>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <button id="export-data" class="btn">Export Binder</button>
-    <label class="btn" for="import-file" style="cursor:pointer;">Import Binder</label>
-    <input id="import-file" type="file" accept=".json" style="display:none;">
-  </div>
-  <div style="font-size:12px;color:var(--muted);margin-top:6px;">Export downloads a single JSON backup. Import will replace your current binder data.</div>
-</div>
       <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
             <div class="fields" id="job-fields-inner">
         <div class="field"><label>Company Logo (PNG/JPG)</label><input type="file" id="company-logo-file" accept="image/*"/><img id="company-logo-preview" alt="Preview" style="max-height:160px; display:none; margin-top:6px;"/></div>

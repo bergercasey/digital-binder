@@ -123,15 +123,7 @@
       box.addEventListener("click", (ev) => {
         // allow click on nameInput to open (was guarded before)
         finishInit();
-        state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll(); renderUsersUI();
-    // Ensure at least one user exists
-    if (!state.users || state.users.length === 0) {
-      const owner = { id: uuid(), name: "Owner", initials: "OWN" };
-      state.users = [owner];
-      state.ui.activeUserId = owner.id;
-      save();
-    }
-
+        state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
       });
 
       box.appendChild(nameInput);
@@ -324,8 +316,7 @@
       const item = document.createElement("div"); item.className = "note-item";
       const isSel = (state.ui && state.ui.selectedNoteIndex === i);
       if (isSel) { item.classList.add("selected"); try { item.style.border="3px solid var(--accent-300)"; item.style.borderRadius="10px"; item.style.background="var(--accent-25)"; } catch(e){} }
-      const d = document.createElement("div"); d.className = "note-date"; d.textContent = (obj.d || ymd());
-      const uc = document.createElement("span"); uc.className = "note-user-chip"; uc.textContent = userInitials(obj.u || null) || ""; d.appendChild(uc);
+      const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
       if (isSel) { const chip = document.createElement("div"); chip.className = "note-selected-chip"; chip.textContent = "Selected"; item.appendChild(chip); }
@@ -454,95 +445,9 @@
     if (typeof idx === "number" && idx >= 0 && idx < notes.length) notes = [notes[idx]];
     const body = notes.map(n => {
       const inner = n.html ? sanitizeHtml(n.html) : formatMarkdownLite(n.text || "").replace(/\n/g,"<br>");
-      return `<div class="print-note"><div class="print-date">${escapeHtml(n.d||"")} ${n.u?`<span style="display:inline-block;border:1px solid #ccc;border-radius:999px;padding:0 6px;margin-left:6px;font-size:11px;">${escapeHtml(userInitials(n.u))}</span>`:""}</div><div class="print-body">${inner}</div></div>`;
+      return `<div class="print-note"><div class="print-date">${escapeHtml(n.d||"")}</div><div class="print-body">${inner}</div></div>`;
     }).join("");
     el.innerHTML = `<div class="print-head"><div class="print-title">${title}</div><div class="print-meta">${meta}</div></div>` + body;
-  }
-
-
-  function activeUser() {
-    const id = state.ui && state.ui.activeUserId;
-    if (!id) return null;
-    return (state.users || []).find(u => u.id === id) || null;
-  }
-  function userInitials(userId) {
-    const u = (state.users || []).find(x => x.id === userId);
-    return u ? (u.initials || (u.name||'').split(/\s+/).map(s=>s[0]).join('').slice(0,4).toUpperCase()) : '';
-  }
-
-
-  function renderUsersUI() {
-    const list = $("users-list"); if (list) {
-      list.innerHTML = "";
-      (state.users || []).forEach(u => {
-        const row = document.createElement("div"); row.style.display="flex"; row.style.gap="8px"; row.style.alignItems="center";
-        const badge = document.createElement("div"); badge.className="note-user-chip"; badge.textContent = (u.initials || "").toUpperCase() || "—";
-        const name = document.createElement("div"); name.textContent = u.name || "—";
-        const del = document.createElement("button"); del.textContent="Remove"; del.className="btn"; del.style.padding="4px 8px";
-        del.addEventListener("click", ()=>{ state.users = (state.users||[]).filter(x=>x.id!==u.id); if (state.ui.activeUserId===u.id) state.ui.activeUserId = (state.users[0] && state.users[0].id) || null; save(); renderAll(); });
-        row.appendChild(badge); row.appendChild(name); row.appendChild(del); list.appendChild(row);
-      });
-    }
-    const sel = $("active-user"); if (sel) {
-      sel.innerHTML = "";
-      (state.users || []).forEach(u => {
-        const opt = document.createElement("option"); opt.value = u.id; opt.textContent = (u.initials? u.initials.toUpperCase()+" – " : "") + (u.name || "");
-        sel.appendChild(opt);
-      });
-      if (state.ui.activeUserId) sel.value = state.ui.activeUserId;
-      sel.onchange = () => { state.ui.activeUserId = sel.value; save(); renderAll(); };
-    }
-    const addBtn = $("add-user"); if (addBtn) addBtn.onclick = () => {
-      const nm = $("new-user-name")?.value?.trim(); const ini = $("new-user-initials")?.value?.trim();
-      if (!nm) return;
-      const u = { id: uuid(), name: nm, initials: ini || (nm.split(/\s+/).map(s=>s[0]).join('').slice(0,4).toUpperCase()) };
-      state.users = state.users || []; state.users.push(u);
-      if (!state.ui.activeUserId) state.ui.activeUserId = u.id;
-      if ($("new-user-name")) $("new-user-name").value = "";
-      if ($("new-user-initials")) $("new-user-initials").value = "";
-      save(); renderAll();
-    };
-  }
-
-
-  // Export / Import
-  function exportBinder() {
-    const blob = new Blob([JSON.stringify(state || {}, null, 2)], {type: "application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = (state?.org || "binder") + "-" + (new Date().toISOString().slice(0,10)) + ".json";
-    document.body.appendChild(a); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  }
-  function importBinderFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(String(e.target.result||"{}"));
-        if (!data || typeof data !== "object") return;
-        state = data; save(); renderAll(); renderUsersUI();
-      } catch(err) { alert("Import failed: invalid JSON"); }
-    };
-    reader.readAsText(file);
-  }
-
-
-  // --- Cloud sync (Netlify Blobs via Edge Function) ---
-  async function cloudGet(ws) {
-    const res = await fetch(`/api/binder?ws=${encodeURIComponent(ws)}`, { method: 'GET', headers: { 'cache-control': 'no-cache' } });
-    if (!res.ok) return null;
-    try { return await res.json(); } catch { return null; }
-  }
-  async function cloudPut(ws, data) {
-    await fetch(`/api/binder?ws=${encodeURIComponent(ws)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data || {}) });
-  }
-  function touchState() {
-    state.updatedAt = Date.now();
-  }
-  function ensureWorkspaceDefaults() {
-    state.ui = state.ui || {};
-    state.ws = state.ws || { id: 'shared', auto: true, lastSync: null };
-    if (state.ws.auto === undefined) state.ws.auto = true;
   }
 
 function renderAll() {
@@ -565,7 +470,7 @@ function renderAll() {
     const payload = { ...state, version: 17 };
     try {
       const res = await API.save(payload);
-      status(res.local ? "Saved locally (offline)" : "Saved");
+      status(res.local ? "Saved (offline)" : "Saved");
     } catch (e) {
       status("Error saving (stored locally)");
     }
@@ -573,49 +478,6 @@ function renderAll() {
 
   function wire() {
     statusEl = $("status");
-
-      // Workspace UI
-      const wsIdInput = $("workspace-id");
-      const wsCreate = $("ws-create");
-      const wsConnect = $("ws-connect");
-      const wsSync = $("ws-sync");
-      const wsAuto = $("ws-auto");
-      const wsStatus = $("ws-status");
-      function updateWsUI() {
-        if (!wsStatus) return;
-        const id = state.ws?.id;
-        const last = state.ws?.lastSync ? new Date(state.ws.lastSync).toLocaleString() : "—";
-        wsStatus.textContent = id ? `Connected: ${id} • Last sync: ${last}` : "Not connected";
-        if (wsIdInput) wsIdInput.value = id || "";
-        if (wsAuto) wsAuto.checked = !!(state.ws && state.ws.auto);
-      }
-      if (wsCreate) wsCreate.onclick = () => { const id = uuid(); state.ws.id = id; save(); updateWsUI(); };
-      if (wsConnect) wsConnect.onclick = async () => {
-        const id = (wsIdInput?.value || "").trim();
-        if (!id) return;
-        state.ws.id = id; save(); updateWsUI();
-        // Pull remote; if remote exists and newer, replace local; else push local up
-        const remote = await cloudGet(id);
-        if (remote && remote.updatedAt && (!state.updatedAt || remote.updatedAt > state.updatedAt)) {
-          state = remote; ensureWorkspaceDefaults(); save(); renderAll();
-        } else {
-          touchState(); await cloudPut(id, state); state.ws.lastSync = Date.now(); save(); updateWsUI();
-        }
-      };
-      if (wsSync) wsSync.onclick = async () => {
-        const id = state.ws?.id; if (!id) return;
-        const remote = await cloudGet(id);
-        if (remote && remote.updatedAt && (!state.updatedAt || remote.updatedAt > state.updatedAt)) {
-          state = remote; ensureWorkspaceDefaults(); save(); renderAll();
-        } else {
-          touchState(); await cloudPut(id, state); state.ws.lastSync = Date.now(); save(); updateWsUI();
-        }
-      };
-      if (wsAuto) wsAuto.onchange = () => { state.ws.auto = !!wsAuto.checked; save(); updateWsUI(); };
-      updateWsUI();
-
-    const ex = $("export-data"); if (ex) ex.addEventListener("click", exportBinder);
-    const im = $("import-file"); if (im) im.addEventListener("change", ()=> importBinderFile(im.files && im.files[0]));
 
     // WYSIWYG toolbar with selection restore and highlight toggle
     (function(){
@@ -772,7 +634,7 @@ function renderAll() {
     });
 
 
-    $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); renderUsersUI(); showView("settings"); });
+    $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
     $("to-main").addEventListener("click", () => { finishInit(); showView("main"); });
 
     $("save-settings").addEventListener("click", () => {
@@ -785,7 +647,7 @@ function renderAll() {
       state.stages.slice(0,10).forEach((s,i) => { if (!existing[s]) existing[s] = defaults[i % defaults.length]; });
       Object.keys(existing).forEach(k => { if (!state.stages.includes(k)) delete existing[k]; });
       state.stageColors = existing;
-      save(); renderSettings(); renderUsersUI(); renderTabs(); renderPanel(); toast("Settings saved");
+      save(); renderSettings(); renderTabs(); renderPanel(); toast("Settings saved");
     });
 
     // Company logo upload
@@ -941,49 +803,6 @@ $("archive-job").addEventListener("click", () => {
     renderPanel();
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
-
-      // Workspace UI
-      const wsIdInput = $("workspace-id");
-      const wsCreate = $("ws-create");
-      const wsConnect = $("ws-connect");
-      const wsSync = $("ws-sync");
-      const wsAuto = $("ws-auto");
-      const wsStatus = $("ws-status");
-      function updateWsUI() {
-        if (!wsStatus) return;
-        const id = state.ws?.id;
-        const last = state.ws?.lastSync ? new Date(state.ws.lastSync).toLocaleString() : "—";
-        wsStatus.textContent = id ? `Connected: ${id} • Last sync: ${last}` : "Not connected";
-        if (wsIdInput) wsIdInput.value = id || "";
-        if (wsAuto) wsAuto.checked = !!(state.ws && state.ws.auto);
-      }
-      if (wsCreate) wsCreate.onclick = () => { const id = uuid(); state.ws.id = id; save(); updateWsUI(); };
-      if (wsConnect) wsConnect.onclick = async () => {
-        const id = (wsIdInput?.value || "").trim();
-        if (!id) return;
-        state.ws.id = id; save(); updateWsUI();
-        // Pull remote; if remote exists and newer, replace local; else push local up
-        const remote = await cloudGet(id);
-        if (remote && remote.updatedAt && (!state.updatedAt || remote.updatedAt > state.updatedAt)) {
-          state = remote; ensureWorkspaceDefaults(); save(); renderAll();
-        } else {
-          touchState(); await cloudPut(id, state); state.ws.lastSync = Date.now(); save(); updateWsUI();
-        }
-      };
-      if (wsSync) wsSync.onclick = async () => {
-        const id = state.ws?.id; if (!id) return;
-        const remote = await cloudGet(id);
-        if (remote && remote.updatedAt && (!state.updatedAt || remote.updatedAt > state.updatedAt)) {
-          state = remote; ensureWorkspaceDefaults(); save(); renderAll();
-        } else {
-          touchState(); await cloudPut(id, state); state.ws.lastSync = Date.now(); save(); updateWsUI();
-        }
-      };
-      if (wsAuto) wsAuto.onchange = () => { state.ws.auto = !!wsAuto.checked; save(); updateWsUI(); };
-      updateWsUI();
-
-    const ex = $("export-data"); if (ex) ex.addEventListener("click", exportBinder);
-    const im = $("import-file"); if (im) im.addEventListener("change", ()=> importBinderFile(im.files && im.files[0]));
 
     // WYSIWYG toolbar with selection restore and highlight toggle
     (function(){
