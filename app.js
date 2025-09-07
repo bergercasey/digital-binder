@@ -314,7 +314,7 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = formatMarkdownLite(obj.text || String(n));
+      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
@@ -391,7 +391,7 @@
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  // --- Notes formatter with inline styles + bullet lists ---
+  // --- Notes helpers (HTML + minimal markdown fallback) ---
   function escapeHtml(s) {
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
@@ -421,6 +421,27 @@
     if (inList) out.push("</ul>");
     return out.join("");
   }
+  function sanitizeHtml(input) {
+    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN"]);
+    const wrap = document.createElement("div");
+    wrap.innerHTML = input || "";
+    (function walk(node){
+      for (let i=node.childNodes.length-1; i>=0; i--) {
+        const ch = node.childNodes[i];
+        if (ch.nodeType === 1) { // element
+          if (!allowed.has(ch.tagName)) {
+            while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
+            node.removeChild(ch);
+          } else {
+            // strip attributes
+            for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
+            walk(ch);
+          }
+        }
+      }
+    })(wrap);
+    return wrap.innerHTML.replace(/\n/g,"");
+  }
 function renderAll() {
     showView(state.ui.view);
     renderContractors();
@@ -430,9 +451,10 @@ function renderAll() {
   }
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
-  function pushNote(job, text) {
+  function pushNote(job, payload) {
     job.notes = job.notes || [];
-    job.notes.push({ d: ymd(), text });
+    if (typeof payload === "string") job.notes.push({ d: ymd(), text: payload });
+    else job.notes.push({ d: ymd(), ...(payload || {}) });
   }
 
   const save = debounce(async () => {
@@ -449,69 +471,37 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
-    // Notes toolbar (textarea markers) + List + active-state
+    // WYSIWYG toolbar for contenteditable editor
     (function(){
-      const ta = $("new-note"); if (!ta) return;
-      function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
-      const map = { "note-bold":"**", "note-italic":"_", "note-underline":"__", "note-highlight":"=="};
-      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); refresh(); }); });
-      const listBtn = $("note-bullet");
-      if (listBtn) listBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
-        const ls = val.lastIndexOf("\n", st-1) + 1;
-        const le = (val.indexOf("\n", en) === -1) ? val.length : val.indexOf("\n", en);
-        const region = val.slice(ls, le).replace(/^(?!\s*-\s)/gm, "- ");
-        ta.value = val.slice(0, ls) + region + val.slice(le);
-        ta.selectionStart = ls; ta.selectionEnd = ls + region.length;
-        ta.focus(); refresh();
-      });
-      // Active-state: toggle button styles based on caret position within markers
-      function rangesOf(pattern, leftLen){
-        const res = []; const val = ta.value||""; let m;
-        while ((m = pattern.exec(val)) !== null) {
-          const innerStart = m.index + leftLen;
-          const innerEnd = innerStart + m[1].length;
-          res.push([innerStart, innerEnd]);
-        }
-        return res;
+      const ed = $("new-note-editor"); if (!ed) return;
+      function focusEd(){ ed.focus(); }
+      function surround(tag){
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const r = sel.getRangeAt(0);
+        try { const el = document.createElement(tag); r.surroundContents(el); }
+        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
       }
-      function isIn(ranges, pos){ return ranges.some(([a,b]) => pos >= a && pos <= b); }
+      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
+      Object.entries(map).forEach(([id, cmd]) => {
+        const b = $(id); if (!b) return;
+        b.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand(cmd); refresh(); });
+      });
+      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); surround('mark'); refresh(); });
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand('insertUnorderedList'); refresh(); });
+      // Tab indent/outdent
+      ed.addEventListener("keydown", (e)=>{ if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } });
+      // Active state
+      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
       function refresh(){
-        const pos = ta.selectionStart||0;
-        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2);
-        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1).map(([a,b])=>[a,b]);
-        const uR    = rangesOf(/__(.+?)__/g, 2);
-        const hR    = rangesOf(/==(.+?)==/g, 2);
-        const sets = { "note-bold": boldR, "note-italic": itR, "note-underline": uR, "note-highlight": hR };
-        Object.entries(sets).forEach(([id, rs]) => { const b=$(id); if (!b) return; b.classList.toggle("active", isIn(rs, pos)); });
+        ["note-bold","note-italic","note-underline"].forEach((id)=>{ const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(map[id]); }catch(e){} b.classList.toggle("active", !!on); });
+        const sel = window.getSelection && window.getSelection();
+        const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
+        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!(node && hasMark(node)));
       }
-      ["keyup","mouseup","input","click"].forEach(ev => ta.addEventListener(ev, refresh));
+      document.addEventListener("selectionchange", refresh);
+      ed.addEventListener("keyup", refresh);
       refresh();
-      // Tab indent/outdent behavior
-      ta.addEventListener("keydown", (e)=>{
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
-          const ls = val.lastIndexOf("\n", st-1) + 1;
-          if (!e.shiftKey) {
-            const region = val.slice(ls, en);
-            const ind = region.replace(/^/gm, "  ");
-            ta.value = val.slice(0, ls) + ind + val.slice(en);
-            const delta = ind.length - region.length;
-            ta.selectionStart = st + (st === ls ? 2 : 0);
-            ta.selectionEnd = en + delta;
-          } else {
-            const region = val.slice(ls, en);
-            const out = region.replace(/^( {1,2})/gm, "");
-            ta.value = val.slice(0, ls) + out + val.slice(en);
-            const delta = region.length - out.length;
-            ta.selectionStart = Math.max(ls, st - (st === ls ? Math.min(2, delta) : 0));
-            ta.selectionEnd = en - delta;
-          }
-          refresh();
-        }
-      });
     })();
 
     // Edit Job toggle
@@ -672,10 +662,14 @@ function renderAll() {
 
     $("add-note").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
-      const txt = $("new-note").value.trim(); if (!txt) return;
-      if (!j.initComplete) j.initComplete = true; // first manual note ends setup
-      pushNote(j, txt); $("new-note").value = "";
-      markUpdated(j); save(); renderPanel(); toast("Note added");
+      const ed = $("new-note-editor");
+      const html = (ed && ed.innerHTML ? ed.innerHTML.trim() : "");
+      const txt  = (ed && ed.innerText ? ed.innerText.trim() : "");
+      if (!html && !txt) return;
+      if (!j.initComplete) j.initComplete = true;
+      pushNote(j, { text: txt, html: sanitizeHtml(html) });
+      if (ed) ed.innerHTML = "";
+      markUpdated(j); save(); renderPanel();
     });
 
     $("refresh-btn").addEventListener("click", async () => {
@@ -720,69 +714,37 @@ function renderAll() {
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
-    // Notes toolbar (textarea markers) + List + active-state
+    // WYSIWYG toolbar for contenteditable editor
     (function(){
-      const ta = $("new-note"); if (!ta) return;
-      function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
-      const map = { "note-bold":"**", "note-italic":"_", "note-underline":"__", "note-highlight":"=="};
-      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); refresh(); }); });
-      const listBtn = $("note-bullet");
-      if (listBtn) listBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
-        const ls = val.lastIndexOf("\n", st-1) + 1;
-        const le = (val.indexOf("\n", en) === -1) ? val.length : val.indexOf("\n", en);
-        const region = val.slice(ls, le).replace(/^(?!\s*-\s)/gm, "- ");
-        ta.value = val.slice(0, ls) + region + val.slice(le);
-        ta.selectionStart = ls; ta.selectionEnd = ls + region.length;
-        ta.focus(); refresh();
-      });
-      // Active-state: toggle button styles based on caret position within markers
-      function rangesOf(pattern, leftLen){
-        const res = []; const val = ta.value||""; let m;
-        while ((m = pattern.exec(val)) !== null) {
-          const innerStart = m.index + leftLen;
-          const innerEnd = innerStart + m[1].length;
-          res.push([innerStart, innerEnd]);
-        }
-        return res;
+      const ed = $("new-note-editor"); if (!ed) return;
+      function focusEd(){ ed.focus(); }
+      function surround(tag){
+        const sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const r = sel.getRangeAt(0);
+        try { const el = document.createElement(tag); r.surroundContents(el); }
+        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); }
       }
-      function isIn(ranges, pos){ return ranges.some(([a,b]) => pos >= a && pos <= b); }
+      const map = { "note-bold":"bold", "note-italic":"italic", "note-underline":"underline" };
+      Object.entries(map).forEach(([id, cmd]) => {
+        const b = $(id); if (!b) return;
+        b.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand(cmd); refresh(); });
+      });
+      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); surround('mark'); refresh(); });
+      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); focusEd(); document.execCommand('insertUnorderedList'); refresh(); });
+      // Tab indent/outdent
+      ed.addEventListener("keydown", (e)=>{ if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) document.execCommand('outdent'); else document.execCommand('indent'); } });
+      // Active state
+      function hasMark(node){ while(node && node.nodeType===1){ if(node.tagName==="MARK") return true; node=node.parentElement; } return false; }
       function refresh(){
-        const pos = ta.selectionStart||0;
-        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2);
-        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1).map(([a,b])=>[a,b]);
-        const uR    = rangesOf(/__(.+?)__/g, 2);
-        const hR    = rangesOf(/==(.+?)==/g, 2);
-        const sets = { "note-bold": boldR, "note-italic": itR, "note-underline": uR, "note-highlight": hR };
-        Object.entries(sets).forEach(([id, rs]) => { const b=$(id); if (!b) return; b.classList.toggle("active", isIn(rs, pos)); });
+        ["note-bold","note-italic","note-underline"].forEach((id)=>{ const b=$(id); if(!b) return; let on=false; try{ on=document.queryCommandState(map[id]); }catch(e){} b.classList.toggle("active", !!on); });
+        const sel = window.getSelection && window.getSelection();
+        const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
+        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!(node && hasMark(node)));
       }
-      ["keyup","mouseup","input","click"].forEach(ev => ta.addEventListener(ev, refresh));
+      document.addEventListener("selectionchange", refresh);
+      ed.addEventListener("keyup", refresh);
       refresh();
-      // Tab indent/outdent behavior
-      ta.addEventListener("keydown", (e)=>{
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
-          const ls = val.lastIndexOf("\n", st-1) + 1;
-          if (!e.shiftKey) {
-            const region = val.slice(ls, en);
-            const ind = region.replace(/^/gm, "  ");
-            ta.value = val.slice(0, ls) + ind + val.slice(en);
-            const delta = ind.length - region.length;
-            ta.selectionStart = st + (st === ls ? 2 : 0);
-            ta.selectionEnd = en + delta;
-          } else {
-            const region = val.slice(ls, en);
-            const out = region.replace(/^( {1,2})/gm, "");
-            ta.value = val.slice(0, ls) + out + val.slice(en);
-            const delta = region.length - out.length;
-            ta.selectionStart = Math.max(ls, st - (st === ls ? Math.min(2, delta) : 0));
-            ta.selectionEnd = en - delta;
-          }
-          refresh();
-        }
-      });
     })();
 
     // Edit Job toggle
