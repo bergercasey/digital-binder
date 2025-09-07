@@ -939,3 +939,71 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
+
+// ===== Login Modal + Right-Gutter Fix =====
+const modalEl = document.getElementById('loginModal');
+const formEl = document.getElementById('loginForm');
+const userEl = document.getElementById('loginUser');
+const passEl = document.getElementById('loginPass');
+const rememberEl = document.getElementById('rememberMe');
+const errEl = document.getElementById('loginError');
+
+function scrollbarWidth() {
+  return Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+}
+function openModal() {
+  // compute scrollbar width and set CSS var to avoid right gutter shift
+  document.documentElement.style.setProperty('--sbw', scrollbarWidth() + 'px');
+  document.documentElement.classList.add('modal-open');
+  document.body.classList.add('modal-open');
+  modalEl.setAttribute('open','');
+  modalEl.setAttribute('aria-hidden','false');
+  setTimeout(()=> userEl?.focus(), 0);
+}
+function closeModal() {
+  modalEl.removeAttribute('open');
+  modalEl.setAttribute('aria-hidden','true');
+  document.documentElement.classList.remove('modal-open');
+  document.body.classList.remove('modal-open');
+  errEl.textContent = '';
+}
+
+async function doLogin(username, password, remember) {
+  const res = await fetch('/.netlify/functions/auth-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, remember: !!remember })
+  });
+  if (!res.ok) return false;
+  const j = await res.json().catch(()=>({}));
+  return !!j.ok;
+}
+
+formEl?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errEl.textContent = '';
+  const ok = await doLogin(userEl.value.trim(), passEl.value, rememberEl.checked);
+  if (!ok) { errEl.textContent = 'Invalid username or password'; return; }
+  closeModal();
+  // reload data after successful login
+  try { const data = await cloudLoad(); if (data) hydrate(data); } catch {}
+});
+
+// Hook into initial load/save: if we see 401 from functions, show the modal.
+const _cloudLoad = cloudLoad;
+cloudLoad = async function() {
+  try {
+    const data = await _cloudLoad();
+    if (data === 401) { openModal(); return null; }
+    return data;
+  } catch (e) { return null; }
+};
+
+// Wrap cloudSave similarly to detect 401
+const _cloudSave = cloudSave;
+cloudSave = async function(data) {
+  const ok = await _cloudSave(data);
+  if (ok === 401) { openModal(); return false; }
+  return ok;
+};
+// ===== End Login Modal =====
