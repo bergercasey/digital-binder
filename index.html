@@ -130,29 +130,6 @@
   .note-selected-chip { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--accent-50); border: 1px solid var(--accent-200); }
 
   .note-item.selected { outline: 3px solid var(--accent-300); border-radius: 8px; background: var(--accent-25); }
-
-/* --- Login Modal (no layout shift) --- */
-:root { --sbw: 0px; } /* scrollbar width captured by JS */
-.modal { position: fixed; inset: 0; display: none; z-index: 50; }
-.modal[open] { display: block; }
-.modal__backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
-.modal__card {
-  position: relative; width: min(92vw, 380px); margin: 10vh auto 0;
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
-  padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.12);
-}
-.modal__title { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
-.modal__hint { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
-.modal__form .field { display: block; margin-bottom: 10px; }
-.modal__form .field span { display:block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-.modal__form input { width: 100%; padding: 8px 10px; border: 1px solid #d0d7de; border-radius: 8px; }
-.modal .actions { display:flex; justify-content:flex-end; margin-top: 8px; }
-.modal button { padding: 8px 12px; }
-.modal .error { margin-top: 8px; color: #b91c1c; font-size: 12px; min-height: 16px; }
-.remember { display:flex; align-items:center; gap: 8px; font-size: 13px; color:#374151; }
-html.modal-open, body.modal-open { overflow: hidden; }
-body.modal-open { padding-right: var(--sbw); } /* compensate removed scrollbar */
-
 </style>
 </head>
 <body>
@@ -166,10 +143,7 @@ body.modal-open { padding-right: var(--sbw); } /* compensate removed scrollbar *
       <button class="ghost" id="to-settings">Settings</button>
       <button class="ghost" id="open-archives-top">Archives</button>
       <button class="ghost" id="to-main" style="display:none;">Back to Jobs</button>
-      <button class="ghost" id="refresh-btn">Home<
-<span id="authBadge" class="pill" style="margin-left:8px;display:none;">Auth</span>
-<button id="loginLink" class="btn" style="margin-left:6px;">Login</button>
-/button>
+      <button class="ghost" id="refresh-btn">Reload</button>
       <div class="searchbar" style="margin-left:8px;">
         <input id="header-search" type="text" placeholder="Search job by #, name, or address…"/>
         <button id="header-search-btn">Open</button>
@@ -258,35 +232,7 @@ body.modal-open { padding-right: var(--sbw); } /* compensate removed scrollbar *
 </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
-  
+  <script defer src="app.js"></script>
 <div id="print-sheet" style="display:none;"></div>
-
-  <!-- Login Modal -->
-  <div id="loginModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal__backdrop"></div>
-    <div class="modal__card" role="document">
-      <h2 class="modal__title">Sign in</h2>
-      <p class="modal__hint">Enter your username and password.</p>
-      <form id="loginForm" class="modal__form" autocomplete="on">
-        <label class="field">
-          <span>Username</span>
-          <input id="loginUser" name="username" required autofocus />
-        </label>
-        <label class="field">
-          <span>Password</span>
-          <input id="loginPass" name="password" type="password" required />
-        </label>
-        <label class="remember">
-          <input id="rememberMe" type="checkbox" /> Remember me
-        </label>
-        <div class="actions">
-          <button type="submit" id="loginBtn">Login</button>
-        </div>
-        <div id="loginError" class="error" role="alert" aria-live="polite"></div>
-      </form>
-    </div>
-  </div>
-
-<script defer src="/app.js"></script>
 </body>
 </html>
