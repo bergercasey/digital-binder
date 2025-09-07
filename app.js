@@ -314,7 +314,7 @@
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = formatMarkdownLite(obj.text || String(n)).replace(/\n/g,"<br>");
+      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body); list.appendChild(item);
     });
 
@@ -391,17 +391,35 @@
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  // --- Notes formatting helpers (minimal) ---
+  // --- Notes formatting helpers (inline + bullet lists) ---
   function escapeHtml(s) {
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
-  function formatMarkdownLite(s) {
-    let x = escapeHtml(String(s || ""));
+  function inlineFmt(s) {
+    let x = s;
     x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     x = x.replace(/__(.+?)__/g, '<u>$1</u>');
     x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2</em>');
     x = x.replace(/==(.+?)==/g, '<mark>$1</mark>');
     return x;
+  }
+  function formatMarkdownLite(s) {
+    const lines = String(s || "").split(/\n/);
+    const out = [];
+    let inList = false;
+    for (const raw of lines) {
+      const line = escapeHtml(raw);
+      if (/^\s*-\s+/.test(line)) {
+        if (!inList) { out.push("<ul>"); inList = true; }
+        const item = line.replace(/^\s*-\s+/, "");
+        out.push("<li>" + inlineFmt(item) + "</li>");
+      } else {
+        if (inList) { out.push("</ul>"); inList = false; }
+        out.push(inlineFmt(line) + "<br>");
+      }
+    }
+    if (inList) out.push("</ul>");
+    return out.join("");
   }
 function renderAll() {
     showView(state.ui.view);
@@ -431,16 +449,50 @@ function renderAll() {
   function wire() {
     statusEl = $("status");
 
-    // Notes toolbar (textarea markers)
+    // Notes toolbar (textarea markers) with List and active-state
     (function(){
       const ta = $("new-note"); if (!ta) return;
       function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
       const map = { "note-bold":"**", "note-italic":"_", "note-underline":"__", "note-highlight":"=="};
-      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); }); });
+      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); refresh(); }); });
+      const listBtn = $("note-bullet");
+      if (listBtn) listBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
+        const ls = val.lastIndexOf("\n", st-1) + 1;
+        const le = (val.indexOf("\n", en) === -1) ? val.length : val.indexOf("\n", en);
+        const region = val.slice(ls, le).replace(/^(?!\s*-\s)/gm, "- ");
+        ta.value = val.slice(0, ls) + region + val.slice(le);
+        ta.selectionStart = ls; ta.selectionEnd = ls + region.length;
+        ta.focus(); refresh();
+      });
+      // Active state: highlight buttons if caret is inside markers
+      function rangesOf(pattern, leftLen, rightLen){
+        const res = []; const val = ta.value||""; let m;
+        while ((m = pattern.exec(val)) !== null) {
+          const innerStart = m.index + leftLen;
+          const innerEnd = innerStart + m[1].length;
+          res.push([innerStart, innerEnd]);
+        }
+        return res;
+      }
+      function isIn(ranges, pos){ return ranges.some(([a,b]) => pos >= a && pos <= b); }
+      function refresh(){
+        const pos = ta.selectionStart||0;
+        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2, 2);
+        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1, 1).map(([a,b])=>[a,b]); // approx
+        const uR    = rangesOf(/__(.+?)__/g, 2, 2);
+        const hR    = rangesOf(/==(.+?)==/g, 2, 2);
+        const sets = { "note-bold": boldR, "note-italic": itR, "note-underline": uR, "note-highlight": hR };
+        Object.entries(sets).forEach(([id, rs]) => { const b=$(id); if (!b) return; b.classList.toggle("active", isIn(rs, pos)); });
+      }
+      ["keyup","mouseup","input","click"].forEach(ev => ta.addEventListener(ev, refresh));
+      refresh();
+      // Tab indent/outdent
       ta.addEventListener("keydown", (e)=>{
         if (e.key === "Tab") {
           e.preventDefault();
-          const st = ta.selectionStart, en = ta.selectionEnd, val = ta.value;
+          const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
           const ls = val.lastIndexOf("\n", st-1) + 1;
           if (!e.shiftKey) {
             const region = val.slice(ls, en);
@@ -457,6 +509,7 @@ function renderAll() {
             ta.selectionStart = Math.max(ls, st - (st === ls ? Math.min(2, delta) : 0));
             ta.selectionEnd = en - delta;
           }
+          refresh();
         }
       });
     })();
@@ -667,16 +720,50 @@ function renderAll() {
   }, { passive: true });
 window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
-    // Notes toolbar (textarea markers)
+    // Notes toolbar (textarea markers) with List and active-state
     (function(){
       const ta = $("new-note"); if (!ta) return;
       function wrap(left, right){ right = right ?? left; const st=ta.selectionStart||0, en=ta.selectionEnd||0; const val=ta.value||""; const sel=val.slice(st,en); ta.value = val.slice(0,st) + left + sel + right + val.slice(en); ta.focus(); const add=left.length; ta.selectionStart=st+add; ta.selectionEnd=en+add; }
       const map = { "note-bold":"**", "note-italic":"_", "note-underline":"__", "note-highlight":"=="};
-      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); }); });
+      Object.entries(map).forEach(([id,mark]) => { const b = $(id); if (!b) return; b.addEventListener("click", (e)=>{ e.preventDefault(); wrap(mark); refresh(); }); });
+      const listBtn = $("note-bullet");
+      if (listBtn) listBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
+        const ls = val.lastIndexOf("\n", st-1) + 1;
+        const le = (val.indexOf("\n", en) === -1) ? val.length : val.indexOf("\n", en);
+        const region = val.slice(ls, le).replace(/^(?!\s*-\s)/gm, "- ");
+        ta.value = val.slice(0, ls) + region + val.slice(le);
+        ta.selectionStart = ls; ta.selectionEnd = ls + region.length;
+        ta.focus(); refresh();
+      });
+      // Active state: highlight buttons if caret is inside markers
+      function rangesOf(pattern, leftLen, rightLen){
+        const res = []; const val = ta.value||""; let m;
+        while ((m = pattern.exec(val)) !== null) {
+          const innerStart = m.index + leftLen;
+          const innerEnd = innerStart + m[1].length;
+          res.push([innerStart, innerEnd]);
+        }
+        return res;
+      }
+      function isIn(ranges, pos){ return ranges.some(([a,b]) => pos >= a && pos <= b); }
+      function refresh(){
+        const pos = ta.selectionStart||0;
+        const boldR = rangesOf(/\*\*(.+?)\*\*/g, 2, 2);
+        const itR   = rangesOf(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, 1, 1).map(([a,b])=>[a,b]); // approx
+        const uR    = rangesOf(/__(.+?)__/g, 2, 2);
+        const hR    = rangesOf(/==(.+?)==/g, 2, 2);
+        const sets = { "note-bold": boldR, "note-italic": itR, "note-underline": uR, "note-highlight": hR };
+        Object.entries(sets).forEach(([id, rs]) => { const b=$(id); if (!b) return; b.classList.toggle("active", isIn(rs, pos)); });
+      }
+      ["keyup","mouseup","input","click"].forEach(ev => ta.addEventListener(ev, refresh));
+      refresh();
+      // Tab indent/outdent
       ta.addEventListener("keydown", (e)=>{
         if (e.key === "Tab") {
           e.preventDefault();
-          const st = ta.selectionStart, en = ta.selectionEnd, val = ta.value;
+          const st = ta.selectionStart||0, en = ta.selectionEnd||0, val = ta.value||"";
           const ls = val.lastIndexOf("\n", st-1) + 1;
           if (!e.shiftKey) {
             const region = val.slice(ls, en);
@@ -693,6 +780,7 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
             ta.selectionStart = Math.max(ls, st - (st === ls ? Math.min(2, delta) : 0));
             ta.selectionEnd = en - delta;
           }
+          refresh();
         }
       });
     })();

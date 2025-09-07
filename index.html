@@ -99,6 +99,7 @@
   
   .note-text { white-space: pre-wrap; }
   .note-toolbar button { padding: 4px 8px; font-size: 12px; }
+  .note-toolbar button.active { background: var(--accent-50); border-color: var(--accent-200); }
 </style>
 </head>
 <body>
@@ -162,7 +163,7 @@
             <div class="field"><label>Crew</label><div id="crew-box" class="chips"></div></div>
           </div>
           <div style="margin-top:14px;">
-            <div class="field"><label>Add Note</label><div class="note-toolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px;"><button id="note-bold"><strong>B</strong></button><button id="note-italic"><em>I</em></button><button id="note-underline"><u>U</u></button><button id="note-highlight">HL</button></div><textarea id="new-note" placeholder="What changed? Materials, inspections, dates..."></textarea></div>
+            <div class="field"><label>Add Note</label><textarea id="new-note" placeholder="What changed? Materials, inspections, dates..."></textarea></div>
             <div class="row"><button id="add-note" class="primary">Add Note</button><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
             <h3 style="margin:14px 0 6px;">Log</h3><div id="notes-list" class="list"></div>
           </div>
