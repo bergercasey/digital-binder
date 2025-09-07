@@ -120,6 +120,9 @@
   .note-card.selected { outline: 2px solid var(--accent-200); }
 
   .note-item.selected{ outline: 2px solid var(--accent-200); }
+
+  .note-item.selected{ outline: 3px solid var(--accent-300); border-radius: 8px; }
+  .print-tip { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
 </style>
 </head>
 <body>
@@ -186,7 +189,7 @@
           <div style="margin-top:14px;">
             <div class="field"><label>Add Note</label><div class="note-toolbar" id="note-toolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px;"><button id="note-bold" type="button"><strong>B</strong></button><button id="note-italic" type="button"><em>I</em></button><button id="note-underline" type="button"><u>U</u></button><button id="note-highlight" type="button">HL</button><button id="note-bullet" type="button">• List</button></div><div id="new-note-editor" class="note-editor" contenteditable="true" data-placeholder="What changed? Materials, inspections, dates..."></div><textarea id="new-note" style="display:none;"></textarea></textarea></div>
             <div class="row"><button id="add-note" class="primary">Add Note</button><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
-            <h3 style="margin:14px 0 6px;">Log</h3><div id="notes-list" class="list"></div>
+            <h3 style="margin:14px 0 6px;">Log</h3><div class="print-tip">Tip: Tap a log entry to select it, then press Print to print just that entry.</div><div id="notes-list" class="list"></div>
           </div>
         </div>
       </div>
