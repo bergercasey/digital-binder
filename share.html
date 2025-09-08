@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Share Logs</title>
+  <style>
+    :root { --b:#d0d7de; --muted:#6b7280; --pad:14px; }
+    *{ box-sizing:border-box }
+    html,body{ margin:0; background:#fff; color:#111; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    header{ display:flex; gap:10px; align-items:center; padding:10px var(--pad); border-bottom:1px solid var(--b); position:sticky; top:0; background:#fff; z-index:2 }
+    h1{ margin:0; font-size:18px; font-weight:700 }
+    main{ display:grid; grid-template-columns: 320px 1fr; min-height:calc(100vh - 52px); }
+    aside{ padding: var(--pad); border-right:1px solid var(--b); }
+    section{ padding: var(--pad); }
+    .box{ border:1px solid var(--b); border-radius:12px; padding:12px; margin-bottom:12px; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+    input[type=text], input[type=email]{ padding:8px 10px; border:1px solid var(--b); border-radius:8px; width:100%; }
+    textarea{ width:100%; padding:8px 10px; border:1px solid var(--b); border-radius:8px; }
+    .btn{ padding:8px 12px; border:1px solid var(--b); background:#fff; border-radius:8px; cursor:pointer }
+    .btn.primary{ font-weight:700 }
+    .list{ list-style:none; margin:0; padding:0; border:1px solid var(--b); border-radius:8px; max-height:calc(100vh - 250px); overflow:auto }
+    .list li{ display:flex; gap:10px; align-items:flex-start; border-bottom:1px solid var(--b); padding:10px }
+    .list li:last-child{ border-bottom:none }
+    .date{ font-size:12px; color:var(--muted); min-width:120px }
+    .empty{ color:var(--muted); font-size:14px; }
+    .preview{ border:1px dashed var(--b); border-radius:12px; padding:12px; background:#fff }
+    .preview h2{ font-size:16px; margin:0 0 6px }
+    .preview .entry{ margin-bottom:12px; }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .muted{ color:var(--muted); font-size:12px; }
+    .pill{ padding:2px 6px; border:1px solid var(--b); border-radius:999px; font-size:12px; }
+    @media print{
+      header, aside { display:none }
+      main{ grid-template-columns: 1fr }
+      body{ background:#fff }
+      .preview{ border:0; padding:0 }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Share Logs</h1>
+    <span id="status" class="muted"></span>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <a href="/" class="btn">Back to Binder</a>
+      <button class="btn" onclick="window.print()">Print Selected</button>
+      <button id="emailBtn" class="btn primary">Email Selected</button>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div class="box">
+        <div class="row"><strong>Email settings</strong><span id="who" class="pill"></span></div>
+        <div class="grid2" style="margin-top:8px;">
+          <label>From name<input id="fromName" type="text" placeholder="e.g., Casey Berger"/></label>
+          <label>From email<input id="fromEmail" type="email" placeholder="you@gmail.com"/></label>
+        </div>
+        <label style="margin-top:8px;">Recipients (comma separated)<textarea id="toList" rows="3" placeholder="boss@co.com, team@co.com"></textarea></label>
+        <div class="row" style="margin-top:8px;">
+          <button id="saveSettings" class="btn">Save settings</button>
+          <span id="saveMsg" class="muted"></span>
+        </div>
+      </div>
+      <div class="box">
+        <strong>Subject</strong>
+        <input id="subject" type="text" placeholder="HVAC Binder – Log updates"/>
+      </div>
+      <div class="box">
+        <strong>Logs</strong>
+        <p class="muted" style="margin:6px 0 10px;">Select the entries to print or email.</p>
+        <ul id="logList" class="list"></ul>
+        <p id="emptyMsg" class="empty" style="display:none;">No logs were found. Add some entries in the Binder, then come back.</p>
+      </div>
+    </aside>
+    <section>
+      <div class="preview" id="preview">
+        <h2>Preview</h2>
+        <div id="previewBody"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const logList = document.getElementById('logList');
+    const previewBody = document.getElementById('previewBody');
+    const emailBtn = document.getElementById('emailBtn');
+    const subjectEl = document.getElementById('subject');
+    const fromNameEl = document.getElementById('fromName');
+    const fromEmailEl = document.getElementById('fromEmail');
+    const toListEl = document.getElementById('toList');
+    const saveSettingsBtn = document.getElementById('saveSettings');
+    const saveMsgEl = document.getElementById('saveMsg');
+    const whoEl = document.getElementById('who');
+
+    function fmt(d){ try{ return new Date(d).toLocaleString(); }catch{ return d+''; } }
+
+    function findLogs(binder){
+      const candidates = [];
+      for (const k of Object.keys(binder||{})){
+        const v = binder[k];
+        if (Array.isArray(v) && v.length && typeof v[0]==='object'){
+          const hasDate = 'date' in v[0] || 'timestamp' in v[0] || 'time' in v[0];
+          const hasText = 'text' in v[0] || 'note' in v[0] || 'message' in v[0] || 'desc' in v[0];
+          if (hasDate && hasText) candidates.push({key:k, items:v});
+        }
+      }
+      if (binder.logs && Array.isArray(binder.logs)) candidates.unshift({key:'logs', items:binder.logs});
+      return candidates[0]?.items || [];
+    }
+
+    function renderLogs(items){
+      logList.innerHTML = '';
+      if (!items.length){
+        document.getElementById('emptyMsg').style.display = 'block';
+        previewBody.innerHTML = '<div class="muted">Nothing selected.</div>';
+        return;
+      }
+      document.getElementById('emptyMsg').style.display = 'none';
+      items.forEach((it, i) => {
+        const li = document.createElement('li');
+        const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.idx=i;
+        const date = document.createElement('div'); date.className='date'; date.textContent = fmt(it.date||it.timestamp||it.time||'');
+        const txt = document.createElement('div'); txt.innerHTML = (it.text||it.note||it.message||it.desc||'').replace(/\n/g,'<br>');
+        li.append(cb,date,txt); logList.appendChild(li);
+      });
+      logList.addEventListener('change', updatePreview);
+      updatePreview();
+    }
+
+    function selected(items){
+      const set = new Set([...logList.querySelectorAll('input[type=checkbox]:checked')].map(x=>+x.dataset.idx));
+      return items.filter((_,i)=>set.has(i));
+    }
+
+    function updatePreview(){
+      const items = window.__LOGS__||[];
+      const sel = selected(items);
+      if (!sel.length){ previewBody.innerHTML = '<div class="muted">Nothing selected.</div>'; return; }
+      previewBody.innerHTML = sel.map(it => (
+        '<div class="entry">'
+        + '<div class="date">'+fmt(it.date||it.timestamp||it.time||'')+'</div>'
+        + '<div>'+(it.text||it.note||it.message||it.desc||'').replace(/\n/g,'<br>')+'</div>'
+        + '</div>'
+      )).join('\n');
+    }
+
+    async function loadBinder(){
+      statusEl.textContent = 'Loading…';
+      try {
+        const who = await fetch('/.netlify/functions/auth-check').then(r => r.json()).catch(()=>({}));
+        if (who && who.user) { whoEl.textContent = '('+who.user+')'; }
+      } catch {}
+      let binder=null;
+      try {
+        const res = await fetch('/.netlify/functions/load', { headers:{'cache-control':'no-cache'} });
+        if (!res.ok) throw new Error('load '+res.status);
+        binder = await res.json();
+      } catch (e) {
+        console.warn(e); statusEl.textContent = 'Offline';
+        binder = {};
+      }
+      window.__BINDER__ = binder;
+      const logs = findLogs(binder);
+      window.__LOGS__ = logs;
+      renderLogs(logs);
+      statusEl.textContent = 'Ready';
+      await loadEmailSettings();
+    }
+
+    async function loadEmailSettings(){
+      try {
+        const j = await fetch('/.netlify/functions/email-settings-load').then(r=>r.json());
+        if (j && j.user){
+          fromNameEl.value = j.fromName || '';
+          fromEmailEl.value = j.fromEmail || '';
+          toListEl.value = (j.to||[]).join(', ');
+          if (j.user) whoEl.textContent = '('+j.user+')';
+        }
+      } catch {}
+    }
+
+    saveSettingsBtn.addEventListener('click', async () => {
+      saveMsgEl.textContent = '';
+      const payload = {
+        fromName: fromNameEl.value.trim(),
+        fromEmail: fromEmailEl.value.trim(),
+        to: toListEl.value.split(',').map(s=>s.trim()).filter(Boolean)
+      };
+      const res = await fetch('/.netlify/functions/email-settings-save', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      saveMsgEl.textContent = res.ok ? 'Saved' : 'Error';
+      setTimeout(()=> saveMsgEl.textContent = '', 1500);
+    });
+
+    emailBtn.addEventListener('click', async () => {
+      const items = selected(window.__LOGS__||[]);
+      if (!items.length){ alert('Select at least one log.'); return; }
+      const html = '<h2>HVAC Binder – Updates</h2>' + previewBody.innerHTML;
+      const payload = {
+        subject: subjectEl.value || 'HVAC Binder – Log updates',
+        html,
+        fromName: fromNameEl.value.trim(),
+        fromEmail: fromEmailEl.value.trim(),
+        to: toListEl.value.split(',').map(s=>s.trim()).filter(Boolean)
+      };
+      statusEl.textContent = 'Sending…';
+      const res = await fetch('/.netlify/functions/send-email', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      statusEl.textContent = res.ok ? 'Sent' : 'Send error';
+      if (!res.ok){
+        const t = await res.text().catch(()=>'');
+        console.warn('Send error', t);
+        alert('Send failed: ' + t);
+      }
+    });
+
+    loadBinder();
+  </script>
+</body>
+</html>
