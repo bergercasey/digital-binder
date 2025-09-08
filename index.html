@@ -130,11 +130,7 @@
   .note-selected-chip { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--accent-50); border: 1px solid var(--accent-200); }
 
   .note-item.selected { outline: 3px solid var(--accent-300); border-radius: 8px; background: var(--accent-25); }
-
-/* Top-right user display */
-header { position: relative; }
-.header-right { position: absolute; right: 12px; top: 8px; display: inline-flex; gap: 8px; align-items: center; }
-    </style>
+</style>
 </head>
 <body>
   <div class="errbar" id="errbar"></div>
@@ -157,10 +153,10 @@ header { position: relative; }
     <div class="status" id="status">Loaded</div>
   
   <div class="header-right">
+    <a href="/share.html" class="ghost" style="text-decoration:none;padding:6px 10px;border-radius:8px;border:1px solid #d0d7de;">Share</a>
     <span id="userBadge" class="muted" style="font-size:12px;"></span>
     <button id="logoutBtn" class="ghost">Logout</button>
   </div>
-
 </header>
 
   <main>
@@ -246,84 +242,35 @@ header { position: relative; }
 <div id="print-sheet" style="display:none;"></div>
 
 <script>
-  document.addEventListener('DOMContentLoaded', async () => {
-    try {
-      const r = await fetch('/.netlify/functions/auth-check', { headers:{'cache-control':'no-cache'} });
-      if (r.status === 401) {
-        const next = encodeURIComponent(location.pathname + location.search);
-        location.href = '/login.html?next=' + next;
-      }
-    } catch {}
-  });
-</script>
-
-
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('logoutBtn');
-    if (btn) {
-      btn.addEventListener('click', async () => {
-        try { await fetch('/.netlify/functions/auth-logout'); } catch {}
-        const next = encodeURIComponent('/');
-        location.href = '/login.html?next=' + next;
-      });
-    }
-  });
-</script>
-
-
-<script>
 document.addEventListener('DOMContentLoaded', async () => {
-  // Home button: navigate to root
-  const homeBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Home');
-  if (homeBtn) {
-    homeBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = '/'; });
-  }
-  // Show logged-in user next to Logout
-  const badge = document.getElementById('userBadge');
+  // Home button behavior
+  const homeBtn = document.getElementById('reload') || Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='Home');
+  if (homeBtn) { homeBtn.textContent = 'Home'; homeBtn.addEventListener('click', (e)=>{ e.preventDefault(); location.href='/'; }); }
+
+  // Auth guard: if required and not logged in, go to login page
   try {
     const r = await fetch('/.netlify/functions/auth-check', { headers:{'cache-control':'no-cache'} });
-    if (r.status === 200) {
+    if (r.status === 401) {
+      const next = encodeURIComponent(location.pathname + location.search);
+      location.href = '/login.html?next=' + next;
+      return;
+    }
+    if (r.ok) {
       const j = await r.json().catch(()=>({}));
-      if (badge && j && j.user) { badge.textContent = `(${j.user})`; }
-    } else {
-      if (badge) { badge.textContent = ''; }
+      const badge = document.getElementById('userBadge');
+      if (badge && j && j.user) badge.textContent = '('+j.user+')';
     }
   } catch {}
-});
-</script>
 
-
-<script>
-document.addEventListener('DOMContentLoaded', async () => {
-  // Home button (id="reload") -> text "Home" + navigate root
-  const homeBtn = document.getElementById('reload');
-  if (homeBtn) {
-    homeBtn.textContent = 'Home';
-    homeBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = '/'; });
-  }
-  // Show logged-in user next to Logout
-  const badge = document.getElementById('userBadge');
-  try {
-    const r = await fetch('/.netlify/functions/auth-check', { headers:{'cache-control':'no-cache'} });
-    if (r.status === 200) {
-      const j = await r.json().catch(()=>({}));
-      if (badge && j && j.user) { badge.textContent = '(' + j.user + ')'; }
-    } else if (badge) {
-      badge.textContent = '';
-    }
-  } catch {}
-  // Logout handler
+  // Logout
   const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) {
+  if (logoutBtn){
     logoutBtn.addEventListener('click', async () => {
       try { await fetch('/.netlify/functions/auth-logout'); } catch {}
-      const next = encodeURIComponent('/');
-      location.href = '/login.html?next=' + next;
+      location.href = '/login.html?next=/';
     });
   }
 });
 </script>
-
 </body>
 </html>
