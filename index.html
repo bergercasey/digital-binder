@@ -143,7 +143,7 @@
       <button class="ghost" id="to-settings">Settings</button>
       <button class="ghost" id="open-archives-top">Archives</button>
       <button class="ghost" id="to-main" style="display:none;">Back to Jobs</button>
-      <button class="ghost" id="refresh-btn">Home</button>
+      <button class="ghost" id="refresh-btn">Reload</button>
       <div class="searchbar" style="margin-left:8px;">
         <input id="header-search" type="text" placeholder="Search job by #, name, or address…"/>
         <button id="header-search-btn">Open</button>
@@ -151,14 +151,7 @@
       <div class="spacer"></div>
     </div>
     <div class="status" id="status">Loaded</div>
-  
-  <div class="header-right">
-    <a href="/share.html" class="ghost" id="shareLink" style="text-decoration:none;padding:6px 10px;border-radius:8px;border:1px solid #d0d7de;">Share</a>
-    <span id="userBadge" class="muted" style="font-size:12px;"></span>
-    <button id="logoutBtn" class="ghost">Logout</button>
-  </div>
-</header>
-
+  </header>
 
   <main>
     <aside>
@@ -241,19 +234,6 @@
   <div class="toast-wrap" id="toast-wrap"></div>
   <script defer src="app.js"></script>
 <div id="print-sheet" style="display:none;"></div>
-
-<script>
-document.addEventListener('DOMContentLoaded', async () => {
-  const homeBtn = document.getElementById('reload') || Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='Home');
-  if (homeBtn) { homeBtn.textContent = 'Home'; homeBtn.addEventListener('click', (e)=>{ e.preventDefault(); location.href='/'; }); }
-  try {
-    const r = await fetch('/.netlify/functions/auth-check', { headers:{'cache-control':'no-cache'} });
-    if (r.status === 401) { location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
-    if (r.ok) { const j = await r.json().catch(()=>({})); const badge = document.getElementById('userBadge'); if (badge && j && j.user) badge.textContent = '('+j.user+')'; }
-  } catch {}
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) { logoutBtn.addEventListener('click', async () => { try { await fetch('/.netlify/functions/auth-logout'); } catch {} location.href = '/login.html?next=/'; }); }
-});
-</script>
+  <script src="/select-modal.js" defer></script>
 </body>
 </html>
