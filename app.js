@@ -309,18 +309,16 @@
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    const pb = $("print-job"); if (pb) pb.textContent = (state.ui && state.ui.selectedNoteIndex != null) ? "Email/Print" : "Print";
+    const pb = $("print-job"); if (pb) pb.textContent = "Email/Print";
     const list = $("notes-list"); list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
-      const isSel = (state.ui && state.ui.selectedNoteIndex === i);
-      if (isSel) { item.classList.add("selected"); try { item.style.border="3px solid var(--accent-300)"; item.style.borderRadius="10px"; item.style.background="var(--accent-25)"; } catch(e){} }
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
       if (isSel) { const chip = document.createElement("div"); chip.className = "note-selected-chip"; chip.textContent = "Selected"; item.appendChild(chip); }
-      item.addEventListener("click", () => { state.ui.selectedNoteIndex = (state.ui.selectedNoteIndex === i ? null : i); renderPanel(); });
+      
       list.appendChild(item);
     });
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";$("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
@@ -684,7 +682,7 @@ function renderAll() {
 
     $("print-job").addEventListener("click", () => {
   const j = currentJob(); if (!j) return;
-  const idx = (state.ui && typeof state.ui.selectedNoteIndex === "number") ? state.ui.selectedNoteIndex : null;
+  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
   buildPrintSheet(j, idx);
   window.print();
 });
