@@ -10,8 +10,6 @@
 
   function cssOnce(id, css){ if(document.getElementById(id)) return; const s=document.createElement('style'); s.id=id; s.textContent=css; document.head.appendChild(s); }
   cssOnce('pe35css', `
-    .note-date{display:inline-flex; align-items:center; gap:6px}
-
     .pe-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
     .pe-date-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:6px; vertical-align:middle; }
     #pe_overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
@@ -54,36 +52,179 @@
     const sib=head.nextElementSibling; if(sib && /tip/i.test(sib.textContent||'')) sib.style.display='none';
   }
 
-  
-function ensureRowCheckboxes(container){
-  // Prefer explicit selector for this app
-  const dates = Array.from(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
-  if (dates.length) {
-    dates.forEach(dateEl => {
+  function ensureRowCheckboxes(container){
+    const rows=findRows(container);
+    rows.forEach(row=>{
+      let dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
+      if(!dateEl){
+        const cand=Array.from(row.querySelectorAll('*')).find(el=>/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||''));
+        if(cand) dateEl=cand;
+      }
+      if(!dateEl) return;
       const sig = hashNode(dateEl);
-      if (dateEl.querySelector(`.pe_cb_row[data-bind="${sig}"]`)) return;
-      const label = document.createElement('label'); label.className = 'pe-date-inline';
-      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pe_cb_row'; cb.dataset.bind = sig;
+      if(row.querySelector(`.pe_cb_row[data-bind="${sig}"]`)) return;
+      const label=document.createElement('label'); label.className='pe-date-inline';
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind=sig;
       label.appendChild(cb);
-      dateEl.appendChild(label);
+      dateEl.insertAdjacentElement('afterend', label);
     });
-    return;
   }
-  // Fallback: generic row scan
-  const rows=findRows(container);
-  rows.forEach(row=>{
-    let dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
-    if(!dateEl){
-      const cand=Array.from(row.querySelectorAll('*')).find(el=>/\b\d{4}\-\d{2}\-\d{2}\b|\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||''));
-      if(cand) dateEl=cand;
+  function findRows(container){
+    if(!container) return [];
+    if(container.tagName==='UL'||container.tagName==='OL'){ return Array.from(container.children).filter(x=>x.tagName==='LI'); }
+    if(container.tagName==='TABLE'){ const tb=container.tBodies[0]||container; return Array.from(tb.querySelectorAll('tr')); }
+    return Array.from(container.children).filter(x=> (x.textContent||'').trim().length>0);
+  }
+  function hashNode(n){
+    let path=[], x=n;
+    while(x && x.parentNode && path.length<5){
+      const idx=Array.prototype.indexOf.call(x.parentNode.children, x);
+      path.push(x.tagName+':'+idx); x=x.parentNode;
     }
-    if(!dateEl) return;
-    const sig = hashNode(dateEl);
-    if(row.querySelector(`.pe_cb_row[data-bind="${sig}"]`)) return;
-    const label=document.createElement('label'); label.className='pe-date-inline';
-    const cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind=sig;
-    label.appendChild(cb);
-    dateEl.appendChild(label);
-  });
-}
-)();
+    return path.join('/');
+  }
+
+  function replaceAllPrintButtons(){
+    const cands = P.printBtnSelectors.flatMap(sel=> Array.from(document.querySelectorAll(sel)));
+    cands.filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()))
+      .forEach(btn=>{
+        if(btn.dataset.pe35) return;
+        const clone=btn.cloneNode(true);
+        clone.textContent='Email/Print';
+        clone.dataset.pe35='1';
+        btn.parentNode.replaceChild(clone, btn);
+        clone.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
+      });
+  }
+
+  function ensureModal(){
+    if(document.getElementById('pe_overlay')) return;
+    const overlay=document.createElement('div'); overlay.id='pe_overlay';
+    const modal=document.createElement('div'); modal.id='pe_modal';
+    modal.innerHTML=`
+      <h3>Print or Email</h3>
+      <div id="pe_count" class="pe-muted"></div>
+      <div class="pe-row" style="margin:8px 0 10px">
+        <button id="pe_print" class="pe-btn">Print selected</button>
+        <button id="pe_email" class="pe-btn primary">Email selected</button>
+        <button id="pe_close" class="pe-btn">Close</button>
+      </div>
+      <div class="pe-col" style="margin-bottom:10px">
+        <div class="pe-muted" style="margin-bottom:6px">Job info + Preview</div>
+        <div id="pe_preview" class="pe-list"></div>
+      </div>
+      <div class="pe-col">
+        <div class="pe-muted" style="margin-bottom:6px">Recipients (saved)</div>
+        <div id="pe_addr_list" class="pe-list"></div>
+        <div id="pe_addr_add">
+          <input id="pe_addr_input" type="text" placeholder="name <email@company.com> or email@company.com"/>
+          <button id="pe_addr_add_btn" class="pe-btn">Add</button>
+        </div>
+        <div class="pe-row" style="margin-top:8px">
+          <button id="pe_addr_save" class="pe-btn">Save list</button>
+          <span id="pe_addr_msg" class="pe-muted"></span>
+        </div>
+      </div>`;
+    overlay.appendChild(modal); document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.style.display='none'; });
+    document.getElementById('pe_close').addEventListener('click', ()=> overlay.style.display='none');
+    document.getElementById('pe_print').addEventListener('click', doPrint);
+    document.getElementById('pe_email').addEventListener('click', doEmail);
+    document.getElementById('pe_addr_add_btn').addEventListener('click', addAddressFromInput);
+    document.getElementById('pe_addr_save').addEventListener('click', saveAddressBook);
+  }
+
+  function jobInfoHTML(){
+    const h1=document.querySelector('h1');
+    const summary=document.querySelector('#job-info, .job-info, #job-summary, .job-summary, #project-info, .project-info');
+    let inner=''; if(h1) inner += '<h2 style="margin:0 0 6px 0">'+(h1.textContent||'').trim()+'</h2>';
+    if(summary) inner += summary.outerHTML;
+    return inner ? '<div class="pe-job">'+inner+'</div>' : '';
+  }
+
+  function getSelectedHTML(container){
+    const rows=findRows(container), out=[];
+    rows.forEach(r=>{
+      const cb=r.querySelector('.pe_cb_row');
+      if(cb && cb.checked){
+        const clone=r.cloneNode(true);
+        Array.from(clone.querySelectorAll('.pe-date-inline')).forEach(n=>n.remove());
+        out.push(clone.innerHTML);
+      }
+    });
+    return out;
+  }
+
+  function openModal(){
+    ensureModal();
+    const head=findHeading(); const container=findContainer(head);
+    const chosen=getSelectedHTML(container);
+    if(!chosen.length){ alert('Check Select all or specific logs first.'); return; }
+    document.getElementById('pe_preview').innerHTML = jobInfoHTML() + chosen.join('');
+    document.getElementById('pe_count').textContent = chosen.length + ' log(s) selected';
+    loadAddressBook();
+    document.getElementById('pe_overlay').style.display='flex';
+  }
+
+  function doPrint(){
+    const html=document.getElementById('pe_preview').innerHTML;
+    const w=window.open('','_blank');
+    w.document.write('<!doctype html><html><head><title>Print Logs</title></head><body>'+html+'</body></html>');
+    w.document.close(); w.focus(); w.print();
+  }
+
+  // Recipients (safe fallbacks for missing functions/env)
+  function contactChip(c){
+    const d=document.createElement('label'); d.className='pe-chip';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=c.checked!==false;
+    cb.dataset.email=c.email; cb.dataset.name=c.name||'';
+    const span=document.createElement('span'); span.textContent = c.name ? `${c.name} <${c.email}>` : c.email;
+    d.append(cb, span); return d;
+  }
+  function parseContact(s){
+    s=(s||'').trim(); if(!s) return null;
+    const m=/^(.*)<([^>]+)>$/.exec(s);
+    if(m) return { name:m[1].trim(), email:m[2].trim(), checked:true };
+    return { name:'', email:s, checked:true };
+  }
+  async function loadAddressBook(){
+    try{
+      const resp = await fetch('/.netlify/functions/email-contacts-load');
+      if(!resp.ok) throw 0;
+      const j = await resp.json();
+      const list=document.getElementById('pe_addr_list'); list.innerHTML='';
+      (j.contacts||[]).forEach(c=> list.appendChild(contactChip(c)));
+    }catch{
+      // no-op fallback
+      document.getElementById('pe_addr_list').innerHTML='';
+    }
+  }
+  async function saveAddressBook(){
+    const chips=Array.from(document.querySelectorAll('#pe_addr_list input[type=checkbox]'));
+    const contacts=chips.map(x=>({ name:x.dataset.name||'', email:x.dataset.email||'', checked:x.checked }));
+    const msg=document.getElementById('pe_addr_msg'); msg.textContent='Saving…';
+    try{
+      const r=await fetch('/.netlify/functions/email-contacts-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contacts})});
+      msg.textContent=r.ok?'Saved':'Error';
+    }catch{ msg.textContent='Error'; }
+    setTimeout(()=> msg.textContent='',1200);
+  }
+  function addAddressFromInput(){
+    const box=document.getElementById('pe_addr_input');
+    const c=parseContact(box.value); if(!c) return;
+    document.getElementById('pe_addr_list').appendChild(contactChip(c));
+    box.value='';
+  }
+
+  function boot(){
+    const head=findHeading(); const container=findContainer(head);
+    if(!head || !container) return;
+    ensureSelectAllInline(head, container);
+    ensureRowCheckboxes(container);
+    replaceAllPrintButtons();
+    const mo=new MutationObserver(()=> ensureRowCheckboxes(container));
+    mo.observe(container,{childList:true,subtree:true});
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+})();
