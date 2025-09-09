@@ -52,7 +52,20 @@
     const sib=head.nextElementSibling; if(sib && /tip/i.test(sib.textContent||'')) sib.style.display='none';
   }
 
-  function ensureRowCheckboxes(container){
+  function hideOldSelectionUI(){
+      try{
+        // hide any old selection columns or controls
+        document.querySelectorAll('.select, .selection, .select-controls, .select-platform, .old-select, th:has(> .selected), td.selected').forEach(el=>{
+          el.style.display='none';
+        });
+        // hide header named "Selected" if present
+        Array.from(document.querySelectorAll('th')).forEach(th=>{
+          if((th.textContent||'').trim().toLowerCase()==='selected'){ th.style.display='none'; }
+        });
+      }catch(e){ /* no-op */ }
+    }
+
+function ensureRowCheckboxes(container){
     const rows=findRows(container);
     rows.forEach(row=>{
       let dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
@@ -92,7 +105,7 @@
         const clone=btn.cloneNode(true);
         clone.textContent='Email/Print';
         clone.dataset.pe35='1';
-        btn.parentNode.replaceChild(clone, btn);
+        if(btn.parentNode){btn.parentNode.replaceChild(clone, btn);} else {btn.replaceWith ? btn.replaceWith(clone) : (btn.outerHTML = clone.outerHTML);}
         clone.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
       });
   }
@@ -105,7 +118,7 @@
       <h3>Print or Email</h3>
       <div id="pe_count" class="pe-muted"></div>
       <div class="pe-row" style="margin:8px 0 10px">
-        <button id="pe_print" class="pe-btn">Print selected</button>
+        <button id="pe_print" class="pe-btn">Email/Print</button>
         <button id="pe_email" class="pe-btn primary">Email selected</button>
         <button id="pe_close" class="pe-btn">Close</button>
       </div>
@@ -216,7 +229,7 @@
     box.value='';
   }
 
-  function boot(){
+  function boot(){ hideOldSelectionUI();
     const head=findHeading(); const container=findContainer(head);
     if(!head || !container) return;
     ensureSelectAllInline(head, container);
