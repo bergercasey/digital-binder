@@ -1,13 +1,15 @@
-/* /print-email.js — v33 */
+/* /print-email.js — v35 */
 (function(){
-  const SEL = {
-    list: '#notes-list',
-    row: '.note-item',
-    date: '.note-date,.date,.log-date,[data-date]'
+  const P = {
+    headingText: 'Log',
+    printBtnSelectors: ['#print-job','button','a[role="button"]'],
+    containerHints: ['#notes-list','.notes','.logs','#entries','.entries','section.logs','main .logs','main .notes']
   };
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $all = (s,r=document)=>Array.from(r.querySelectorAll(s));
 
   function cssOnce(id, css){ if(document.getElementById(id)) return; const s=document.createElement('style'); s.id=id; s.textContent=css; document.head.appendChild(s); }
-  cssOnce('pe33css', `
+  cssOnce('pe35css', `
     .pe-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
     .pe-date-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:6px; vertical-align:middle; }
     #pe_overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
@@ -27,84 +29,79 @@
     .pe-job{border:1px solid #d0d7de;border-radius:10px;padding:10px;margin-bottom:10px;background:#fafafa}
   `);
 
-  const $ = (s,r=document)=>r.querySelector(s);
-  const $all = (s,r=document)=>Array.from(r.querySelectorAll(s));
-
-  function ensureSelectAllInline(){
-    const head = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(h => (h.textContent||'').trim()==='Log');
-    if(!head || $('#pe_cb_all')) return;
-    const span = document.createElement('span'); span.className='pe-inline';
-    const cb = document.createElement('input'); cb.type='checkbox'; cb.id='pe_cb_all';
-    span.append(cb, document.createTextNode('Select all'));
-    head.appendChild(span);
-    cb.addEventListener('change', ()=>{
-      const list = $(SEL.list); if(!list) return;
-      $all('.pe_cb_row', list).forEach(x => x.checked = cb.checked);
-    });
+  function findHeading(){
+    return Array.from(document.querySelectorAll('h1,h2,h3,h4'))
+      .find(h => (h.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase());
+  }
+  function findContainer(head){
+    let n=head&&head.nextElementSibling;
+    while(n){ if(/^(UL|OL|DIV|SECTION|TABLE)$/i.test(n.tagName)) return n; n=n.nextElementSibling; }
+    for(const sel of P.containerHints){ const el=document.querySelector(sel); if(el) return el; }
+    const main=document.querySelector('main')||document.body;
+    return main.querySelector('ul,ol,table,section,div');
   }
 
-  function ensureRowCheckboxes(){
-    const list = $(SEL.list); if(!list) return;
-    const rows = findRows(list);
+  function ensureSelectAllInline(head, container){
+    if(!head || document.getElementById('pe_cb_all')) return;
+    const span=document.createElement('span'); span.className='pe-inline';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.id='pe_cb_all';
+    span.append(cb, document.createTextNode('Select all'));
+    head.appendChild(span);
+    cb.addEventListener('change', ()=> Array.from(container.querySelectorAll('.pe_cb_row')).forEach(x=> x.checked = cb.checked) );
+    // Hide any "Tip ..." sibling to keep the line clean
+    const sib=head.nextElementSibling; if(sib && /tip/i.test(sib.textContent||'')) sib.style.display='none';
+  }
+
+  function ensureRowCheckboxes(container){
+    const rows=findRows(container);
     rows.forEach(row=>{
-      const dateEl = row.querySelector(SEL.date);
+      let dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
+      if(!dateEl){
+        const cand=Array.from(row.querySelectorAll('*')).find(el=>/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||''));
+        if(cand) dateEl=cand;
+      }
       if(!dateEl) return;
-      if(row.querySelector('.pe_cb_row[data-bind="'+hashNode(dateEl)+'"]')) return;
-      const label = document.createElement('label'); label.className='pe-date-inline';
-      const cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind = hashNode(dateEl);
+      const sig = hashNode(dateEl);
+      if(row.querySelector(`.pe_cb_row[data-bind="${sig}"]`)) return;
+      const label=document.createElement('label'); label.className='pe-date-inline';
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind=sig;
       label.appendChild(cb);
       dateEl.insertAdjacentElement('afterend', label);
     });
   }
-  function findRows(list){
-    if(list.tagName==='UL'||list.tagName==='OL'){ return $all(':scope > li', list); }
-    if(list.tagName==='TABLE'){ return $all('tbody tr', list).length?$all('tbody tr', list):$all('tr', list); }
-    return $all(':scope > .note-item, :scope > div, :scope > article', list);
+  function findRows(container){
+    if(!container) return [];
+    if(container.tagName==='UL'||container.tagName==='OL'){ return Array.from(container.children).filter(x=>x.tagName==='LI'); }
+    if(container.tagName==='TABLE'){ const tb=container.tBodies[0]||container; return Array.from(tb.querySelectorAll('tr')); }
+    return Array.from(container.children).filter(x=> (x.textContent||'').trim().length>0);
   }
   function hashNode(n){
-    if(!n) return '';
     let path=[], x=n;
     while(x && x.parentNode && path.length<5){
-      const idx = Array.prototype.indexOf.call(x.parentNode.children, x);
+      const idx=Array.prototype.indexOf.call(x.parentNode.children, x);
       path.push(x.tagName+':'+idx); x=x.parentNode;
     }
     return path.join('/');
   }
 
   function replaceAllPrintButtons(){
-    const cands = [
-      ...$all('#print-job'),
-      ...$all('button'),
-      ...$all('a[role="button"]')
-    ].filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()));
-    cands.forEach(btn=>{
-      if(btn.dataset.pe33) return;
-      const clone = btn.cloneNode(true);
-      clone.textContent = 'Email/Print';
-      clone.dataset.pe33 = '1';
-      btn.parentNode.replaceChild(clone, btn);
-      clone.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
-    });
-  }
-
-  function getSelectedHTML(){
-    const list = $(SEL.list); if(!list) return [];
-    return findRows(list).map(r=>{
-      const cb = r.querySelector('.pe_cb_row');
-      if(cb && cb.checked){
-        const clone = r.cloneNode(true);
-        $all('.pe-date-inline', clone).forEach(n=>n.remove());
-        return clone.innerHTML;
-      }
-      return null;
-    }).filter(Boolean);
+    const cands = P.printBtnSelectors.flatMap(sel=> Array.from(document.querySelectorAll(sel)));
+    cands.filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()))
+      .forEach(btn=>{
+        if(btn.dataset.pe35) return;
+        const clone=btn.cloneNode(true);
+        clone.textContent='Email/Print';
+        clone.dataset.pe35='1';
+        btn.parentNode.replaceChild(clone, btn);
+        clone.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
+      });
   }
 
   function ensureModal(){
-    if($('#pe_overlay')) return;
-    const overlay = document.createElement('div'); overlay.id='pe_overlay';
-    const modal = document.createElement('div'); modal.id='pe_modal';
-    modal.innerHTML = `
+    if(document.getElementById('pe_overlay')) return;
+    const overlay=document.createElement('div'); overlay.id='pe_overlay';
+    const modal=document.createElement('div'); modal.id='pe_modal';
+    modal.innerHTML=`
       <h3>Print or Email</h3>
       <div id="pe_count" class="pe-muted"></div>
       <div class="pe-row" style="margin:8px 0 10px">
@@ -117,7 +114,7 @@
         <div id="pe_preview" class="pe-list"></div>
       </div>
       <div class="pe-col">
-        <div class="pe-muted" style="margin-bottom:6px">Recipients (saved per user)</div>
+        <div class="pe-muted" style="margin-bottom:6px">Recipients (saved)</div>
         <div id="pe_addr_list" class="pe-list"></div>
         <div id="pe_addr_add">
           <input id="pe_addr_input" type="text" placeholder="name <email@company.com> or email@company.com"/>
@@ -127,104 +124,107 @@
           <button id="pe_addr_save" class="pe-btn">Save list</button>
           <span id="pe_addr_msg" class="pe-muted"></span>
         </div>
-      </div>
-    `;
+      </div>`;
     overlay.appendChild(modal); document.body.appendChild(overlay);
     overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.style.display='none'; });
-    $('#pe_close').addEventListener('click', ()=> overlay.style.display='none');
-    $('#pe_print').addEventListener('click', doPrint);
-    $('#pe_email').addEventListener('click', doEmail);
-    $('#pe_addr_add_btn').addEventListener('click', addAddressFromInput);
-    $('#pe_addr_save').addEventListener('click', saveAddressBook);
+    document.getElementById('pe_close').addEventListener('click', ()=> overlay.style.display='none');
+    document.getElementById('pe_print').addEventListener('click', doPrint);
+    document.getElementById('pe_email').addEventListener('click', doEmail);
+    document.getElementById('pe_addr_add_btn').addEventListener('click', addAddressFromInput);
+    document.getElementById('pe_addr_save').addEventListener('click', saveAddressBook);
   }
 
   function jobInfoHTML(){
-    const h1 = document.querySelector('h1');
-    const summary = document.querySelector('#job-info, .job-info, #job-summary, .job-summary, #project-info, .project-info');
-    let inner = '';
-    if(h1) inner += '<h2 style="margin:0 0 6px 0">'+(h1.textContent||'').trim()+'</h2>';
+    const h1=document.querySelector('h1');
+    const summary=document.querySelector('#job-info, .job-info, #job-summary, .job-summary, #project-info, .project-info');
+    let inner=''; if(h1) inner += '<h2 style="margin:0 0 6px 0">'+(h1.textContent||'').trim()+'</h2>';
     if(summary) inner += summary.outerHTML;
     return inner ? '<div class="pe-job">'+inner+'</div>' : '';
   }
 
+  function getSelectedHTML(container){
+    const rows=findRows(container), out=[];
+    rows.forEach(r=>{
+      const cb=r.querySelector('.pe_cb_row');
+      if(cb && cb.checked){
+        const clone=r.cloneNode(true);
+        Array.from(clone.querySelectorAll('.pe-date-inline')).forEach(n=>n.remove());
+        out.push(clone.innerHTML);
+      }
+    });
+    return out;
+  }
+
   function openModal(){
     ensureModal();
-    const chosen = getSelectedHTML();
+    const head=findHeading(); const container=findContainer(head);
+    const chosen=getSelectedHTML(container);
     if(!chosen.length){ alert('Check Select all or specific logs first.'); return; }
-    $('#pe_preview').innerHTML = jobInfoHTML() + chosen.join('');
-    $('#pe_count').textContent = chosen.length + ' log(s) selected';
+    document.getElementById('pe_preview').innerHTML = jobInfoHTML() + chosen.join('');
+    document.getElementById('pe_count').textContent = chosen.length + ' log(s) selected';
     loadAddressBook();
-    $('#pe_overlay').style.display='flex';
+    document.getElementById('pe_overlay').style.display='flex';
   }
 
   function doPrint(){
-    const html = $('#pe_preview').innerHTML;
-    const w = window.open('', '_blank');
+    const html=document.getElementById('pe_preview').innerHTML;
+    const w=window.open('','_blank');
     w.document.write('<!doctype html><html><head><title>Print Logs</title></head><body>'+html+'</body></html>');
     w.document.close(); w.focus(); w.print();
   }
 
+  // Recipients (safe fallbacks for missing functions/env)
   function contactChip(c){
-    const d = document.createElement('label'); d.className='pe-chip';
-    const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = c.checked!==false;
-    cb.dataset.email = c.email; cb.dataset.name = c.name || '';
-    const span = document.createElement('span'); span.textContent = c.name ? `${c.name} <${c.email}>` : c.email;
-    d.append(cb, span);
-    return d;
+    const d=document.createElement('label'); d.className='pe-chip';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=c.checked!==false;
+    cb.dataset.email=c.email; cb.dataset.name=c.name||'';
+    const span=document.createElement('span'); span.textContent = c.name ? `${c.name} <${c.email}>` : c.email;
+    d.append(cb, span); return d;
   }
   function parseContact(s){
-    s = (s||'').trim(); if(!s) return null;
-    const m = /^(.*)<([^>]+)>$/.exec(s);
+    s=(s||'').trim(); if(!s) return null;
+    const m=/^(.*)<([^>]+)>$/.exec(s);
     if(m) return { name:m[1].trim(), email:m[2].trim(), checked:true };
     return { name:'', email:s, checked:true };
   }
   async function loadAddressBook(){
     try{
-      const j = await fetch('/.netlify/functions/email-contacts-load').then(r=>r.json());
-      const list = $('#pe_addr_list'); list.innerHTML='';
+      const resp = await fetch('/.netlify/functions/email-contacts-load');
+      if(!resp.ok) throw 0;
+      const j = await resp.json();
+      const list=document.getElementById('pe_addr_list'); list.innerHTML='';
       (j.contacts||[]).forEach(c=> list.appendChild(contactChip(c)));
-    }catch{}
+    }catch{
+      // no-op fallback
+      document.getElementById('pe_addr_list').innerHTML='';
+    }
   }
   async function saveAddressBook(){
-    const chips = $all('#pe_addr_list input[type=checkbox]');
-    const contacts = chips.map(x=>({ name:x.dataset.name||'', email:x.dataset.email||'', checked:x.checked }));
-    const msg = $('#pe_addr_msg'); msg.textContent='Saving…';
+    const chips=Array.from(document.querySelectorAll('#pe_addr_list input[type=checkbox]'));
+    const contacts=chips.map(x=>({ name:x.dataset.name||'', email:x.dataset.email||'', checked:x.checked }));
+    const msg=document.getElementById('pe_addr_msg'); msg.textContent='Saving…';
     try{
-      const r = await fetch('/.netlify/functions/email-contacts-save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contacts })});
-      msg.textContent = r.ok ? 'Saved' : 'Error';
-      setTimeout(()=> msg.textContent='', 1200);
-    }catch{ msg.textContent='Error'; setTimeout(()=> msg.textContent='',1200); }
+      const r=await fetch('/.netlify/functions/email-contacts-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contacts})});
+      msg.textContent=r.ok?'Saved':'Error';
+    }catch{ msg.textContent='Error'; }
+    setTimeout(()=> msg.textContent='',1200);
   }
   function addAddressFromInput(){
-    const box = $('#pe_addr_input'); const c = parseContact(box.value); if(!c) return;
-    $('#pe_addr_list').appendChild(contactChip(c)); box.value='';
-  }
-
-  async function doEmail(){
-    const chips = $all('#pe_addr_list input[type=checkbox]');
-    const to = chips.filter(x=>x.checked).map(x=>x.dataset.email).filter(Boolean);
-    if(!to.length){ alert('Check at least one recipient.'); return; }
-    let who={}; try{ who = await fetch('/.netlify/functions/auth-check').then(r=>r.json()); }catch{}
-    const jobTitle = (document.querySelector('h1')?.textContent||'Job').trim();
-    const subject = 'HVAC Binder – Log updates for ' + jobTitle;
-    const intro = '<h2>'+subject+'</h2><p><strong>'+((who&&who.user)||'A user')+'</strong> added info to <strong>'+jobTitle+'</strong>.</p>';
-    const html = intro + $('#pe_preview').innerHTML;
-    const r = await fetch('/.netlify/functions/send-email', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ subject, html, to })});
-    if(!r.ok){ const t = await r.text().catch(()=>'' ); alert('Send failed: '+t); return; }
-    alert('Sent!'); $('#pe_overlay').style.display='none';
+    const box=document.getElementById('pe_addr_input');
+    const c=parseContact(box.value); if(!c) return;
+    document.getElementById('pe_addr_list').appendChild(contactChip(c));
+    box.value='';
   }
 
   function boot(){
-    ensureSelectAllInline();
-    ensureRowCheckboxes();
+    const head=findHeading(); const container=findContainer(head);
+    if(!head || !container) return;
+    ensureSelectAllInline(head, container);
+    ensureRowCheckboxes(container);
     replaceAllPrintButtons();
+    const mo=new MutationObserver(()=> ensureRowCheckboxes(container));
+    mo.observe(container,{childList:true,subtree:true});
   }
-  document.addEventListener('DOMContentLoaded', ()=>{
-    boot();
-    const list = $(SEL.list);
-    if(list){
-      const mo = new MutationObserver(()=> ensureRowCheckboxes());
-      mo.observe(list, { childList:true, subtree:true });
-    }
-  });
+
+  document.addEventListener('DOMContentLoaded', boot);
 })();
