@@ -2,6 +2,8 @@
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
+  // guard for legacy vars used by cached scripts
+  window.isSel = false;
 
   // Error banner
   const errbar = $("errbar");
@@ -317,7 +319,7 @@
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
-      if (isSel) { const chip = document.createElement("div"); chip.className = "note-selected-chip"; chip.textContent = "Selected"; item.appendChild(chip); }
+      
       
       list.appendChild(item);
     });
