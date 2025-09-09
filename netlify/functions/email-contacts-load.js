@@ -1,6 +1,6 @@
 // /.netlify/functions/email-contacts-load (ESM)
 import { getStore } from '@netlify/blobs';
-import { checkAuth } from './auth-check.js'; // use existing function to get user
+import { checkAuth } from './auth-check.js';
 export async function handler(event){
   let who = { user: 'anon' };
   try { const r = await checkAuth.handler(event); const body = JSON.parse(r.body||'{}'); if (r.statusCode===200) who.user = body.user || 'anon'; } catch {}
