@@ -79,7 +79,7 @@ function ensureRowCheckboxes(container){
       const label=document.createElement('label'); label.className='pe-date-inline';
       const cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind=sig;
       label.appendChild(cb);
-      dateEl.insertAdjacentElement('afterend', label);
+      dateEl.appendChild(label);
     });
   }
   function findRows(container){
