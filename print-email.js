@@ -1,13 +1,15 @@
+/* /print-email.js — v33 */
 (function(){
-  const SEL = { list:'#notes-list', row:'.note-item', date:'.note-date', printBtn:'#print-job' };
+  const SEL = {
+    list: '#notes-list',
+    row: '.note-item',
+    date: '.note-date,.date,.log-date,[data-date]'
+  };
 
   function cssOnce(id, css){ if(document.getElementById(id)) return; const s=document.createElement('style'); s.id=id; s.textContent=css; document.head.appendChild(s); }
-  cssOnce('pe31css', `
-    .pe-rel{ position: relative !important; }
-    .pe-right{ position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 6px; }
-    .pe-right input{ width:16px; height:16px; }
-    .pe-td{ white-space:nowrap; }
-    .pe-sel-all{ float: right; font-size: 13px; display:inline-flex; align-items:center; gap:6px; margin-left: 10px; }
+  cssOnce('pe33css', `
+    .pe-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
+    .pe-date-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:6px; vertical-align:middle; }
     #pe_overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
     #pe_modal{width:min(92vw,900px);max-height:82vh;overflow:auto;background:#fff;border:1px solid #d0d7de;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:14px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111}
     #pe_modal h3{margin:0 0 8px 0;font-size:16px}
@@ -25,86 +27,77 @@
     .pe-job{border:1px solid #d0d7de;border-radius:10px;padding:10px;margin-bottom:10px;background:#fafafa}
   `);
 
-  function $(s, r=document){ return r.querySelector(s); }
-  function $all(s, r=document){ return Array.from(r.querySelectorAll(s)); }
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $all = (s,r=document)=>Array.from(r.querySelectorAll(s));
 
-  function ensureSelectAll(){
+  function ensureSelectAllInline(){
     const head = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(h => (h.textContent||'').trim()==='Log');
     if(!head || $('#pe_cb_all')) return;
-    const label = document.createElement('label'); label.className='pe-sel-all';
+    const span = document.createElement('span'); span.className='pe-inline';
     const cb = document.createElement('input'); cb.type='checkbox'; cb.id='pe_cb_all';
-    label.append(cb, document.createTextNode('Select all'));
-    head.insertAdjacentElement('afterend', label);
-    cb.addEventListener('change', () => {
-      const list = $(SEL.list); if (!list) return;
+    span.append(cb, document.createTextNode('Select all'));
+    head.appendChild(span);
+    cb.addEventListener('change', ()=>{
+      const list = $(SEL.list); if(!list) return;
       $all('.pe_cb_row', list).forEach(x => x.checked = cb.checked);
     });
   }
 
-  function ensureRowCheckbox(row){
-    if(row.querySelector('.pe_cb_row')) return;
-    if(row.tagName==='TR'){
-      // add a trailing cell
-      const td = document.createElement('td'); td.className='pe-td';
-      const lab = document.createElement('label'); lab.className='pe-right'; lab.style.position='static';
-      const cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row';
-      lab.appendChild(cb); td.appendChild(lab);
-      row.appendChild(td);
-    }else{
-      row.classList.add('pe-rel');
-      const lab = document.createElement('label'); lab.className='pe-right';
-      const cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row';
-      lab.appendChild(cb); row.appendChild(lab);
-    }
-  }
-
-  function injectRowCheckboxes(){
+  function ensureRowCheckboxes(){
     const list = $(SEL.list); if(!list) return;
     const rows = findRows(list);
-    rows.forEach(ensureRowCheckbox);
+    rows.forEach(row=>{
+      const dateEl = row.querySelector(SEL.date);
+      if(!dateEl) return;
+      if(row.querySelector('.pe_cb_row[data-bind="'+hashNode(dateEl)+'"]')) return;
+      const label = document.createElement('label'); label.className='pe-date-inline';
+      const cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind = hashNode(dateEl);
+      label.appendChild(cb);
+      dateEl.insertAdjacentElement('afterend', label);
+    });
+  }
+  function findRows(list){
+    if(list.tagName==='UL'||list.tagName==='OL'){ return $all(':scope > li', list); }
+    if(list.tagName==='TABLE'){ return $all('tbody tr', list).length?$all('tbody tr', list):$all('tr', list); }
+    return $all(':scope > .note-item, :scope > div, :scope > article', list);
+  }
+  function hashNode(n){
+    if(!n) return '';
+    let path=[], x=n;
+    while(x && x.parentNode && path.length<5){
+      const idx = Array.prototype.indexOf.call(x.parentNode.children, x);
+      path.push(x.tagName+':'+idx); x=x.parentNode;
+    }
+    return path.join('/');
   }
 
-  function findRows(list){
-    if(!list) return [];
-    if(list.tagName==='UL'||list.tagName==='OL'){ return $all(':scope > li', list); }
-    if(list.tagName==='TABLE'){ return $all('tbody tr', list).length ? $all('tbody tr', list) : $all('tr', list); }
-    return $all(':scope > .note-item, :scope > div, :scope > article', list);
+  function replaceAllPrintButtons(){
+    const cands = [
+      ...$all('#print-job'),
+      ...$all('button'),
+      ...$all('a[role="button"]')
+    ].filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()));
+    cands.forEach(btn=>{
+      if(btn.dataset.pe33) return;
+      const clone = btn.cloneNode(true);
+      clone.textContent = 'Email/Print';
+      clone.dataset.pe33 = '1';
+      btn.parentNode.replaceChild(clone, btn);
+      clone.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
+    });
   }
 
   function getSelectedHTML(){
-    const list = $(SEL.list); if (!list) return [];
-    const rows = findRows(list);
-    const out = [];
-    rows.forEach(r=>{
+    const list = $(SEL.list); if(!list) return [];
+    return findRows(list).map(r=>{
       const cb = r.querySelector('.pe_cb_row');
       if(cb && cb.checked){
         const clone = r.cloneNode(true);
-        // remove injected UIs
-        $all('.pe-right', clone).forEach(n=>n.remove());
-        out.push(clone.innerHTML);
+        $all('.pe-date-inline', clone).forEach(n=>n.remove());
+        return clone.innerHTML;
       }
-    });
-    return out;
-  }
-
-  function replacePrintButton(){
-    const orig = document.querySelector(SEL.printBtn);
-    if(!orig || orig.dataset.pe31) return;
-    const clone = orig.cloneNode(true);
-    clone.textContent = 'Print/Email';
-    clone.dataset.pe31 = '1';
-    // Remove default click (replace node drops existing listeners)
-    orig.parentNode.replaceChild(clone, orig);
-    clone.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
-  }
-
-  function jobInfoHTML(){
-    const h1 = document.querySelector('h1');
-    const summary = document.querySelector('#job-info, .job-info, #job-summary, .job-summary, #project-info, .project-info');
-    let inner = '';
-    if(h1){ inner += '<h2 style="margin:0 0 6px 0">'+(h1.textContent||'').trim()+'</h2>'; }
-    if(summary){ inner += summary.outerHTML; }
-    return inner ? '<div class="pe-job">'+inner+'</div>' : '';
+      return null;
+    }).filter(Boolean);
   }
 
   function ensureModal(){
@@ -123,18 +116,16 @@
         <div class="pe-muted" style="margin-bottom:6px">Job info + Preview</div>
         <div id="pe_preview" class="pe-list"></div>
       </div>
-      <div style="display:flex;gap:14px;flex-wrap:wrap">
-        <div class="pe-col">
-          <div class="pe-muted" style="margin-bottom:6px">Recipients (saved per user)</div>
-          <div id="pe_addr_list" class="pe-list"></div>
-          <div id="pe_addr_add">
-            <input id="pe_addr_input" type="text" placeholder="name <email@company.com> or email@company.com"/>
-            <button id="pe_addr_add_btn" class="pe-btn">Add</button>
-          </div>
-          <div class="pe-row" style="margin-top:8px">
-            <button id="pe_addr_save" class="pe-btn">Save list</button>
-            <span id="pe_addr_msg" class="pe-muted"></span>
-          </div>
+      <div class="pe-col">
+        <div class="pe-muted" style="margin-bottom:6px">Recipients (saved per user)</div>
+        <div id="pe_addr_list" class="pe-list"></div>
+        <div id="pe_addr_add">
+          <input id="pe_addr_input" type="text" placeholder="name <email@company.com> or email@company.com"/>
+          <button id="pe_addr_add_btn" class="pe-btn">Add</button>
+        </div>
+        <div class="pe-row" style="margin-top:8px">
+          <button id="pe_addr_save" class="pe-btn">Save list</button>
+          <span id="pe_addr_msg" class="pe-muted"></span>
         </div>
       </div>
     `;
@@ -147,52 +138,20 @@
     $('#pe_addr_save').addEventListener('click', saveAddressBook);
   }
 
-  function contactChip(c){
-    const d = document.createElement('label'); d.className='pe-chip';
-    const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = c.checked!==false;
-    cb.dataset.email = c.email; cb.dataset.name = c.name || '';
-    const span = document.createElement('span'); span.textContent = c.name ? `${c.name} <${c.email}>` : c.email;
-    d.append(cb, span);
-    return d;
-  }
-
-  function parseContact(s){
-    s = (s||'').trim(); if(!s) return null;
-    const m = /^(.*)<([^>]+)>$/.exec(s);
-    if(m) return { name:m[1].trim(), email:m[2].trim(), checked:true };
-    return { name:'', email:s, checked:true };
-  }
-
-  async function loadAddressBook(){
-    try{
-      const j = await fetch('/.netlify/functions/email-contacts-load').then(r=>r.json());
-      const list = $('#pe_addr_list'); list.innerHTML='';
-      (j.contacts||[]).forEach(c=> list.appendChild(contactChip(c)));
-    }catch{}
-  }
-
-  async function saveAddressBook(){
-    const chips = $all('#pe_addr_list input[type=checkbox]');
-    const contacts = chips.map(x=>({ name:x.dataset.name||'', email:x.dataset.email||'', checked:x.checked }));
-    const msg = $('#pe_addr_msg'); msg.textContent='Saving…';
-    try{
-      const r = await fetch('/.netlify/functions/email-contacts-save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contacts })});
-      msg.textContent = r.ok ? 'Saved' : 'Error';
-      setTimeout(()=> msg.textContent='', 1200);
-    }catch{ msg.textContent='Error'; setTimeout(()=> msg.textContent='',1200); }
-  }
-
-  function addAddressFromInput(){
-    const box = $('#pe_addr_input'); const c = parseContact(box.value); if(!c) return;
-    $('#pe_addr_list').appendChild(contactChip(c)); box.value='';
+  function jobInfoHTML(){
+    const h1 = document.querySelector('h1');
+    const summary = document.querySelector('#job-info, .job-info, #job-summary, .job-summary, #project-info, .project-info');
+    let inner = '';
+    if(h1) inner += '<h2 style="margin:0 0 6px 0">'+(h1.textContent||'').trim()+'</h2>';
+    if(summary) inner += summary.outerHTML;
+    return inner ? '<div class="pe-job">'+inner+'</div>' : '';
   }
 
   function openModal(){
     ensureModal();
     const chosen = getSelectedHTML();
     if(!chosen.length){ alert('Check Select all or specific logs first.'); return; }
-    const html = jobInfoHTML() + chosen.join('');
-    $('#pe_preview').innerHTML = html;
+    $('#pe_preview').innerHTML = jobInfoHTML() + chosen.join('');
     $('#pe_count').textContent = chosen.length + ' log(s) selected';
     loadAddressBook();
     $('#pe_overlay').style.display='flex';
@@ -205,6 +164,42 @@
     w.document.close(); w.focus(); w.print();
   }
 
+  function contactChip(c){
+    const d = document.createElement('label'); d.className='pe-chip';
+    const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = c.checked!==false;
+    cb.dataset.email = c.email; cb.dataset.name = c.name || '';
+    const span = document.createElement('span'); span.textContent = c.name ? `${c.name} <${c.email}>` : c.email;
+    d.append(cb, span);
+    return d;
+  }
+  function parseContact(s){
+    s = (s||'').trim(); if(!s) return null;
+    const m = /^(.*)<([^>]+)>$/.exec(s);
+    if(m) return { name:m[1].trim(), email:m[2].trim(), checked:true };
+    return { name:'', email:s, checked:true };
+  }
+  async function loadAddressBook(){
+    try{
+      const j = await fetch('/.netlify/functions/email-contacts-load').then(r=>r.json());
+      const list = $('#pe_addr_list'); list.innerHTML='';
+      (j.contacts||[]).forEach(c=> list.appendChild(contactChip(c)));
+    }catch{}
+  }
+  async function saveAddressBook(){
+    const chips = $all('#pe_addr_list input[type=checkbox]');
+    const contacts = chips.map(x=>({ name:x.dataset.name||'', email:x.dataset.email||'', checked:x.checked }));
+    const msg = $('#pe_addr_msg'); msg.textContent='Saving…';
+    try{
+      const r = await fetch('/.netlify/functions/email-contacts-save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contacts })});
+      msg.textContent = r.ok ? 'Saved' : 'Error';
+      setTimeout(()=> msg.textContent='', 1200);
+    }catch{ msg.textContent='Error'; setTimeout(()=> msg.textContent='',1200); }
+  }
+  function addAddressFromInput(){
+    const box = $('#pe_addr_input'); const c = parseContact(box.value); if(!c) return;
+    $('#pe_addr_list').appendChild(contactChip(c)); box.value='';
+  }
+
   async function doEmail(){
     const chips = $all('#pe_addr_list input[type=checkbox]');
     const to = chips.filter(x=>x.checked).map(x=>x.dataset.email).filter(Boolean);
@@ -212,24 +207,23 @@
     let who={}; try{ who = await fetch('/.netlify/functions/auth-check').then(r=>r.json()); }catch{}
     const jobTitle = (document.querySelector('h1')?.textContent||'Job').trim();
     const subject = 'HVAC Binder – Log updates for ' + jobTitle;
-    const intro = '<p><strong>'+((who&&who.user)||'A user')+'</strong> added info to <strong>'+jobTitle+'</strong>.</p>';
-    const html = '<h2>'+subject+'</h2>'+intro+$('#pe_preview').innerHTML;
+    const intro = '<h2>'+subject+'</h2><p><strong>'+((who&&who.user)||'A user')+'</strong> added info to <strong>'+jobTitle+'</strong>.</p>';
+    const html = intro + $('#pe_preview').innerHTML;
     const r = await fetch('/.netlify/functions/send-email', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ subject, html, to })});
     if(!r.ok){ const t = await r.text().catch(()=>'' ); alert('Send failed: '+t); return; }
     alert('Sent!'); $('#pe_overlay').style.display='none';
   }
 
-  function mount(){
-    ensureSelectAll();
-    injectRowCheckboxes();
-    replacePrintButton();
+  function boot(){
+    ensureSelectAllInline();
+    ensureRowCheckboxes();
+    replaceAllPrintButtons();
   }
-
   document.addEventListener('DOMContentLoaded', ()=>{
-    mount();
-    const list = document.querySelector(SEL.list);
+    boot();
+    const list = $(SEL.list);
     if(list){
-      const mo = new MutationObserver(()=> injectRowCheckboxes());
+      const mo = new MutationObserver(()=> ensureRowCheckboxes());
       mo.observe(list, { childList:true, subtree:true });
     }
   });
