@@ -1,7 +1,9 @@
 // /.netlify/functions/load
 import { getStore } from '@netlify/blobs';
+import { checkAuth, needAuth } from './_auth.js';
 
-export async function handler() {
+export async function handler(event){
+  if (needAuth()) { const auth = checkAuth(event); if (!auth.ok) return { statusCode: 401, body: 'Unauthorized' }; }
   try {
     const store = getStore({ name: 'binder-store', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
     const data = await store.get('data', { type: 'json' });
