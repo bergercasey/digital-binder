@@ -1,106 +1,322 @@
 
-/* Clean rebuild of emailprint.js
- * - Do NOT change selection UI or email function endpoints.
- * - Only handle: wiring the Email/Print button, and the PRINT/EMAIL layouts.
- * - Header layout: Job name; Address (own line); then list of Stage, PO, Crew, Updated.
- */
 (function(){
-  function $(sel, ctx){ return (ctx||document).querySelector(sel); }
-  function $all(sel, ctx){ return Array.prototype.slice.call((ctx||document).querySelectorAll(sel)); }
-  function txt(n){ return n ? (n.innerText || n.textContent || '').trim() : ''; }
-  function esc(s){ return String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-  function on(el, ev, fn, capture){ if(el) el.addEventListener(ev, fn, !!capture); }
+  if (window.__emailPrintLoaded) return; window.__emailPrintLoaded = true;
 
-  function jobInfo(){
-    function gt(id){ return txt(document.getElementById(id)); }
-    var summary = gt('job-summary');
-    var name = gt('job-name') || txt($('.job-title')) || txt($('h1')) || (summary ? (summary.split(/(?:Stage:|PO:|Crew:|Last updated:)/)[0]||'').trim() : document.title);
-    var address = gt('job-address');
-    var po = gt('job-po'); if(!po && summary){ var m = summary.match(/PO:\s*([^|•\n]+)/i); if(m) po = m[1].trim(); }
-    var stage = gt('job-stage'); if(!stage && summary){ var m2 = summary.match(/Stage:\s*([^|•\n]+)/i); if(m2) stage = m2[1].trim(); }
-    if(stage && /bid.?rough.?in.?trim.?complete/i.test(stage)){
-      var body = (document.body.innerText||''); var m3 = body.match(/Stage:\s*(Bid|Rough-?in|Trim|Complete)\b/i);
-      if(m3) stage = m3[1].replace(/Rough ?in/i,'Rough-in');
+  function $(id){ return document.getElementById(id); }
+  function q(sel, root){ return (root||document).querySelector(sel); }
+  function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+  function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
+
+  // ---------- Selected log entries ----------
+  function getSelectedNotes(){
+    var items = qsa('#notes-list .note-item');
+    var sel = [];
+    items.forEach(function(it){
+      var dateEl = it.querySelector('.note-date'); if (!dateEl) return;
+      var cb = dateEl.querySelector('input.pe_row_chk'); if (!cb || !cb.checked) return;
+      var dateText = (dateEl.textContent||'').replace(/\s*\d{1,2}:\d{2}.*$/, '').trim();
+      var body = it.querySelector('.note-text') || it.querySelector('.note-body') || it;
+      var bodyText = body ? (body.innerText || body.textContent || '').trim() : '';
+      sel.push({date: dateText, text: bodyText});
+    });
+    return sel;
+  }
+
+  // ---------- Helpers to pick a sane job name ----------
+  function isGenericHeading(s){
+    if (!s) return true;
+    var x = String(s).replace(/\s+/g,' ').trim().toLowerCase();
+    var generics = ['log','logs','select all','settings','home','contractors','archives','schedule','open','search','email/print','print selected','print','job','jobs','hvac digital binder','digital binder','job binder'];
+    if (generics.indexOf(x) !== -1) return true;
+    if (x.indexOf('select all') !== -1) return true;
+    if (/^contractors?\b/.test(x)) return true;
+    return false;
+  }
+  function scoreName(s){
+    var sc = 0;
+    if (/\d/.test(s)) sc += 2;           // digits (addresses/job numbers)
+    if (/\s-\s/.test(s)) sc += 3;        // "101 - 123 Main St"
+    if (/\b(st|ave|rd|dr|ln|lane|road|street|avenue|boulevard|blvd)\b/i.test(s)) sc += 1;
+    sc += Math.min(String(s).length, 60) / 60;
+    return sc;
+  }
+  function chooseJobName(address){
+    var cands = [];
+    function add(sel){
+      var el = q(sel);
+      if (el) cands.push((el.textContent||'').replace(/\s+/g,' ').trim());
     }
-    var crew = '', updated='';
-    if(summary){ var mC = summary.match(/Crew:\s*([^|•\n]+)/i); if(mC) crew = mC[1].trim(); var mU = summary.match(/Last updated:\s*([^\n]+)/i); if(mU) updated = mU[1].trim(); }
-    return { name, address, po, stage, crew, updated };
+    add('#job-name'); add('#job-title'); add('.job-title');
+    add('.job-header h1'); add('.job-header h2'); add('.job-header h3');
+    add('main h1'); add('main h2'); add('main h3');
+
+    // Look near Edit Job / Email-Print button containers for headings
+    function addFromNearButton(labelText){
+      var all = qsa('button, a[role="button"]');
+      for (var i=0;i<all.length;i++){
+        var t=(all[i].textContent||'').trim().toLowerCase();
+        if (t===labelText){
+          var cont = all[i].closest('.card, .panel, .section, .container, .content, .box, .wrap, .header, div');
+          if (cont){
+            var hh = cont.querySelector('h1,h2,h3,.title');
+            if (hh) cands.push((hh.textContent||'').replace(/\s+/g,' ').trim());
+          }
+        }
+      }
+    }
+    addFromNearButton('email/print');
+    addFromNearButton('print selected');
+    addFromNearButton('edit job');
+
+    // Parse the global header text segment BEFORE labels like Stage/PO/Crew
+    var host = q('#job-header, .job-header') || ( $('print-job') ? $('print-job').closest('.card, .panel, .section, .container') : null );
+    var headerText = host ? (host.textContent||'') : document.body.textContent || '';
+    var pre = String(headerText).split(/(?:^|\s)(?:Stage:|PO:|Crew:|Address:|Last updated:)/i)[0];
+    if (pre){
+      // keep the first logical line
+      var firstLine = pre.split(/\n/).map(function(s){return s.trim();}).filter(Boolean)[0];
+      if (firstLine) cands.push(firstLine);
+      cands.push(pre.trim());
+    }
+
+    // Cleanup & filter
+    cands = cands
+      .map(function(s){ return (s||'').replace(/\s+/g,' ').trim(); })
+      .filter(Boolean)
+      .filter(function(s){
+        if (isGenericHeading(s)) return false;
+        if (address && s.toLowerCase() === String(address).toLowerCase()) return false; // don't use address as title if we have it elsewhere
+        return true;
+      });
+
+    if (!cands.length) return '';
+
+    cands.sort(function(a,b){ return scoreName(b) - scoreName(a); });
+    return cands[0] || '';
+  }
+
+  // ---------- Job info (robust) ----------
+  function jobInfo(){
+    function val(id){ var n = document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
+    function pickFromText(label, text){
+      var m = String(text||'').match(new RegExp(label+':\\s*([^]+?)(?=\\s(?:Stage:|PO:|Crew:|Address:|Last updated:|$))','i'));
+      return m ? m[1].trim() : '';
+    }
+    function firstNonEmpty(arr){ for (var i=0;i<arr.length;i++){ var s=arr[i]; if (s && String(s).trim()) return String(s).trim(); } return ''; }
+
+    var address = val('job-address');
+    var po = val('job-po');
+    var stage = val('job-stage');
+    var crew = (document.getElementById('job-crew')||{textContent:''}).textContent || '';
+
+    // Prefer an explicit job-name; otherwise choose best candidate (NOT address)
+    var name = val('job-name');
+    if (!name){
+      name = chooseJobName(address);
+    }
+
+    var host = q('#job-header, .job-header') || ( $('print-job') ? $('print-job').closest('.card, .panel, .section, .container') : null );
+    var headerText = host ? (host.textContent||'') : document.body.textContent || '';
+
+    address = firstNonEmpty([address, pickFromText('Address', headerText)]);
+    if (!address){
+      var mAddr = headerText.match(/\b\d{1,6}\s+[^,]+,\s*[A-Za-z][A-Za-z .-]+(?:,\s*[A-Z]{2})?/);
+      if (mAddr) address = mAddr[0];
+    }
+    po = firstNonEmpty([po, pickFromText('PO', headerText)]);
+    stage = firstNonEmpty([stage, pickFromText('Stage', headerText)]);
+    crew = firstNonEmpty([crew, pickFromText('Crew', headerText)]);
+
+    // Clean & final fallback (never use generic; if still empty, use document.title)
+    if (name && / Stage:| PO:| Crew:| Address:/i.test(name)) {
+      name = name.split(/\s(?:Stage:|PO:|Crew:|Address:)/i)[0].trim();
+    }
+    if (isGenericHeading(name) || !name) {
+      name = (document.title && !isGenericHeading(document.title) ? document.title : '') || 'Job';
+    }
+    return { name:name, address:address, po:po, stage:stage, crew:crew };
   }
 
   function renderHeaderHTML(info){
-    var items=[];
-    if(info.stage)   items.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
-    if(info.po)      items.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
-    if(info.crew)    items.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
-    if(info.updated) items.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
-    return '<div class="head"><div class="title">'+ esc(info.name||'Job') +'</div>'
-      + (info.address ? '<div class="addr">'+ esc(info.address) +'</div>' : '')
-      + (items.length ? '<ul class="meta-list">'+ items.join('') +'</ul>' : '')
-      + '</div>';
+  function esc(x){ return String(x||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
+  var li=[]; if(info.stage)li.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>'); if(info.po)li.push('<li><b>PO:</b> '+esc(info.po)+'</li>'); if(info.crew)li.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>'); if(info.updated)li.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
+  var addr = info.address ? '<div class="addr">'+esc(info.address)+'</div>' : '';
+  return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>'+addr+(li.length?('<ul class="meta-list">'+li.join('')+'</ul>'):'')+'</div>';
+}
+[c]); }); }
+    var rows=[];
+    if(info.address) rows.push(['Address', info.address]);
+    if(info.po) rows.push(['PO', info.po]);
+    if(info.stage) rows.push(['Stage', info.stage]);
+    if(info.crew) rows.push(['Crew', info.crew]);
+    var table = rows.length ? ('<table class="meta"><tbody>'+rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>') : '';
+    return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>'+table+'</div>';
   }
 
-  function getSelectedNotesSafe(){
-    if (typeof getSelectedNotes === 'function') { try { return getSelectedNotes(); } catch(_) {} }
-    var rows = $all('input[type=checkbox]:checked').map(cb => cb.closest('.log-row') || cb.closest('.log') || cb.closest('li') || cb.closest('div'));
-    var notes=[]; rows.forEach(function(r){ if(!r) return; var date = txt($('.date', r)) || txt($('.log-date', r)) || (txt(r).match(/\d{4}-\d{2}-\d{2}/)||[''])[0]; var textEl = $('.text', r) || $('.log-text', r); var text = textEl ? txt(textEl) : txt(r).replace(date,'').trim(); if(date || text) notes.push({date, text}); });
-    return notes;
+  // ---------- Contacts store / modal / printing (same as v4) ----------
+  function parseContact(s){
+    if (typeof s === 'object' && s && s.email) return {name: s.name || s.email, email: s.email};
+    var m = String(s).match(/^\s*(.*?)\s*<\s*([^>]+@[^>]+)\s*>\s*$/);
+    if (m) return {name: m[1] || m[2], email: m[2]};
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s))) return {name: String(s), email: String(s)};
+    return null;
+  }
+  function loadContacts(){
+    var keys = ['binder_contacts','pe_contacts','pe35_contacts','contacts'];
+    var seen = {}, out = [];
+    keys.forEach(function(k){
+      try{
+        var raw = localStorage.getItem(k); if (!raw) return;
+        var val; try{ val = JSON.parse(raw); } catch(e){ val = raw; }
+        var arr = Array.isArray(val) ? val : (typeof val === 'string' ? val.split(/[,\n]/) : []);
+        arr.forEach(function(s){ var o = parseContact(s); if(o && !seen[o.email.toLowerCase()]){ seen[o.email.toLowerCase()] = true; out.push(o); } });
+      }catch(_){}
+    });
+    return out;
+  }
+  function saveContacts(list){
+    try{ localStorage.setItem('binder_contacts', JSON.stringify(list)); }catch(_){}
   }
 
-  function printSelected(){
-    var notes = getSelectedNotesSafe();
-    if(!notes.length){ alert('Select at least one log entry.'); return; }
-    var info = jobInfo();
-    var w = window.open('', '_blank');
-    var css = '*{box-sizing:border-box}'
-      + 'body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:16px;line-height:1.35}'
-      + '.head{border-bottom:1px solid #ddd;margin:0 0 8px;padding:0 0 6px}'
-      + '.title{font-size:16px;font-weight:700;margin:0 0 6px}'
-      + '.addr{margin:2px 0 6px;color:#333;font-size:12px}'
-      + '.meta-list{list-style:none;margin:0;padding:0;font-size:12px;color:#111}'
-      + '.meta-list li{margin:2px 0}'
-      + '.entry{margin:0 0 10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;page-break-inside:avoid}'
-      + '.date{font-weight:600;margin-bottom:4px}'
-      + '.text{white-space:pre-wrap}';
-    var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>'+css+'</style></head><body>'
-      + renderHeaderHTML(info);
-    notes.forEach(function(n){ html += '<div class="entry"><div class="date">'+esc(n.date)+'</div><div class="text">'+esc(n.text)+'</div></div>'; });
-    html += '<script>window.print();<\/script></body></html>';
-    w.document.open(); w.document.write(html); w.document.close();
-  }
+  function openModal(){
+    var ov = document.createElement('div'); ov.id='ep_overlay';
+    ov.style.position='fixed'; ov.style.inset='0'; ov.style.background='rgba(0,0,0,.35)'; ov.style.zIndex='9999';
+    ov.addEventListener('click', function(e){ if(e.target===ov) document.body.removeChild(ov); });
+    var box = document.createElement('div'); box.id='ep_box';
+    box.style.position='absolute'; box.style.top='10%'; box.style.left='50%'; box.style.transform='translateX(-50%)';
+    box.style.background='#fff'; box.style.borderRadius='12px'; box.style.padding='16px'; box.style.minWidth='360px'; box.style.maxWidth='92%'; box.style.boxShadow='0 10px 30px rgba(0,0,0,.2)';
+    ov.appendChild(box);
 
-  function isEmailPrintButton(n){
-    if(!n || (n.closest && n.closest('#ep_box'))) return false;
-    var t=(n.textContent||n.value||'').trim().toLowerCase();
-    return t==='email/print' || (t.includes('email') && t.includes('print'));
-  }
+    var title=document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent='Email / Print';
+    var note=document.createElement('div'); note.style.fontSize='13px'; note.style.color='#555'; note.style.marginBottom='10px'; note.textContent='Choose recipients to email selected log entries, or print the selection.';
+    box.appendChild(title); box.appendChild(note);
 
-  function bindButtons(){
-    var main = Array.prototype.find.call(document.querySelectorAll('button, a, .btn, [role="button"]'), isEmailPrintButton);
-    if (main && !main.__ep_bound){ main.__ep_bound=true; on(main,'click',function(e){ e.preventDefault(); e.stopPropagation(); try{ if(typeof openModal==='function') openModal(); }catch(_){} },true); }
-    var modal = document.getElementById('ep_box');
-    if (modal){
-      var pbtn = Array.prototype.find.call(modal.querySelectorAll('button, a'), function(b){ var t=(b.textContent||b.value||'').trim().toLowerCase(); return t==='print' || t==='print selected' || t==='print logs'; });
-      if(pbtn && !pbtn.__ep_bound){ pbtn.__ep_bound=true; on(pbtn,'click',function(e){ e.preventDefault(); e.stopPropagation(); printSelected(); },true); }
+    var contacts = loadContacts();
+    var listWrap=document.createElement('div'); listWrap.style.maxHeight='220px'; listWrap.style.overflowY='auto'; listWrap.style.border='1px solid #e5e7eb'; listWrap.style.borderRadius='8px'; listWrap.style.padding='8px'; listWrap.style.fontSize='16px';
+    box.appendChild(listWrap);
+
+    function renderContacts(){
+      listWrap.innerHTML='';
+      if(!contacts.length){
+        var empty=document.createElement('div'); empty.style.color='#666'; empty.textContent='No saved contacts yet.'; listWrap.appendChild(empty);
+      }else{
+        contacts.forEach(function(c, idx){
+          var row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='auto 1fr auto'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='4px 2px';
+          var cb=document.createElement('input'); cb.type='checkbox'; cb.className='ep_rec'; cb.value=c.email; cb.setAttribute('data-index', idx);
+          var txt=document.createElement('span'); txt.textContent=(c.name||c.email)+' <'+c.email+'>';
+          var del=document.createElement('button'); del.className='btn'; del.textContent='Remove';
+          del.addEventListener('click', function(){ contacts.splice(idx,1); saveContacts(contacts); renderContacts(); });
+          row.appendChild(cb); row.appendChild(txt); row.appendChild(del); listWrap.appendChild(row);
+        });
+      }
     }
+    renderContacts();
+
+    var addRow=document.createElement('div'); addRow.style.marginTop='10px'; addRow.style.display='grid'; addRow.style.gridTemplateColumns='1fr 1fr auto'; addRow.style.gap='6px';
+    var nameInput=document.createElement('input'); nameInput.placeholder='Name'; nameInput.type='text'; nameInput.style.fontSize='16px'; nameInput.style.padding='10px 12px'; nameInput.style.borderRadius='8px';
+    var emailInput=document.createElement('input'); emailInput.placeholder='email@domain'; emailInput.type='email'; emailInput.style.fontSize='16px'; emailInput.style.padding='10px 12px'; emailInput.style.borderRadius='8px';
+    var addBtn=document.createElement('button'); addBtn.textContent='Add'; addBtn.className='btn';
+    addBtn.addEventListener('click', function(){
+      var nm=(nameInput.value||'').trim(); var em=(emailInput.value||'').trim();
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ alert('Enter a valid email'); return; }
+      if(!nm) nm = em;
+      contacts.push({name:nm, email:em}); saveContacts(contacts); nameInput.value=''; emailInput.value=''; renderContacts();
+    });
+    addRow.appendChild(nameInput); addRow.appendChild(emailInput); addRow.appendChild(addBtn); box.appendChild(addRow);
+
+    var actions=document.createElement('div'); actions.style.marginTop='14px'; actions.style.display='flex'; actions.style.gap='8px'; actions.style.justifyContent='flex-end';
+    var btnEmail=document.createElement('button'); btnEmail.textContent='Send Email'; btnEmail.className='btn primary';
+    var btnPrint=document.createElement('button'); btnPrint.textContent='Print Selection'; btnPrint.className='btn';
+    var btnCancel=document.createElement('button'); btnCancel.textContent='Cancel'; btnCancel.className='btn';
+    actions.appendChild(btnCancel); actions.appendChild(btnPrint); actions.appendChild(btnEmail); box.appendChild(actions);
+
+    btnCancel.addEventListener('click', function(){ document.body.removeChild(ov); });
+
+    btnEmail.addEventListener('click', async function(){
+      var picks = qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
+      if(!picks.length){ alert('Pick at least one recipient.'); return; }
+      var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
+      var info = jobInfo();
+      var subj = (info.name || 'Job') + ' - Log Update';
+
+      var headerTxt=[]; if(info.name) headerTxt.push(info.name);
+      if(info.address) headerTxt.push('Address: '+info.address);
+      if(info.po) headerTxt.push('PO: '+info.po);
+      if(info.stage) headerTxt.push('Stage: '+info.stage);
+      if(info.crew) headerTxt.push('Crew: '+info.crew);
+      var textBody = headerTxt.join('\\n') + '\\n\\n' + notes.map(function(n){ return n.date + '\\n' + n.text + '\\n'; }).join('\\n');
+
+      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+      var htmlBody = renderHeaderHTML(info) + notes.map(function(n){
+        return '<div class="entry"><div class="date">'+esc(n.date)+'</div><div class="text">'+esc(n.text).replace(/\\n/g,'<br>')+'</div></div>';
+      }).join('');
+
+      try{
+        var resp = await fetch('/.netlify/functions/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
+        });
+        if (!resp.ok) { var t = await resp.text(); alert('Send failed: ' + t); return; }
+        alert('Email sent!'); document.body.removeChild(ov);
+      }catch(e){ alert('Send failed: ' + (e && e.message ? e.message : String(e))); }
+    });
+
+    btnPrint.addEventListener('click', function(){
+      var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
+      var info = jobInfo();
+      var w = window.open('','_blank');
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>' +
+        '*{box-sizing:border-box}' +
+        'body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px;line-height:1.35}.addr{margin:2px 0 6px;color:#333;font-size:12px}.meta-list{list-style:none;margin:0;padding:0;font-size:12px;color:#111}.meta-list li{margin:2px 0}' +
+        '.title{font-size:18px;font-weight:600;margin:0 0 6px}' +
+        'table.meta{border-collapse:collapse;margin:0 0 14px;width:auto}' +
+        '.meta th{font-weight:600;text-align:left;color:#555;padding:2px 14px 2px 0;vertical-align:top;font-size:13px;white-space:nowrap}' +
+        '.meta td{color:#111;padding:2px 0;font-size:13px}' +
+        '.entry{margin:0 0 12px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;page-break-inside:avoid}' +
+        '.date{font-weight:600;margin-bottom:4px}' +
+        '.text{white-space:pre-wrap}' +
+      '</style></head><body>' + renderHeaderHTML(info);
+
+      notes.forEach(function(n){
+        function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
+        html += '<div class="entry"><div class="date">'+esc(n.date)+'</div><div class="text">'+esc(n.text)+'</div></div>';
+      });
+      html += '<script>window.print();<\/script></body></html>';
+      w.document.open(); w.document.write(html); w.document.close();
+    });
+
+    document.body.appendChild(ov);
   }
 
-  try{
-    var _orig = window.print;
-    window.print = function(){ try{ if(typeof openModal==='function') openModal(); }catch(_){} };
-    document.addEventListener('keydown', function(e){ var k=(e.key||'').toLowerCase(); if((e.ctrlKey||e.metaKey)&&k==='p'){ e.preventDefault(); e.stopPropagation(); try{ if(typeof openModal==='function') openModal(); }catch(_){} } }, true);
-  }catch(_){}
-
-  function handle(e){
-    try{
-      if(e.target && e.target.closest && e.target.closest('#ep_box')) return;
-      var t = e.target && e.target.closest ? e.target.closest('button, a[role="button"], .btn, a') : e.target;
-      if(isEmailPrintButton(t)){ e.preventDefault(); e.stopPropagation(); try{ if(typeof openModal==='function') openModal(); }catch(_){} }
-    }catch(_){}
+  // ---------- Intercept original Print button ----------
+  function matchPrintNode(n){
+    if(!n) return false;
+    if(n.id==='print-job') return true;
+    var t=(n.textContent||'').trim().toLowerCase();
+    return t==='print selected' || t==='print';
   }
-  ['click','touchstart','pointerdown','mousedown'].forEach(function(ev){ document.addEventListener(ev, handle, true); });
+  function interceptEvents(){
+    function handle(e){ try{ if (e.target && e.target.closest && e.target.closest('#ep_box')) return;
+        var t = e.target && e.target.closest ? e.target.closest('button, a[role=\"button\"], #print-job') : e.target;
+        if (matchPrintNode(t)){
+          e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+          openModal();
+        }
+      }catch(_){}
+    }
+    ['touchstart','pointerdown','mousedown','click'].forEach(function(type){
+      document.addEventListener(type, handle, true);
+    });
+  }
+  function renameButton(){
+    var btn = $('print-job'); if (btn) btn.textContent = 'Email/Print';
+    qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
+  }
 
-  var tries=0, timer=setInterval(function(){ try{ bindButtons(); }catch(_){ } if(++tries>20) clearInterval(timer); }, 300);
-  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', bindButtons, {once:true}); } else { bindButtons(); }
-
-  window.__ep_printSelected = printSelected;
+  onReady(function(){
+    renameButton();
+    interceptEvents();
+    var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=8) clearInterval(t); }, 500);
+  });
 })();
