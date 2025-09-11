@@ -23,6 +23,15 @@
   }
 
   // ---------- Helpers to pick a sane job name ----------
+  function isGenericHeading(s){
+    if (!s) return true;
+    var x = String(s).replace(/\s+/g,' ').trim().toLowerCase();
+    var generics = ['log','logs','select all','settings','home','contractors','archives','schedule','open','search','email/print','print selected','print','job','jobs','hvac digital binder','digital binder','job binder'];
+    if (generics.indexOf(x) !== -1) return true;
+    if (x.indexOf('select all') !== -1) return true;
+    if (/^contractors?\b/.test(x)) return true;
+    return false;
+  }
   function chooseJobName(){
     var cands = [];
     function add(sel){
@@ -50,22 +59,20 @@
       }
     }
 
-    // Filter out headings that are clearly not a job name
+    // Filter out generics
     cands = cands.filter(Boolean).filter(function(s){
-      var x = s.toLowerCase();
-      if (x === 'log' || x === 'logs') return false;
-      if (x.indexOf('select all') !== -1) return false;
-      if (/^contractors?\b/.test(x)) return false;
+      if (isGenericHeading(s)) return false;
+      if (s.length < 6 && !/\d/.test(s)) return false; // too short and not job-like
       return true;
     });
 
-    // Prefer strings that look like a job (numbers / address / contains hyphen)
+    // Score: prefer job-like strings
     cands.sort(function(a,b){
       function score(s){
         var sc = 0;
-        if (/\d/.test(s)) sc += 2;           // has digits (addresses / job numbers)
+        if (/\d/.test(s)) sc += 2;           // digits (address/lot/job#)
         if (/\s-\s/.test(s)) sc += 2;        // "101 - 123 Main St"
-        sc += Math.min(s.length, 60) / 60;   // longer (up to a point)
+        sc += Math.min(s.length, 60) / 60;   // some weight for longer titles
         return sc;
       }
       return score(b) - score(a);
@@ -83,11 +90,11 @@
     }
     function firstNonEmpty(arr){ for (var i=0;i<arr.length;i++){ var s=arr[i]; if (s && String(s).trim()) return String(s).trim(); } return ''; }
 
-    var name = val('job-name') || chooseJobName();
     var address = val('job-address');
     var po = val('job-po');
     var stage = val('job-stage');
     var crew = (document.getElementById('job-crew')||{textContent:''}).textContent || '';
+    var name = val('job-name') || chooseJobName();
 
     var host = q('#job-header, .job-header') || ( $('print-job') ? $('print-job').closest('.card, .panel, .section, .container') : null );
     var headerText = host ? (host.textContent||'') : document.body.textContent || '';
@@ -101,10 +108,13 @@
     stage = firstNonEmpty([stage, pickFromText('Stage', headerText)]);
     crew = firstNonEmpty([crew, pickFromText('Crew', headerText)]);
 
+    // Clean & fallback
     if (name && / Stage:| PO:| Crew:| Address:/i.test(name)) {
       name = name.split(/\s(?:Stage:|PO:|Crew:|Address:)/i)[0].trim();
     }
-    if (!name) name = document.title || 'Job';
+    if (isGenericHeading(name) || !name) {
+      name = address || (po ? ('PO ' + po) : 'Job');
+    }
     return { name:name, address:address, po:po, stage:stage, crew:crew };
   }
 
