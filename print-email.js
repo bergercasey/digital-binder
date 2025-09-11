@@ -191,3 +191,20 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 })();
+
+function ensureSelectAllInline(head, container){
+  if(!head) return;
+  if(document.getElementById('pe_cb_all')) return;
+  var span=document.createElement('span'); span.className='pe-inline';
+  var cb=document.createElement('input'); cb.type='checkbox'; cb.id='pe_cb_all';
+  span.appendChild(cb);
+  span.appendChild(document.createTextNode(' Select all'));
+  head.appendChild(span);
+  cb.addEventListener('change', function(){
+    Array.prototype.slice.call(container.querySelectorAll('.pe_cb_row')).forEach(function(x){ x.checked = cb.checked; });
+  });
+  // Hide the old tip line if it exists
+  try{
+    var sib=head.nextElementSibling; if(sib && /tip/i.test((sib.textContent||''))) sib.style.display='none';
+  }catch(e){}
+}
