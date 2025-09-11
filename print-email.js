@@ -39,102 +39,22 @@
   `);
 
   function findHeading(){
-    return Array.from(document.querySelectorAll('h1,h2,h3,h4'))
-      .find(h => (h.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase());
-  }
-  function findContainer(head){
-    let n=head&&head.nextElementSibling;
-    while(n){ if(/^(UL|OL|DIV|SECTION|TABLE)$/i.test(n.tagName)) return n; n=n.nextElementSibling; }
-    for(const sel of P.containerHints){ const el=document.querySelector(sel); if(el) return el; }
-    const main=document.querySelector('main')||document.body;
-    return main.querySelector('ul,ol,table,section,div');
-  }
-
-  function ensureSelectAllInline(head, container){
-    if(!head || document.getElementById('pe_cb_all')) return;
-    const span=document.createElement('span'); span.className='pe-inline';
-    const cb=document.createElement('input'); cb.type='checkbox'; cb.id='pe_cb_all';
-    span.append(cb, document.createTextNode('Select all'));
-    head.appendChild(span);
-    cb.addEventListener('change', ()=> Array.from(container.querySelectorAll('.pe_cb_row')).forEach(x=> x.checked = cb.checked) );
-    // Hide any "Tip ..." sibling to keep the line clean
-    const sib=head.nextElementSibling; if(sib && /tip/i.test(sib.textContent||'')) sib.style.display='none';
-  }
-
-  
-function ensureRowCheckboxes(container){
-    try{
-      var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
-      if (dates.length) {
-        dates.forEach(function(dateEl){
-          var sig = hashNode(dateEl);
-          if (dateEl.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
-          var label = document.createElement('label'); label.className='pe-date-inline';
-          var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-          label.appendChild(cb);
-          dateEl.appendChild(label);
-        });
-        return;
+    // Try strict: any heading tag with exact "Log"
+    const heads = Array.from(document.querySelectorAll('h1,h2,h3,h4,.section-title,.title,.log-title,label'));
+    let h = heads.find(el => (el.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase());
+    if (h) return h;
+    // Fallback: find container first, then walk back to a sibling that contains "Log"
+    const container = document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.querySelector('#entries') || document.querySelector('.entries');
+    if (container){
+      let n = container.previousElementSibling, steps = 0;
+      while(n && steps < 5){
+        const txt=(n.textContent||'').trim().toLowerCase();
+        if (txt.includes('log')) return n;
+        n = n.previousElementSibling; steps++;
       }
-    }catch(e){}
-    var rows = findRows(container);
-    rows.forEach(function(row){
-      var dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
-      if(!dateEl){
-        var cand=Array.prototype.slice.call(row.querySelectorAll('*')).find(function(el){
-          return /\b\d{4}\-\d{2}\-\d{2}\b|\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||'');
-        });
-        if(cand) dateEl=cand;
-      }
-      if(!dateEl) return;
-      var sig = hashNode(dateEl);
-      if(row.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
-      var label=document.createElement('label'); label.className='pe-date-inline';
-      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-      label.appendChild(cb);
-      dateEl.appendChild(label);
-    });
-  }
-
-  function findRows(container){
-    if(!container) return [];
-    if(container.tagName==='UL'||container.tagName==='OL'){ return Array.from(container.children).filter(x=>x.tagName==='LI'); }
-    if(container.tagName==='TABLE'){ const tb=container.tBodies[0]||container; return Array.from(tb.querySelectorAll('tr')); }
-    return Array.from(container.children).filter(x=> (x.textContent||'').trim().length>0);
-  }
-  function hashNode(n){
-    let path=[], x=n;
-    while(x && x.parentNode && path.length<5){
-      const idx=Array.prototype.indexOf.call(x.parentNode.children, x);
-      path.push(x.tagName+':'+idx); x=x.parentNode;
     }
-    return path.join('/');
+    return null;
   }
-
-  
-
-function replaceAllPrintButtons(){
-  try{
-    var cands = [];
-    P.printBtnSelectors.forEach(function(sel){
-      Array.prototype.push.apply(cands, Array.prototype.slice.call(document.querySelectorAll(sel)));
-    });
-    cands.filter(function(b){ return /^(print\s*selection|print)$/i.test((b.textContent||'').trim()); })
-      .forEach(function(btn){
-        if(!btn || btn.dataset.pe35) return;
-        var label='Email/Print';
-        var addHandler=function(node){ try{ node.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true}); }catch(e){}};
-        if(btn.parentNode){
-          var clone=btn.cloneNode(true);
-          clone.textContent=label; clone.dataset.pe35='1';
-          btn.parentNode.replaceChild(clone, btn);
-          addHandler(clone);
-        } else {
-          try{ btn.textContent=label; btn.dataset.pe35='1'; addHandler(btn);}catch(e){}
-        }
-      });
-  }catch(e){}
-}
 
 
 
@@ -258,20 +178,15 @@ function replaceAllPrintButtons(){
   }
 
   function boot(){
-    try { hideOldSelectionUI && hideOldSelectionUI(); } catch(e){}
-    const head = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(h => (h.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase());
-    const container = (function(h){
-      if(!h) return null;
-      let n=h.nextElementSibling; while(n){ if(/^(UL|OL|DIV|SECTION|TABLE)$/i.test(n.tagName)) return n; n=n.nextElementSibling; }
-      return document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.body;
-    })(head);
+    try { if (typeof hideOldSelectionUI === 'function') hideOldSelectionUI(); } catch(e){}
+    const container = document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.querySelector('#entries') || document.querySelector('.entries') || document.body;
+    const head = findHeading();
     if(!head || !container) return;
     ensureSelectAllInline(head, container);
     ensureRowCheckboxes(container);
     replaceAllPrintButtons();
     const mo=new MutationObserver(()=> ensureRowCheckboxes(container));
     mo.observe(container,{childList:true,subtree:true});
-  });
   }
 
   document.addEventListener('DOMContentLoaded', boot);
