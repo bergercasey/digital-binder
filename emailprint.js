@@ -128,7 +128,35 @@
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = ''; if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>'; var meta=[]; /* meta list rendered by header helper */
+      var headerHtml = renderHeaderHTML(info2);
+      var htmlBody = headerHtml + notes.map(function(n){
+        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
+      }).join('');
+      try{
+        var resp = await fetch('/.netlify/functions/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
+        });
+        if (!resp.ok) {
+          var txt = await resp.text();
+          alert('Send failed: ' + txt);
+          return;
+        }
+        alert('Email sent!');
+        document.body.removeChild(ov);
+      } catch(e){
+        alert('Send failed: ' + (e && e.message ? e.message : String(e)));
+      }
+    });
+btnPrint.addEventListener('click', function(){
+      var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
+      var w=window.open('','_blank');
+      var info = jobInfo();
+      var title = info.name || currentJobTitle();
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
+      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
+      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
@@ -141,13 +169,11 @@
   function matchPrintNode(n){
     if(!n) return false;
     if(n.id==='print-job') return true;
-    var t=((n.textContent||n.value||'')+'').trim().toLowerCase();
-    return t==='print selected' || t==='print' || t==='email/print' || t.indexOf('print')>=0;
+    var t=(n.textContent||'').trim().toLowerCase();
+    return t==='print selected' || t==='print';
   }
   function interceptEvents(){
-    function handle(e){
-      try{
-        if (e.target && e.target.closest && e.target.closest('#ep_box')) return;
+    function handle(e){ try{ if (e.target && e.target.closest && e.target.closest('#ep_box')) return;
         var t = e.target && e.target.closest ? e.target.closest('button, a[role=\"button\"], #print-job') : e.target;
         if (matchPrintNode(t)){
           e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
@@ -159,53 +185,49 @@
       document.addEventListener(type, handle, true);
     });
   }
-  function renameButton(){
+  
+  function bindEmailPrint(){
+    function isEP(n){ var t=(n.textContent||n.value||'').trim().toLowerCase(); return t==='email/print' || (t.indexOf('email')>=0 && t.indexOf('print')>=0); }
+    function arm(n){ if(!n || n.__ep_arm) return; n.__ep_arm=true; n.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, true); n.onclick=function(e){ if(e){ e.preventDefault(); e.stopPropagation(); } try{ openModal(); }catch(_){ } return false; }; }
+    var ids=['print-job','email-print','emailPrint','printSelection']; ids.forEach(function(id){ var el=document.getElementById(id); if(el) arm(el); });
+    Array.prototype.forEach.call(document.querySelectorAll('button, a, .btn, [role=\"button\"]'), function(n){ if(n.closest && n.closest('#ep_box')) return; if(isEP(n)) arm(n); });
+    document.addEventListener('keydown', function(e){ var k=(e.key||'').toLowerCase(); if((e.ctrlKey||e.metaKey)&&k==='p'){ e.preventDefault(); e.stopPropagation(); try{ openModal(); }catch(_){ } } }, true);
+    try{ window.print = function(){ try{ openModal(); }catch(_){ } }; }catch(_){ }
+  }
+function renameButton(){
     var btn = $('print-job'); if (btn) btn.textContent = 'Email/Print';
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){
-    renameButton();
-    interceptEvents();
-    document.addEventListener('keydown', function(e){var k=(e.key||'').toLowerCase(); if((e.ctrlKey||e.metaKey)&&k==='p'){ e.preventDefault(); e.stopPropagation(); try{ openModal(); }catch(_){ } }}, true);
-    try{ window.print = function(){ try{ openModal(); }catch(_){ } }; }catch(_){ }
-    var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
+  onReady(function(){ renameButton(); interceptEvents(); bindEmailPrint(); var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
   function jobInfo(){
-    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
-    var summary = gt('job-summary');
-    var name = gt('job-name') || (summary ? (summary.split(/(?:Stage:|PO:|Crew:|Last updated:)/)[0]||'').trim() : currentJobTitle());
-    var address = gt('job-address');
-    var po = gt('job-po') || (summary.match(/PO:\s*([^|•\n]+)/i)||[])[1] || '';
-    var stage = gt('job-stage') || (summary.match(/Stage:\s*([^|•\n]+)/i)||[])[1] || '';
-    var crew = (summary.match(/Crew:\s*([^|•\n]+)/i)||[])[1] || '';
-    var updated = (summary.match(/Last updated:\s*([^\n]+)/i)||[])[1] || '';
-    var lines = [];
-    if (name) lines.push('Job: ' + name);
-    if (address) lines.push('Address: ' + address);
-    if (po) lines.push('PO: ' + po);
-    if (stage) lines.push('Stage: ' + stage);
-    if (crew) lines.push('Crew: ' + crew);
-    if (updated) lines.push('Updated: ' + updated);
-    return { name: name, address: address, po: po, stage: stage, crew: crew, updated: updated, lines: lines }
-  function renderHeaderHTML(info){
-    function esc(x){ return String(x||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-    var li=[];
-    if(info.stage) li.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
-    if(info.po) li.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
-    if(info.crew) li.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
-    if(info.updated) li.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
-    var addr = info.address ? '<div class="addr">'+esc(info.address)+'</div>' : '';
-    return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>' + addr + (li.length?('<ul class="meta-list">'+li.join('')+'</ul>'):'') + '</div>';
-  }[c]); }); }
-    var li=[];
-    if(info.stage) li.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
-    if(info.po) li.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
-    if(info.crew) li.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
-    if(info.address) li.push('<li><b>Address:</b> '+esc(info.address)+'</li>');
-    if(info.updated) li.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
-    return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>' + (li.length?('<ul class="meta-list">'+li.join('')+'</ul>'):'') + '</div>';
-  }
+  function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
+  var summary = gt('job-summary');
+  var name = gt('job-name') || (summary ? (summary.split(/(?:Stage:|PO:|Crew:|Last updated:)/)[0]||'').trim() : currentJobTitle());
+  var address = gt('job-address');
+  var po = gt('job-po') || (summary.match(/PO:\s*([^|•\n]+)/i)||[])[1] || '';
+  var stage = gt('job-stage') || (summary.match(/Stage:\s*([^|•\n]+)/i)||[])[1] || '';
+  var crew = (summary.match(/Crew:\s*([^|•\n]+)/i)||[])[1] || '';
+  var updated = (summary.match(/Last updated:\s*([^\n]+)/i)||[])[1] || '';
+  var lines = [];
+  if (name)    lines.push('Job: ' + name);
+  if (address) lines.push('Address: ' + address);
+  if (po)      lines.push('PO: ' + po);
+  if (stage)   lines.push('Stage: ' + stage);
+  if (crew)    lines.push('Crew: ' + crew);
+  if (updated) lines.push('Updated: ' + updated);
+  return { name: name, address: address, po: po, stage: stage, crew: crew, updated: updated, lines: lines }
+function renderHeaderHTML(info){
+  function esc(x){ return String(x||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
+  var list=[];
+  if(info.stage)   list.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
+  if(info.po)      list.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
+  if(info.crew)    list.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
+  if(info.updated) list.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
+  var addr = info.address ? '<div class=\"addr\">'+esc(info.address)+'</div>' : '';
+  return '<div class=\"head\"><div class=\"title\">'+esc(info.name||'Job')+'</div>'+ addr + (list.length?('<ul class=\"meta-list\">'+list.join('')+'</ul>'):'') + '</div>';
+}
 ;
-  }
+}
