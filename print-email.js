@@ -18,6 +18,9 @@
   function cssOnce(id, css){ if(document.getElementById(id)) return; const s=document.createElement('style'); s.id=id; s.textContent=css; document.head.appendChild(s); }
   cssOnce('pe35css', `
     .note-date{display:inline-flex; align-items:center; gap:6px}
+    .note-date input.pe_cb_row{margin-left:6px}
+
+    .note-date{display:inline-flex; align-items:center; gap:6px}
 
     .pe-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
     .pe-date-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:6px; vertical-align:middle; }
@@ -181,46 +184,28 @@
 function ensureRowCheckboxes(container){
   try{
     var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
-    // If there is a "tip" line immediately under the Log heading, hide it to keep the row tight.
-    try{
-      var head = Array.prototype.slice.call(document.querySelectorAll('h1,h2,h3,h4')).find(function(h){ return (h.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase(); });
-      if (head && head.nextElementSibling && /tip/i.test((head.nextElementSibling.textContent||''))) head.nextElementSibling.style.display='none';
-    }catch(e){}
     if (dates.length) {
       dates.forEach(function(dateEl){
         var sig = hashNode(dateEl);
-        if (dateEl.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
-        var label = document.createElement('label'); label.className = 'pe-date-inline';
-        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pe_cb_row'; cb.setAttribute('data-bind', sig);
-        label.appendChild(cb);
-        dateEl.appendChild(label);
+        if (dateEl.querySelector('input.pe_cb_row[data-bind="'+sig+'"]')) return;
+        var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
+        // insert as the last child so it's immediately after the date text
+        dateEl.appendChild(cb);
       });
       return;
     }
   }catch(e){}
-  // Fallback: try to guess rows and then locate a date-like element
   try{
-    var rows = [];
-    if (container) {
-      if (/^(UL|OL)$/i.test(container.tagName)) { rows = Array.prototype.slice.call(container.children); }
-      else if (/^TABLE$/i.test(container.tagName)) { rows = Array.prototype.slice.call((container.tBodies[0]||container).querySelectorAll('tr')); }
-      else { rows = Array.prototype.slice.call(container.children); }
-    }
-    rows.forEach(function(row){
-      var dateEl = row.querySelector('.note-date,.date,.log-date,[data-date],time');
-      if(!dateEl){
-        var cand = Array.prototype.slice.call(row.querySelectorAll('*')).find(function(el){
-          return /\\b\\d{4}\\-\\d{2}\\-\\d{2}\\b|\\b\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}\\b/.test((el.textContent||''));
-        });
-        if (cand) dateEl = cand;
-      }
-      if(!dateEl) return;
-      var sig = hashNode(dateEl);
-      if (row.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
-      var label = document.createElement('label'); label.className = 'pe-date-inline';
+    var list = document.getElementById('notes-list') || container;
+    if(!list) return;
+    var items = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
+    items.forEach(function(it){
+      var d = it.querySelector('.note-date');
+      if(!d) return;
+      var sig = hashNode(d);
+      if (it.querySelector('input.pe_cb_row[data-bind="'+sig+'"]')) return;
       var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-      label.appendChild(cb);
-      dateEl.appendChild(label);
+      d.appendChild(cb);
     });
   }catch(e){}
 }
@@ -247,7 +232,17 @@ function replaceAllPrintButtons(){
   }catch(e){ /* swallow */ }
 }
 function boot(){
-    try { if (typeof hideOldSelectionUI === 'function') hideOldSelectionUI(); } catch(e){}
+
+    try { if (typeof hideOldSelectionUI === 'function') hideOldSelectionUI(); 
+  // retry a few times in case notes render a bit later
+  try{
+    var attempts=0;
+    var t = setInterval(function(){
+      attempts++; ensureRowCheckboxes(document.getElementById('notes-list'));
+      if(attempts>=6) clearInterval(t);
+    }, 500);
+  }catch(e){}
+} catch(e){}
     const container = document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.querySelector('#entries') || document.querySelector('.entries') || document.body;
     const head = findHeading();
     if(!head || !container) return;
