@@ -128,7 +128,7 @@
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = ''; if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>'; var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage)); if(info2.crew) meta.push('Crew: '+esc(info2.crew)); if (meta.length) headerHtml += '<ul style="margin:0;padding:0;list-style:none;font-size:12px;color:#111">' + meta.map(function(m){ return '<li>'+m+'</li>'; }).join('') + '</ul>';
+      var headerHtml = renderHeaderHTML(info2);
       var htmlBody = headerHtml + notes.map(function(n){
         return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
       }).join('');
@@ -154,8 +154,9 @@ btnPrint.addEventListener('click', function(){
       var w=window.open('','_blank');
       var info = jobInfo();
       var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}.meta-list{list-style:none;margin:0;padding:0;font-size:12px;color:#111}.meta-list li{margin:2px 0}</style></head><body><h1>' + title + '</h1>';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage); if(info.crew) meta.push('Crew: '+info.crew); if(meta.length) html += '<ul class="meta-list">' + meta.map(function(m){ return '<li>'+m+'</li>'; }).join('') + '</ul>';
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:14px;line-height:1.35}.head{border-bottom:1px solid #ddd;margin:0 0 8px;padding:0 0 6px}.title{font-size:16px;font-weight:700;margin:0 0 6px}.meta-list{list-style:none;margin:0;padding:0;font-size:12px;color:#111}.meta-list li{display:block;margin:2px 0}.entry{margin:0 0 10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;page-break-inside:avoid}.date{font-weight:600;margin-bottom:4px}.text{white-space:pre-wrap}</style></head><body>' + renderHeaderHTML(info) + ';
+      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
+      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
@@ -186,17 +187,20 @@ btnPrint.addEventListener('click', function(){
     });
   }
 
-  // --- Hard bind print triggers to our modal (prevent OS print) ---
-  function bindPrintTriggers(){
-    function attach(el){
-      if(!el) return;
-      el.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, true);
-      el.onclick = function(e){ if(e){ e.preventDefault(); e.stopPropagation(); } try{ openModal(); }catch(_){ } return false; };
+  // Hard-bind Email/Print button(s) to our modal and block native print
+  function bindEmailPrintButtons(){
+    function txt(n){ return n ? (n.textContent || n.value || '').trim().toLowerCase() : ''; }
+    function arm(n){
+      if(!n || n.__armed) return;
+      n.__armed = true;
+      n.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, true);
+      n.onclick = function(e){ if(e){ e.preventDefault(); e.stopPropagation(); } try{ openModal(); }catch(_){ } return false; };
     }
-    attach(document.getElementById('print-job'));
-    Array.prototype.forEach.call(document.querySelectorAll('button, a[role="button"], a, .btn'), function(n){
-      var t = (n.textContent||n.value||'').trim().toLowerCase();
-      if(t.includes('print')) attach(n);
+    var ids = ['print-job', 'email-print', 'emailPrint', 'printSelection'];
+    ids.forEach(function(id){ arm(document.getElementById(id)); });
+    Array.prototype.forEach.call(document.querySelectorAll('button, a, .btn, [role=\"button\"]'), function(n){
+      var t = txt(n);
+      if (t === 'email/print' || t === 'print selection' || (t.includes('print') && t.includes('email')) ) arm(n);
     });
     try{ window.print = function(){ try{ openModal(); }catch(_){ } }; }catch(_){}
   }
@@ -206,7 +210,7 @@ btnPrint.addEventListener('click', function(){
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){ renameButton(); interceptEvents(); bindPrintTriggers(); var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
+  onReady(function(){ renameButton(); interceptEvents(); bindEmailPrintButtons(); var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
   function jobInfo(){
@@ -222,3 +226,17 @@ btnPrint.addEventListener('click', function(){
     if (stage) lines.push('Stage: ' + stage);
     return { name: name, address: address, po: po, stage: stage, lines: lines };
   }
+
+function renderHeaderHTML(info){
+  function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+  var items = [];
+  if (info.stage)   items.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
+  if (info.po)      items.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
+  if (info.crew)    items.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
+  if (info.address) items.push('<li><b>Address:</b> '+esc(info.address)+'</li>');
+  if (info.updated) items.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
+  var list = items.length ? ('<ul class="meta-list">'+items.join('')+'</ul>') : '';
+  return '<div class="head"><div class="title">'+ esc(info.name || 'Job') +'</div>'+ list +'</div>';
+}
+
+
