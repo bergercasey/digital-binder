@@ -8,6 +8,13 @@
   const $ = (s,r=document)=>r.querySelector(s);
   const $all = (s,r=document)=>Array.from(r.querySelectorAll(s));
 
+  function hideOldSelectionUI(){
+    try{
+      document.querySelectorAll('.selected-chip, .select-platform, .select, .selection, #log-tip').forEach(el=>{ el.style.display='none'; });
+      Array.from(document.querySelectorAll('th')).forEach(th=>{ if((th.textContent||'').trim().toLowerCase()==='selected') th.style.display='none'; });
+    }catch(e){}
+  }
+
   function cssOnce(id, css){ if(document.getElementById(id)) return; const s=document.createElement('style'); s.id=id; s.textContent=css; document.head.appendChild(s); }
   cssOnce('pe35css', `
     .note-date{display:inline-flex; align-items:center; gap:6px}
@@ -56,38 +63,38 @@
 
   
 function ensureRowCheckboxes(container){
-  try{
-    var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
-    if (dates.length) {
-      dates.forEach(function(dateEl){
-        var sig = hashNode(dateEl);
-        if (dateEl.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
-        var label = document.createElement('label'); label.className = 'pe-date-inline';
-        var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-        label.appendChild(cb);
-        dateEl.appendChild(label);
-      });
-      return;
-    }
-  }catch(e){} 
-  var rows = findRows(container);
-  rows.forEach(function(row){
-    var dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
-    if(!dateEl){
-      var cand=Array.prototype.slice.call(row.querySelectorAll('*')).find(function(el){
-        return /\b\d{4}\-\d{2}\-\d{2}\b|\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||'');
-      });
-      if(cand) dateEl=cand;
-    }
-    if(!dateEl) return;
-    var sig = hashNode(dateEl);
-    if(row.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
-    var label=document.createElement('label'); label.className='pe-date-inline';
-    var cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-    label.appendChild(cb);
-    dateEl.appendChild(label);
-  });
-}
+    try{
+      var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
+      if (dates.length) {
+        dates.forEach(function(dateEl){
+          var sig = hashNode(dateEl);
+          if (dateEl.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
+          var label = document.createElement('label'); label.className='pe-date-inline';
+          var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
+          label.appendChild(cb);
+          dateEl.appendChild(label);
+        });
+        return;
+      }
+    }catch(e){}
+    var rows = findRows(container);
+    rows.forEach(function(row){
+      var dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
+      if(!dateEl){
+        var cand=Array.prototype.slice.call(row.querySelectorAll('*')).find(function(el){
+          return /\b\d{4}\-\d{2}\-\d{2}\b|\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||'');
+        });
+        if(cand) dateEl=cand;
+      }
+      if(!dateEl) return;
+      var sig = hashNode(dateEl);
+      if(row.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
+      var label=document.createElement('label'); label.className='pe-date-inline';
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
+      label.appendChild(cb);
+      dateEl.appendChild(label);
+    });
+  }
 
   function findRows(container){
     if(!container) return [];
@@ -250,14 +257,21 @@ function replaceAllPrintButtons(){
     box.value='';
   }
 
-  function boot(){ hideOldSelectionUI();
-    const head=findHeading(); const container=findContainer(head);
+  function boot(){
+    try { hideOldSelectionUI && hideOldSelectionUI(); } catch(e){}
+    const head = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(h => (h.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase());
+    const container = (function(h){
+      if(!h) return null;
+      let n=h.nextElementSibling; while(n){ if(/^(UL|OL|DIV|SECTION|TABLE)$/i.test(n.tagName)) return n; n=n.nextElementSibling; }
+      return document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.body;
+    })(head);
     if(!head || !container) return;
     ensureSelectAllInline(head, container);
     ensureRowCheckboxes(container);
     replaceAllPrintButtons();
     const mo=new MutationObserver(()=> ensureRowCheckboxes(container));
     mo.observe(container,{childList:true,subtree:true});
+  });
   }
 
   document.addEventListener('DOMContentLoaded', boot);
