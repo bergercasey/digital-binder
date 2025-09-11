@@ -1,5 +1,9 @@
 
 (function(){
+  try{ window.__origPrint = window.print && window.print.bind ? window.print.bind(window) : window.print; }catch(_){ window.__origPrint = window.print; }
+  window.__squelchPrint = false;
+  try{ window.print = function(){ if (window.__squelchPrint) return; if (typeof window.__origPrint === 'function') return window.__origPrint(); }; }catch(_){}
+
   if (window.__emailPrintLoaded) return; window.__emailPrintLoaded = true;
 
   function $(id){ return document.getElementById(id); }
@@ -171,7 +175,18 @@
       b.type = 'button';
       b.className = 'btn';
       b.textContent = 'Email/Print';
-      b.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, {capture:true, passive:false});
+      function open(e){ try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
+        try{ window.__squelchPrint = true; setTimeout(function(){ window.__squelchPrint=false; }, 1200); }catch(_){}
+        openModal();
+      }
+      try{
+        b.addEventListener('touchstart', open, {capture:true, passive:false});
+        b.addEventListener('pointerdown', open, {capture:true, passive:false});
+        b.addEventListener('mousedown', open, {capture:true, passive:false});
+        b.addEventListener('click', open, {capture:true, passive:false});
+      }catch(_){
+        b.onclick = open;
+      }
       return b;
     }
     function hideOriginal(node){
