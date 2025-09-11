@@ -165,24 +165,58 @@
   }
 
   function hookButton(){
-    var btn = $('print-job');
-    function attach(n){
-      if (!n || n.__epHooked) return;
-      n.__epHooked = true;
-      n.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); openModal(); });
-      n.textContent = 'Email/Print';
+    function attachTo(node){
+      if (!node || node.__epHooked) return;
+      node.__epHooked = true;
+      node.addEventListener('click', function(e){
+        try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
+        openModal();
+      }, {capture:true, passive:false});
+      node.textContent = 'Email/Print';
+      if (node.tagName === 'A') { try{ node.setAttribute('href', 'javascript:void(0)'); }catch(_){ } }
+      if (!node.getAttribute('type')) node.setAttribute('type','button');
     }
-    if (btn) attach(btn);
-    // Fallback: scan for any button that says Print or Email/Print
-    qsa('button, a[role="button"]').forEach(function(n){
+    function replacePrint(node){
+      if (!node) return null;
+      var repl = document.createElement('button');
+      repl.className = node.className || '';
+      repl.id = 'email-print-btn';
+      repl.type = 'button';
+      try{ repl.style.cssText = node.style.cssText; }catch(_){}
+      repl.textContent = 'Email/Print';
+      // Replace in DOM so any old listeners on the original cannot fire
+      if (node.parentNode){
+        node.parentNode.replaceChild(repl, node);
+      } else {
+        // As a fallback, clear all attributes/handlers on the original and reuse it
+        try{
+          node.removeAttribute('onclick');
+          node.removeAttribute('href');
+          node.textContent = 'Email/Print';
+          node.id = 'email-print-btn';
+          repl = node;
+        }catch(_){}
+      }
+      // Ensure no default action occurs
+      try{ repl.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, {capture:true, passive:false}); }catch(_){}
+      return repl;
+    }
+    var btn = document.getElementById('print-job');
+    if (btn && !document.getElementById('email-print-btn')) {
+      replacePrint(btn);
+      return;
+    }
+    // Fallback: search for a visible button with "Print selected" or "Print"
+    var nodes = Array.prototype.slice.call(document.querySelectorAll('button, a[role="button"]'));
+    var cand = nodes.find(function(n){
       var t=(n.textContent||'').trim().toLowerCase();
-      if (t==='email/print' || t==='print selected' || t==='print') attach(n);
+      return (t==='print selected' || t==='print') && !n.__epHooked;
     });
-  }
-
-  onReady(function(){
-    hookButton();
-    // also retry a few times in case button renders late
-    var tries=0; var t=setInterval(function(){ hookButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
-  });
-})();
+    if (cand) {
+      replacePrint(cand);
+      return;
+    }
+    // As a last resort, if we already created email-print-btn but it's not hooked, attach
+    var ep = document.getElementById('email-print-btn');
+    if (ep && !ep.__epHooked) attachTo(ep);
+  })();
