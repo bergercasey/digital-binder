@@ -318,9 +318,7 @@
       const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
-      if (isSel) { const chip = document.createElement("div"); chip.className = "note-selected-chip"; chip.textContent = "Selected"; item.appendChild(chip); }
-      
-      list.appendChild(item);
+list.appendChild(item);
     });
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";$("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }

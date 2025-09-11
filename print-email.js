@@ -10,6 +10,8 @@
 
   function cssOnce(id, css){ if(document.getElementById(id)) return; const s=document.createElement('style'); s.id=id; s.textContent=css; document.head.appendChild(s); }
   cssOnce('pe35css', `
+    .note-date{display:inline-flex; align-items:center; gap:6px}
+
     .pe-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
     .pe-date-inline{ display:inline-flex; align-items:center; gap:6px; margin-left:6px; vertical-align:middle; }
     #pe_overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
@@ -52,23 +54,41 @@
     const sib=head.nextElementSibling; if(sib && /tip/i.test(sib.textContent||'')) sib.style.display='none';
   }
 
-  function ensureRowCheckboxes(container){
-    const rows=findRows(container);
-    rows.forEach(row=>{
-      let dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
-      if(!dateEl){
-        const cand=Array.from(row.querySelectorAll('*')).find(el=>/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||''));
-        if(cand) dateEl=cand;
-      }
-      if(!dateEl) return;
-      const sig = hashNode(dateEl);
-      if(row.querySelector(`.pe_cb_row[data-bind="${sig}"]`)) return;
-      const label=document.createElement('label'); label.className='pe-date-inline';
-      const cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.dataset.bind=sig;
-      label.appendChild(cb);
-      dateEl.insertAdjacentElement('afterend', label);
-    });
-  }
+  
+function ensureRowCheckboxes(container){
+  try{
+    var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
+    if (dates.length) {
+      dates.forEach(function(dateEl){
+        var sig = hashNode(dateEl);
+        if (dateEl.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
+        var label = document.createElement('label'); label.className = 'pe-date-inline';
+        var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
+        label.appendChild(cb);
+        dateEl.appendChild(label);
+      });
+      return;
+    }
+  }catch(e){} 
+  var rows = findRows(container);
+  rows.forEach(function(row){
+    var dateEl=row.querySelector('.note-date,.date,.log-date,[data-date],time');
+    if(!dateEl){
+      var cand=Array.prototype.slice.call(row.querySelectorAll('*')).find(function(el){
+        return /\b\d{4}\-\d{2}\-\d{2}\b|\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/.test(el.textContent||'');
+      });
+      if(cand) dateEl=cand;
+    }
+    if(!dateEl) return;
+    var sig = hashNode(dateEl);
+    if(row.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
+    var label=document.createElement('label'); label.className='pe-date-inline';
+    var cb=document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
+    label.appendChild(cb);
+    dateEl.appendChild(label);
+  });
+}
+
   function findRows(container){
     if(!container) return [];
     if(container.tagName==='UL'||container.tagName==='OL'){ return Array.from(container.children).filter(x=>x.tagName==='LI'); }
@@ -85,33 +105,30 @@
   }
 
   
+
 function replaceAllPrintButtons(){
   try{
-    const cands = P.printBtnSelectors.flatMap(sel => Array.from(document.querySelectorAll(sel)));
-    cands
-      .filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()))
-      .forEach(btn => {
-        if (!btn || btn.dataset.pe35) return;
-        const label = 'Email/Print';
-        const addHandler = (node)=>{
-          try{ node.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true}); }catch(e){}
-        };
-        if (btn.parentNode) {
-          const clone = btn.cloneNode(true);
-          clone.textContent = label;
-          clone.dataset.pe35 = '1';
+    var cands = [];
+    P.printBtnSelectors.forEach(function(sel){
+      Array.prototype.push.apply(cands, Array.prototype.slice.call(document.querySelectorAll(sel)));
+    });
+    cands.filter(function(b){ return /^(print\s*selection|print)$/i.test((b.textContent||'').trim()); })
+      .forEach(function(btn){
+        if(!btn || btn.dataset.pe35) return;
+        var label='Email/Print';
+        var addHandler=function(node){ try{ node.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true}); }catch(e){}};
+        if(btn.parentNode){
+          var clone=btn.cloneNode(true);
+          clone.textContent=label; clone.dataset.pe35='1';
           btn.parentNode.replaceChild(clone, btn);
           addHandler(clone);
         } else {
-          try{
-            btn.textContent = label;
-            btn.dataset.pe35 = '1';
-            addHandler(btn);
-          }catch(e){}
+          try{ btn.textContent=label; btn.dataset.pe35='1'; addHandler(btn);}catch(e){}
         }
       });
   }catch(e){}
 }
+
 
 
   function ensureModal(){
@@ -233,7 +250,7 @@ function replaceAllPrintButtons(){
     box.value='';
   }
 
-  function boot(){
+  function boot(){ hideOldSelectionUI();
     const head=findHeading(); const container=findContainer(head);
     if(!head || !container) return;
     ensureSelectAllInline(head, container);
