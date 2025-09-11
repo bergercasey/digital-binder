@@ -118,16 +118,35 @@
     actions.appendChild(btnCancel); actions.appendChild(btnPrint); actions.appendChild(btnEmail); box.appendChild(actions);
 
     btnCancel.addEventListener('click', function(){ document.body.removeChild(ov); });
-    btnEmail.addEventListener('click', function(){
-      var picks=qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
+    btnEmail.addEventListener('click', async function(){
+      var picks = qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
       if(!picks.length){ alert('Pick at least one recipient.'); return; }
-      var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var subj=currentJobTitle()+' - Log Update';
-      var bodyLines=notes.map(function(n){ return n.date+'\\n'+n.text+'\\n'; });
-      var body=encodeURIComponent(bodyLines.join('\\n')); var to=encodeURIComponent(picks.join(','));
-      window.location.href='mailto:'+to+'?subject='+encodeURIComponent(subj)+'&body='+body;
+      var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
+      var subj = currentJobTitle() + ' - Log Update';
+      var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
+      var textBody = bodyLines.join('\n');
+      var htmlBody = notes.map(function(n){
+        function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+        return '<div><strong>' + esc(n.date) + '</strong><br>' + esc(n.text).replace(/\n/g,'<br>') + '</div>';
+      }).join('');
+      try{
+        var resp = await fetch('/.netlify/functions/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
+        });
+        if (!resp.ok) {
+          var txt = await resp.text();
+          alert('Send failed: ' + txt);
+          return;
+        }
+        alert('Email sent!');
+        document.body.removeChild(ov);
+      } catch(e){
+        alert('Send failed: ' + (e && e.message ? e.message : String(e)));
+      }
     });
-    btnPrint.addEventListener('click', function(){
+btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
       var html='<!doctype html><html><head><meta charset=\"utf-8\"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:18px;margin:0 0 12px}.n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px}.d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ (currentJobTitle()) +' - Selected Logs</h1>';
