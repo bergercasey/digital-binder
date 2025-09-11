@@ -128,35 +128,7 @@
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = ''; if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>'; var meta=[]; if(info2.stage) meta.push('Stage: '+esc(info2.stage)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.crew) meta.push('Crew: '+esc(info2.crew)); if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.updated) meta.push('Updated: '+esc(info2.updated)); if (meta.length) headerHtml += '<ul style="margin:0;padding:0;list-style:none;font-size:12px;color:#111">' + meta.map(function(m){ return '<li>'+m+'</li>'; }).join('') + '</ul>';
-      var htmlBody = headerHtml + notes.map(function(n){
-        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
-      }).join('');
-      try{
-        var resp = await fetch('/.netlify/functions/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
-        });
-        if (!resp.ok) {
-          var txt = await resp.text();
-          alert('Send failed: ' + txt);
-          return;
-        }
-        alert('Email sent!');
-        document.body.removeChild(ov);
-      } catch(e){
-        alert('Send failed: ' + (e && e.message ? e.message : String(e)));
-      }
-    });
-btnPrint.addEventListener('click', function(){
-      var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var w=window.open('','_blank');
-      var info = jobInfo();
-      var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
-      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
+      var headerHtml = ''; if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>'; var meta=[]; /* meta list rendered by header helper */
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
@@ -175,6 +147,7 @@ btnPrint.addEventListener('click', function(){
   function interceptEvents(){
     function handle(e){
       try{
+        if (e.target && e.target.closest && e.target.closest('#ep_box')) return;
         var t = e.target && e.target.closest ? e.target.closest('button, a[role=\"button\"], #print-job') : e.target;
         if (matchPrintNode(t)){
           e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
@@ -218,6 +191,14 @@ btnPrint.addEventListener('click', function(){
     return { name: name, address: address, po: po, stage: stage, crew: crew, updated: updated, lines: lines }
   function renderHeaderHTML(info){
     function esc(x){ return String(x||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+    var li=[];
+    if(info.stage) li.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
+    if(info.po) li.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
+    if(info.crew) li.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
+    if(info.updated) li.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
+    var addr = info.address ? '<div class="addr">'+esc(info.address)+'</div>' : '';
+    return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>' + addr + (li.length?('<ul class="meta-list">'+li.join('')+'</ul>'):'') + '</div>';
+  }[c]); }); }
     var li=[];
     if(info.stage) li.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
     if(info.po) li.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
