@@ -128,7 +128,7 @@
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = renderHeaderHTML(info2);font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
+      var headerHtml = ''; if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>'; var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage)); if(info2.crew) meta.push('Crew: '+esc(info2.crew)); if (meta.length) headerHtml += '<ul style="margin:0;padding:0;list-style:none;font-size:12px;color:#111">' + meta.map(function(m){ return '<li>'+m+'</li>'; }).join('') + '</ul>';
       var htmlBody = headerHtml + notes.map(function(n){
         return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
       }).join('');
@@ -154,9 +154,8 @@ btnPrint.addEventListener('click', function(){
       var w=window.open('','_blank');
       var info = jobInfo();
       var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:14px;line-height:1.35}.head{border-bottom:1px solid #ddd;margin:0 0 8px;padding:0 0 6px}.title{font-size:16px;font-weight:700;margin:0 0 6px}.meta-list{list-style:none;margin:0;padding:0;font-size:12px;color:#111}.meta-list li{display:block;margin:2px 0}.entry{margin:0 0 10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;page-break-inside:avoid}.date{font-weight:600;margin-bottom:4px}.text{white-space:pre-wrap}</style></head><body>' + renderHeaderHTML(info) + ';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
-      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}.meta-list{list-style:none;margin:0;padding:0;font-size:12px;color:#111}.meta-list li{margin:2px 0}</style></head><body><h1>' + title + '</h1>';
+      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage); if(info.crew) meta.push('Crew: '+info.crew); if(meta.length) html += '<ul class="meta-list">' + meta.map(function(m){ return '<li>'+m+'</li>'; }).join('') + '</ul>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
@@ -182,63 +181,44 @@ btnPrint.addEventListener('click', function(){
         }
       }catch(_){}
     }
-    ['click','touchstart','pointerdown','mousedown','pointerup','mouseup','touchend'].forEach(function(type){
+    ['touchstart','pointerdown','mousedown','click'].forEach(function(type){
       document.addEventListener(type, handle, true);
     });
   }
+
+  // --- Hard bind print triggers to our modal (prevent OS print) ---
+  function bindPrintTriggers(){
+    function attach(el){
+      if(!el) return;
+      el.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, true);
+      el.onclick = function(e){ if(e){ e.preventDefault(); e.stopPropagation(); } try{ openModal(); }catch(_){ } return false; };
+    }
+    attach(document.getElementById('print-job'));
+    Array.prototype.forEach.call(document.querySelectorAll('button, a[role="button"], a, .btn'), function(n){
+      var t = (n.textContent||n.value||'').trim().toLowerCase();
+      if(t.includes('print')) attach(n);
+    });
+    try{ window.print = function(){ try{ openModal(); }catch(_){ } }; }catch(_){}
+  }
+
   function renameButton(){
     var btn = $('print-job'); if (btn) btn.textContent = 'Email/Print';
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){
-    // Route native print to our modal on the main page
-    try{ if(!window.__ep_printPatched){ window.__ep_printPatched = true; window.print = function(){ try{ openModal(); }catch(e){} }; } }catch(_){}
-    // Intercept Ctrl/Cmd+P
-    document.addEventListener('keydown', function(e){ var isP=(e.key||'').toLowerCase()==='p'; if((e.ctrlKey||e.metaKey)&&isP){ e.preventDefault(); e.stopPropagation(); try{ openModal(); }catch(_){} } }, true);
-    renameButton();
-    interceptEvents();
-    var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
+  onReady(function(){ renameButton(); interceptEvents(); bindPrintTriggers(); var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
-  
-function jobInfo(){
-  function txt(n){ return n ? (n.innerText || n.textContent || '').trim() : ''; }
-  function gt(id){ return txt(document.getElementById(id)); }
-  function q(sel){ return txt(document.querySelector(sel)); }
-
-  var summary = gt('job-summary'); // may include "Stage:", "PO:", "Crew:", "Last updated:"
-  var name = gt('job-name') || q('h3.job-title, h2.job-title, h1.job-title')
-          || (summary ? (summary.split(/(?:Stage:|PO:|Crew:|Last updated:)/)[0]||'').trim() : document.title);
-
-  function rx(re){ var m = summary ? summary.match(re) : null; return m ? m[1].trim() : ''; }
-  var stage   = gt('job-stage') || rx(/Stage:\s*([A-Za-z0-9 \-]+)/i);
-  var po      = gt('job-po')    || rx(/PO:\s*([\w\-\._]+)/i);
-  var crew    = rx(/Crew:\s*([^|•\n]+)/i);
-  var updated = rx(/Last updated:\s*([^\n]+)/i);
-  var address = gt('job-address');
-
-  var lines = [];
-  if (name)    lines.push('Job: '     + name);
-  if (stage)   lines.push('Stage: '   + stage);
-  if (po)      lines.push('PO: '      + po);
-  if (crew)    lines.push('Crew: '    + crew);
-  if (address) lines.push('Address: ' + address);
-  if (updated) lines.push('Updated: ' + updated);
-
-  return { name:name, address:address, po:po, stage:stage, crew:crew, updated:updated, lines:lines };
-}
-
-function renderHeaderHTML(info){
-  function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-  var items = [];
-  if (info.stage)   items.push('<li><b>Stage:</b> '+esc(info.stage)+'</li>');
-  if (info.po)      items.push('<li><b>PO:</b> '+esc(info.po)+'</li>');
-  if (info.crew)    items.push('<li><b>Crew:</b> '+esc(info.crew)+'</li>');
-  if (info.address) items.push('<li><b>Address:</b> '+esc(info.address)+'</li>');
-  if (info.updated) items.push('<li><b>Updated:</b> '+esc(info.updated)+'</li>');
-  var list = items.length ? ('<ul class="meta-list">'+items.join('')+'</ul>') : '';
-  return '<div class="head"><div class="title">'+ esc(info.name || 'Job') +'</div>'+ list +'</div>';
-}
-
-}
+  function jobInfo(){
+    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
+    var name = gt('job-name') || gt('job-summary') || currentJobTitle();
+    var address = gt('job-address');
+    var po = gt('job-po');
+    var stage = gt('job-stage');
+    var lines = [];
+    if (name) lines.push('Job: ' + name);
+    if (address) lines.push('Address: ' + address);
+    if (po) lines.push('PO: ' + po);
+    if (stage) lines.push('Stage: ' + stage);
+    return { name: name, address: address, po: po, stage: stage, lines: lines };
+  }
