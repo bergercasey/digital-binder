@@ -73,7 +73,7 @@
 
     var contacts = loadContacts();
 
-    var listWrap = document.createElement('div'); listWrap.style.maxHeight='220px'; listWrap.style.overflowY='auto'; listWrap.style.border='1px solid #e5e7eb'; listWrap.style.borderRadius='8px'; listWrap.style.padding='8px';
+    var listWrap = document.createElement('div'); listWrap.style.maxHeight='220px'; listWrap.style.overflowY='auto'; listWrap.style.border='1px solid #e5e7eb'; listWrap.style.borderRadius='8px'; listWrap.style.padding='8px'; listWrap.style.fontSize='16px';
     box.appendChild(listWrap);
 
     function renderContacts(){
@@ -98,8 +98,8 @@
 
     // Add new contact (Name + Email)
     var addRow=document.createElement('div'); addRow.style.marginTop='10px'; addRow.style.display='grid'; addRow.style.gridTemplateColumns='1fr 1fr auto'; addRow.style.gap='6px';
-    var nameInput=document.createElement('input'); nameInput.placeholder='Name'; nameInput.type='text';
-    var emailInput=document.createElement('input'); emailInput.placeholder='email@domain'; emailInput.type='email';
+    var nameInput=document.createElement('input'); nameInput.placeholder='Name'; nameInput.type='text'; nameInput.style.fontSize='16px'; nameInput.style.padding='10px 12px'; nameInput.style.borderRadius='8px';
+    var emailInput=document.createElement('input'); emailInput.placeholder='email@domain'; emailInput.type='email'; emailInput.style.fontSize='16px'; emailInput.style.padding='10px 12px'; emailInput.style.borderRadius='8px';
     var addBtn=document.createElement('button'); addBtn.textContent='Add'; addBtn.className='btn';
     addBtn.addEventListener('click', function(){
       var nm=(nameInput.value||'').trim(); var em=(emailInput.value||'').trim();
