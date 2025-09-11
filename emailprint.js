@@ -55,42 +55,7 @@
     var main = document.querySelector('#job-title') || document.querySelector('.job-header');
     if (main) return (main.textContent||'').trim();
     return document.title || 'Job Log';
-  
-  // ---- Gather Job Info (robust scrapers; no dependency on existing logic) ----
-  function getText(el){ return el ? (el.innerText || el.textContent || '').trim() : ''; }
-  function bySel(sel){ return document.querySelector(sel); }
-  function readStage(){
-    // Try common patterns: checked input, explicit value, active button text, or a field labeled "Stage"
-    var inp = document.querySelector('input[name="stage"]:checked');
-    if (inp && inp.value) return inp.value;
-    var active = document.querySelector('.stage .active, .stage .selected, .stage .btn.active');
-    if (active) return getText(active);
-    var labeled = Array.prototype.find.call(document.querySelectorAll('*'), function(n){
-      return /stage/i.test(n.textContent||'') && n.nextElementSibling && (n.tagName==='DT' || n.classList.contains('label'));
-    });
-    if (labeled) return getText(labeled.nextElementSibling);
-    var idVal = bySel('#stage, #job-stage, #stage-value, .job-stage');
-    return getText(idVal);
   }
-  function readField(candidates){
-    for (var i=0;i<candidates.length;i++){
-      var n = bySel(candidates[i]);
-      if (n){ var t=getText(n); if (t) return t; }
-    }
-    return '';
-  }
-  function gatherJobSummary(){
-    var title = currentJobTitle();
-    var number = readField(['#job-number','.job-number','[data-field="jobNumber"]']);
-    var customer = readField(['#customer','.customer','[data-field="customer"]','.job-customer']);
-    var address = readField(['#address','.address','[data-field="address"]','.job-address']);
-    var city = readField(['#city','.city','[data-field="city"]']);
-    var phone = readField(['#phone','.phone','[data-field="phone"]']);
-    var contact = readField(['#contact','.contact','[data-field="contact"]']);
-    var stage = readStage();
-    return {title:title, number:number, customer:customer, contact:contact, phone:phone, address:[address,city].filter(Boolean).join(', '), stage:stage};
-  }
-}
 
   // ---- Modal ----
   function openModal(){
@@ -162,11 +127,30 @@
       var body=encodeURIComponent(bodyLines.join('\\n')); var to=encodeURIComponent(picks.join(','));
       window.location.href='mailto:'+to+'?subject='+encodeURIComponent(subj)+'&body='+body;
     });
+    
     btnPrint.addEventListener('click', function(){
-      var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var w=window.open('','_blank');
-      
-      var summary = gatherJobSummary();
+      var notes = getSelectedNotes();
+      if(!notes.length){ alert('Select at least one log entry.'); return; }
+
+      // Inline summary builder
+      var _txt = function(el){ return el ? (el.innerText || el.textContent || '').trim() : ''; };
+      var _sel = function(s){ return document.querySelector(s); };
+      var _read = function(list){ for(var i=0;i<list.length;i++){ var n=_sel(list[i]); if(n){ var t=_txt(n); if(t) return t; }} return ''; };
+      var _stage = (function(){
+        var c=_sel('input[name="stage"]:checked'); if(c && c.value) return c.value;
+        var a=_sel('.stage .active, .stage .selected, .stage .btn.active'); if(a) return _txt(a);
+        var id=_sel('#stage, #job-stage, #stage-value, .job-stage'); return _txt(id);
+      })();
+      var summary = {
+        title: (function(){ var h=document.querySelector('h3.job-title, h2.job-title, h1.job-title'); if(h) return _txt(h); var m=_sel('#job-title,.job-header'); return _txt(m) || document.title || 'Job';})(),
+        number: _read(['#job-number','.job-number','[data-field="jobNumber"]']),
+        customer: _read(['#customer','.customer','[data-field="customer"]','.job-customer']),
+        contact: _read(['#contact','.contact','[data-field="contact"]']),
+        phone: _read(['#phone','.phone','[data-field="phone"]']),
+        address: (function(){ var a=_read(['#address','.address','[data-field="address"]','.job-address']); var c=_read(['#city','.city','[data-field="city"]']); return [a,c].filter(Boolean).join(', '); })(),
+        stage: _stage
+      };
+      var safe = function(s){return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);});};
       var css = [
         "body{font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px;color:#222}",
         ".hdr{border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:16px}",
@@ -181,23 +165,22 @@
         ".n .t{white-space:pre-wrap}",
         "@media print{.meta{gap:10px}}"
       ].join("");
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>'+ (summary.title||'Job') +' - Selected</title><style>'+css+'</style></head><body>';
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>'+(summary.title||'Job')+' - Selected</title><style>'+css+'</style></head><body>';
       html+='<div class="hdr">'
            +'<h1 class="title">'+ (summary.title || 'Job') + (summary.number?(' — '+summary.number):'') +'</h1>'
            +'<div class="meta">'
-             + (summary.stage?('<div><b>Stage:</b> '+ summary.stage +'</div>'):'')
-             + (summary.customer?('<div><b>Customer:</b> '+ summary.customer +'</div>'):'')
-             + (summary.contact?('<div><b>Contact:</b> '+ summary.contact +'</div>'):'')
-             + (summary.phone?('<div><b>Phone:</b> '+ summary.phone +'</div>'):'')
-             + (summary.address?('<div><b>Address:</b> '+ summary.address +'</div>'):'')
+             + (summary.stage?('<div><b>Stage:</b> '+ safe(summary.stage) +'</div>'):'')
+             + (summary.customer?('<div><b>Customer:</b> '+ safe(summary.customer) +'</div>'):'')
+             + (summary.contact?('<div><b>Contact:</b> '+ safe(summary.contact) +'</div>'):'')
+             + (summary.phone?('<div><b>Phone:</b> '+ safe(summary.phone) +'</div>'):'')
+             + (summary.address?('<div><b>Address:</b> '+ safe(summary.address) +'</div>'):'')
            +'</div></div>';
       html+='<div class="section-title">Selected Log Entries</div><div class="notes">';
       notes.forEach(function(n){
-        var safe = function(s){return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);});};
         html+='<div class="n"><div class="d">'+ safe(n.date) +'</div><div class="t">'+ safe(n.text) +'</div></div>';
       });
       html+='</div><script>window.print();<\/script></body></html>';
-
+      var w=window.open('about:blank','_blank'); if(!w){ alert('Popup blocked'); return; }
       w.document.open(); w.document.write(html); w.document.close();
     });
 
