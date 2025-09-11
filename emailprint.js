@@ -126,9 +126,14 @@
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
       var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
       var textBody = bodyLines.join('\n');
-      var htmlBody = notes.map(function(n){
-        function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-        return '<div><strong>' + esc(n.date) + '</strong><br>' + esc(n.text).replace(/\n/g,'<br>') + '</div>';
+      var info2 = jobInfo();
+      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+      var headerHtml = '';
+      if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>';
+      var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
+      if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
+      var htmlBody = headerHtml + notes.map(function(n){
+        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
       }).join('');
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
