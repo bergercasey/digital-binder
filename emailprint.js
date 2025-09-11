@@ -165,58 +165,50 @@
   }
 
   function hookButton(){
-    function attachTo(node){
-      if (!node || node.__epHooked) return;
-      node.__epHooked = true;
-      node.addEventListener('click', function(e){
-        try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
-        openModal();
-      }, {capture:true, passive:false});
-      node.textContent = 'Email/Print';
-      if (node.tagName === 'A') { try{ node.setAttribute('href', 'javascript:void(0)'); }catch(_){ } }
-      if (!node.getAttribute('type')) node.setAttribute('type','button');
+    function makeEPButton(){
+      var b = document.createElement('button');
+      b.id = 'email-print-btn';
+      b.type = 'button';
+      b.className = 'btn';
+      b.textContent = 'Email/Print';
+      b.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, {capture:true, passive:false});
+      return b;
     }
-    function replacePrint(node){
-      if (!node) return null;
-      var repl = document.createElement('button');
-      repl.className = node.className || '';
-      repl.id = 'email-print-btn';
-      repl.type = 'button';
-      try{ repl.style.cssText = node.style.cssText; }catch(_){}
-      repl.textContent = 'Email/Print';
-      // Replace in DOM so any old listeners on the original cannot fire
+    function hideOriginal(node){
+      try{
+        node.style.display = 'none';
+        node.setAttribute('aria-hidden','true');
+        node.setAttribute('disabled','disabled');
+        node.removeAttribute('onclick');
+        if (node.tagName === 'A') node.setAttribute('href','javascript:void(0)');
+      }catch(_){}
+    }
+    function placeNewNear(node){
+      if (!node) return;
+      var exists = document.getElementById('email-print-btn');
+      if (exists && exists.isConnected) return exists;
+      var ep = makeEPButton();
       if (node.parentNode){
-        node.parentNode.replaceChild(repl, node);
+        if (node.nextSibling) node.parentNode.insertBefore(ep, node.nextSibling);
+        else node.parentNode.appendChild(ep);
       } else {
-        // As a fallback, clear all attributes/handlers on the original and reuse it
-        try{
-          node.removeAttribute('onclick');
-          node.removeAttribute('href');
-          node.textContent = 'Email/Print';
-          node.id = 'email-print-btn';
-          repl = node;
-        }catch(_){}
+        document.body.appendChild(ep);
       }
-      // Ensure no default action occurs
-      try{ repl.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, {capture:true, passive:false}); }catch(_){}
-      return repl;
+      return ep;
     }
+    // Primary: id=print-job
     var btn = document.getElementById('print-job');
-    if (btn && !document.getElementById('email-print-btn')) {
-      replacePrint(btn);
-      return;
+    if (btn){
+      hideOriginal(btn);
+      placeNewNear(btn);
     }
-    // Fallback: search for a visible button with "Print selected" or "Print"
+    // Secondary: any visible button that looks like original print
     var nodes = Array.prototype.slice.call(document.querySelectorAll('button, a[role="button"]'));
-    var cand = nodes.find(function(n){
+    nodes.forEach(function(n){
       var t=(n.textContent||'').trim().toLowerCase();
-      return (t==='print selected' || t==='print') && !n.__epHooked;
+      if (t==='print selected' || t==='print'){
+        hideOriginal(n);
+        placeNewNear(n);
+      }
     });
-    if (cand) {
-      replacePrint(cand);
-      return;
-    }
-    // As a last resort, if we already created email-print-btn but it's not hooked, attach
-    var ep = document.getElementById('email-print-btn');
-    if (ep && !ep.__epHooked) attachTo(ep);
   })();
