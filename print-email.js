@@ -224,6 +224,28 @@ function ensureRowCheckboxes(container){
     });
   }catch(e){}
 }
+
+function replaceAllPrintButtons(){
+  try{
+    // Primary: id="print-job"
+    var btn = document.getElementById('print-job');
+    var handler = function(e){ try{ e.preventDefault(); e.stopPropagation(); }catch(err){} try{ openModal(); }catch(err){} };
+    if(btn && !btn.dataset.pe35){
+      btn.textContent = 'Email/Print';
+      try{ btn.addEventListener('click', handler, {capture:true}); }catch(e){ try{ btn.addEventListener('click', handler); }catch(_e){} }
+      btn.dataset.pe35='1';
+    }
+    // Secondary: any visible button with the Email/Print text
+    var nodes = Array.prototype.slice.call(document.querySelectorAll('button, a[role="button"]'));
+    nodes.forEach(function(n){
+      var t=(n.textContent||'').trim().toLowerCase();
+      if((t==='email/print' || t==='print selected' || t==='print') && !n.dataset.pe35){
+        try{ n.addEventListener('click', handler, {capture:true}); }catch(e){ try{ n.addEventListener('click', handler); }catch(_e){} }
+        n.dataset.pe35='1';
+      }
+    });
+  }catch(e){ /* swallow */ }
+}
 function boot(){
     try { if (typeof hideOldSelectionUI === 'function') hideOldSelectionUI(); } catch(e){}
     const container = document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.querySelector('#entries') || document.querySelector('.entries') || document.body;
