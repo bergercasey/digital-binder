@@ -173,7 +173,7 @@ btnPrint.addEventListener('click', function(){
       var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
       if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
-      html+='<script>window.print();<\/script></body></html>';
+      html+='</body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     });
 
