@@ -3,10 +3,11 @@
   if (window.__emailPrintLoaded) return; window.__emailPrintLoaded = true;
 
   function $(id){ return document.getElementById(id); }
+  function q(sel, root){ return (root||document).querySelector(sel); }
   function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
 
-  // ---------- Selection ----------
+  // ---------- Selected log entries ----------
   function getSelectedNotes(){
     var items = qsa('#notes-list .note-item');
     var sel = [];
@@ -21,46 +22,76 @@
     return sel;
   }
 
-  // ---------- Job info + header rendering ----------
+  // ---------- Job info (robust) ----------
   function jobInfo(){
     function val(id){ var n = document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
-    var info = {
-      name: val('job-name') || (document.querySelector('h3.job-title, h2.job-title, h1.job-title')||{}).textContent || '',
-      address: val('job-address'),
-      po: val('job-po'),
-      stage: val('job-stage'),
-      crew: (document.getElementById('job-crew')||{textContent:''}).textContent || ''
-    };
-    if (info.name && / Stage:| PO:| Crew:/.test(info.name)) {
-      info.name = info.name.split(/\s(?:Stage:|PO:|Crew:)/)[0].trim();
+    function pickFromText(label, text){
+      var m = String(text||'').match(new RegExp(label+':\\s*([^]+?)(?=\\s(?:Stage:|PO:|Crew:|Address:|Last updated:|$))','i'));
+      return m ? m[1].trim() : '';
     }
-    return info;
+    function firstNonEmpty(arr){ for (var i=0;i<arr.length;i++){ var s=arr[i]; if (s && String(s).trim()) return String(s).trim(); } return ''; }
+
+    var name = val('job-name');
+    var address = val('job-address');
+    var po = val('job-po');
+    var stage = val('job-stage');
+    var crew = (document.getElementById('job-crew')||{textContent:''}).textContent || '';
+
+    if (!name){
+      var cand = q('#job-title, .job-title, .job-header, h1.job-title, h2.job-title, h3.job-title, main h1, main h2, main h3');
+      if (cand) name = (cand.textContent||'').trim();
+    }
+    if (name && / Stage:| PO:| Crew:| Address:/i.test(name)) {
+      name = name.split(/\s(?:Stage:|PO:|Crew:|Address:)/i)[0].trim();
+    }
+
+    var host = q('#job-header, .job-header') || ( $('print-job') ? $('print-job').closest('.card, .panel, .section, .container') : null );
+    var headerText = host ? (host.textContent||'') : document.body.textContent || '';
+
+    address = firstNonEmpty([address, pickFromText('Address', headerText)]);
+    if (!address){
+      var mAddr = headerText.match(/\b\d{1,6}\s+[^,]+,\s*[A-Za-z][A-Za-z .-]+(?:,\s*[A-Z]{2})?/);
+      if (mAddr) address = mAddr[0];
+    }
+    po = firstNonEmpty([po, pickFromText('PO', headerText)]);
+    stage = firstNonEmpty([stage, pickFromText('Stage', headerText)]);
+    crew = firstNonEmpty([crew, pickFromText('Crew', headerText)]);
+
+    if (!name) name = document.title || 'Job';
+    return { name:name, address:address, po:po, stage:stage, crew:crew };
   }
+
   function renderHeaderHTML(info){
     function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-    var rows = [];
-    if (info.address) rows.push(['Address', info.address]);
-    if (info.po) rows.push(['PO', info.po]);
-    if (info.stage) rows.push(['Stage', info.stage]);
-    if (info.crew) rows.push(['Crew', info.crew]);
-    var table = rows.length ? (
-      '<table class="meta"><tbody>' + rows.map(function(r){
-        return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>';
-      }).join('') + '</tbody></table>'
-    ) : '';
-    var title = esc(info.name || 'Job');
-    return '<div class="head"><div class="title">'+title+'</div>'+table+'</div>';
+    var rows=[];
+    if(info.address) rows.push(['Address', info.address]);
+    if(info.po) rows.push(['PO', info.po]);
+    if(info.stage) rows.push(['Stage', info.stage]);
+    if(info.crew) rows.push(['Crew', info.crew]);
+    var table = rows.length ? ('<table class="meta"><tbody>'+rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>') : '';
+    return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>'+table+'</div>';
   }
 
   // ---------- Contacts store ----------
+  function parseContact(s){
+    if (typeof s === 'object' && s && s.email) return {name: s.name || s.email, email: s.email};
+    var m = String(s).match(/^\s*(.*?)\s*<\s*([^>]+@[^>]+)\s*>\s*$/);
+    if (m) return {name: m[1] || m[2], email: m[2]};
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s))) return {name: String(s), email: String(s)};
+    return null;
+  }
   function loadContacts(){
-    var raw = null;
-    try{ raw = localStorage.getItem('binder_contacts'); }catch(_){}
-    var list = [];
-    if (raw){
-      try{ list = JSON.parse(raw) || []; }catch(_){ list = []; }
-    }
-    return Array.isArray(list) ? list.filter(Boolean) : [];
+    var keys = ['binder_contacts','pe_contacts','pe35_contacts','contacts'];
+    var seen = {}, out = [];
+    keys.forEach(function(k){
+      try{
+        var raw = localStorage.getItem(k); if (!raw) return;
+        var val; try{ val = JSON.parse(raw); } catch(e){ val = raw; }
+        var arr = Array.isArray(val) ? val : (typeof val === 'string' ? val.split(/[,\n]/) : []);
+        arr.forEach(function(s){ var o = parseContact(s); if(o && !seen[o.email.toLowerCase()]){ seen[o.email.toLowerCase()] = true; out.push(o); } });
+      }catch(_){}
+    });
+    return out;
   }
   function saveContacts(list){
     try{ localStorage.setItem('binder_contacts', JSON.stringify(list)); }catch(_){}
@@ -81,7 +112,6 @@
     box.appendChild(title); box.appendChild(note);
 
     var contacts = loadContacts();
-
     var listWrap=document.createElement('div'); listWrap.style.maxHeight='220px'; listWrap.style.overflowY='auto'; listWrap.style.border='1px solid #e5e7eb'; listWrap.style.borderRadius='8px'; listWrap.style.padding='8px'; listWrap.style.fontSize='16px';
     box.appendChild(listWrap);
 
@@ -129,13 +159,12 @@
       var info = jobInfo();
       var subj = (info.name || 'Job') + ' - Log Update';
 
-      // text + html bodies
-      var headerTxt = []; if(info.name) headerTxt.push(info.name);
-      if(info.address) headerTxt.push('Address: ' + info.address);
-      if(info.po) headerTxt.push('PO: ' + info.po);
-      if(info.stage) headerTxt.push('Stage: ' + info.stage);
-      if(info.crew) headerTxt.push('Crew: ' + info.crew);
-      var textBody = headerTxt.join('\n') + '\\n\\n' + notes.map(function(n){ return n.date + '\\n' + n.text + '\\n'; }).join('\\n');
+      var headerTxt=[]; if(info.name) headerTxt.push(info.name);
+      if(info.address) headerTxt.push('Address: '+info.address);
+      if(info.po) headerTxt.push('PO: '+info.po);
+      if(info.stage) headerTxt.push('Stage: '+info.stage);
+      if(info.crew) headerTxt.push('Crew: '+info.crew);
+      var textBody = headerTxt.join('\\n') + '\\n\\n' + notes.map(function(n){ return n.date + '\\n' + n.text + '\\n'; }).join('\\n');
 
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
       var htmlBody = renderHeaderHTML(info) + notes.map(function(n){
