@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign in</title>
+  <style>
+    :root { --b:#d0d7de; --muted:#6b7280; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;background:#fff;color:#111}
+    .wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
+    .card{width:min(92vw,380px);border:1px solid var(--b);border-radius:12px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+    h1{margin:0 0 6px;font-size:18px;font-weight:700}
+    p{margin:0 0 12px;color:var(--muted);font-size:13px}
+    label{display:block;margin-bottom:10px}
+    label span{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+    input[type="text"], input[type="password"]{width:100%;padding:10px;border:1px solid var(--b);border-radius:8px}
+    .row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:10px}
+    button{padding:10px 14px;border:1px solid var(--b);border-radius:8px;background:#fff;cursor:pointer;appearance:none;-webkit-appearance:none;font-weight:600;white-space:nowrap}
+    .err{color:#b91c1c;font-size:12px;min-height:16px;margin-top:8px}
+    .muted{color:var(--muted);font-size:12px}
+  
+/* Robust submit button sizing for iPad Safari */
+#loginBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  height: 38px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  flex: 0 0 auto;
+}
+.row { gap: 12px; }
+.row .muted { flex: 1 1 auto; }
+.row #loginBtn { flex: 0 0 auto; }
+    
+/* Full-width primary sign-in button (iPad-safe) */
+input[type=submit].primary#loginBtn{ color:#111; cursor:pointer;
+  display:block;
+  width:100%;
+  height:44px;
+  line-height:44px;
+  text-align:center;
+  font-size:16px;
+  font-weight:700;
+  border-radius:10px;
+  -webkit-appearance:none;
+  appearance:none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Prevent iOS zoom on focus */
+input[type="text"], input[type="password"], input[type="submit"], button { font-size:16px; }
+/* Space above button */
+#loginBtn { margin-top:10px; }
+    </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Sign in</h1>
+      <p>Use the credentials configured for this site.</p>
+      <form id="f">
+        <label><span>Username</span><input id="u" type="text" autocomplete="username" required autofocus/></label>
+        <label><span>Password</span><input id="p" type="password" autocomplete="current-password" required/></label>
+        <div class="row"><label class="muted" style="display:flex;align-items:center;gap:8px;"><input id="r" type="checkbox"/> Remember me</label></div>
+<input type="submit" id="loginBtn" class="primary" value="Sign in"/>
+        <div id="e" class="err"></div>
+      </form>
+      <p class="muted" style="margin-top:12px;"><a href="/">Back to Binder</a></p>
+    </div>
+  </div>
+  <script>
+    const f = document.getElementById('f');
+    const u = document.getElementById('u');
+    const p = document.getElementById('p');
+    const r = document.getElementById('r');
+    const e = document.getElementById('e');
+
+    function nextUrl() {
+      const qs = new URLSearchParams(location.search);
+      const n = qs.get('next');
+      return n && n.startsWith('/') ? n : '/';
+    }
+
+    f.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      e.textContent = '';
+      try {
+        const res = await fetch('/.netlify/functions/auth-login', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ username: u.value.trim(), password: p.value, remember: r.checked })
+        });
+        if (!res.ok) { e.textContent = 'Invalid username or password'; return; }
+        const j = await res.json().catch(()=>({}));
+        if (!j.ok) { e.textContent = 'Invalid username or password'; return; }
+        location.href = nextUrl();
+      } catch(err) {
+        e.textContent = 'Network error; try again.';
+      }
+    });
+  </script>
+</body>
+</html>
