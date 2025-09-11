@@ -133,17 +133,19 @@
       var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
       if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
       
+      
       var htmlBody = headerHtml + notes.map(function(n){
         return '<div class="log-entry">'
-          + '<div><strong>' + (n.jobName || '') + '</strong></div>'
-          + '<div>Address: ' + (n.address || '') + '</div>'
-          + '<div>PO: ' + (n.po || '') + '</div>'
-          + '<div>Status: ' + (n.status || '') + '</div>'
-          + '<div>Date: ' + (n.date || '') + '</div>'
+          + '<div><strong>' + esc(info2.name || '') + '</strong></div>'
+          + '<div>Address: ' + esc(info2.address || '') + '</div>'
+          + '<div>PO: ' + esc(info2.po || '') + '</div>'
+          + '<div>Status: ' + esc(info2.stage || '') + '</div>'
+          + '<div>Date: ' + esc(n.date || '') + '</div>'
           + '<div><strong>Job Notes</strong></div>'
-          + '<div>' + (n.text || '') + '</div>'
+          + '<div>' + esc(n.text || '') + '</div>'
           + '</div><hr>';
       }).join('');
+    
 
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
@@ -210,8 +212,30 @@ btnPrint.addEventListener('click', function(){
     var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
-  function jobInfo(){
-    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
+  
+function jobInfo(){
+    function gv(id){
+      var el = document.getElementById(id);
+      if (!el) return '';
+      var tag = (el.tagName||'').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return (el.value||'').trim();
+      if (tag === 'SELECT') {
+        var t = (el.selectedOptions && el.selectedOptions[0] && (el.selectedOptions[0].text||'')) || (el.value||'');
+        return String(t).trim();
+      }
+      return (el.textContent||'').trim();
+    }
+    var name = gv('job-name') || gv('job-summary') || currentJobTitle();
+    var address = gv('job-address');
+    var po = gv('job-po');
+    var stage = gv('job-stage');
+    var lines = [];
+    if (name) lines.push('Job: ' + name);
+    if (address) lines.push('Address: ' + address);
+    if (po) lines.push('PO: ' + po);
+    if (stage) lines.push('Stage: ' + stage);
+    return { name: name, address: address, po: po, stage: stage, lines: lines };
+  }
     var name = gt('job-name') || gt('job-summary') || currentJobTitle();
     var address = gt('job-address');
     var po = gt('job-po');
