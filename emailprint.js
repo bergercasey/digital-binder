@@ -3,11 +3,10 @@
   if (window.__emailPrintLoaded) return; window.__emailPrintLoaded = true;
 
   function $(id){ return document.getElementById(id); }
-  function q(sel, root){ return (root||document).querySelector(sel); }
   function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
 
-  // ---------- Selected log entries ----------
+  // ---------- Selection ----------
   function getSelectedNotes(){
     var items = qsa('#notes-list .note-item');
     var sel = [];
@@ -22,133 +21,46 @@
     return sel;
   }
 
-  // ---------- Helpers to pick a sane job name ----------
-  function isGenericHeading(s){
-    if (!s) return true;
-    var x = String(s).replace(/\s+/g,' ').trim().toLowerCase();
-    var generics = ['log','logs','select all','settings','home','contractors','archives','schedule','open','search','email/print','print selected','print','job','jobs','hvac digital binder','digital binder','job binder'];
-    if (generics.indexOf(x) !== -1) return true;
-    if (x.indexOf('select all') !== -1) return true;
-    if (/^contractors?\b/.test(x)) return true;
-    return false;
-  }
-  function chooseJobName(){
-    var cands = [];
-    function add(sel){
-      var el = q(sel);
-      if (el) cands.push((el.textContent||'').replace(/\s+/g,' ').trim());
-    }
-    add('#job-name'); add('#job-title'); add('.job-title');
-    add('.job-header h1'); add('.job-header h2'); add('.job-header h3');
-    add('main h1'); add('main h2'); add('main h3');
-
-    // Look near the Email/Print button
-    var btn = $('print-job') || (function(){
-      var all = qsa('button, a[role="button"]'); 
-      for (var i=0;i<all.length;i++){
-        var t=(all[i].textContent||'').trim().toLowerCase();
-        if (t==='email/print' || t==='print selected' || t==='print') return all[i];
-      }
-      return null;
-    })();
-    if (btn){
-      var cont = btn.closest('.card, .panel, .section, .container, .content, .box, .wrap, .header') || btn.closest('div');
-      if (cont){
-        var hh = cont.querySelector('h1,h2,h3,.title');
-        if (hh) cands.push((hh.textContent||'').replace(/\s+/g,' ').trim());
-      }
-    }
-
-    // Filter out generics
-    cands = cands.filter(Boolean).filter(function(s){
-      if (isGenericHeading(s)) return false;
-      if (s.length < 6 && !/\d/.test(s)) return false; // too short and not job-like
-      return true;
-    });
-
-    // Score: prefer job-like strings
-    cands.sort(function(a,b){
-      function score(s){
-        var sc = 0;
-        if (/\d/.test(s)) sc += 2;           // digits (address/lot/job#)
-        if (/\s-\s/.test(s)) sc += 2;        // "101 - 123 Main St"
-        sc += Math.min(s.length, 60) / 60;   // some weight for longer titles
-        return sc;
-      }
-      return score(b) - score(a);
-    });
-
-    return cands[0] || '';
-  }
-
-  // ---------- Job info (robust) ----------
+  // ---------- Job info + header rendering ----------
   function jobInfo(){
     function val(id){ var n = document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
-    function pickFromText(label, text){
-      var m = String(text||'').match(new RegExp(label+':\\s*([^]+?)(?=\\s(?:Stage:|PO:|Crew:|Address:|Last updated:|$))','i'));
-      return m ? m[1].trim() : '';
+    var info = {
+      name: val('job-name') || (document.querySelector('h3.job-title, h2.job-title, h1.job-title')||{}).textContent || '',
+      address: val('job-address'),
+      po: val('job-po'),
+      stage: val('job-stage'),
+      crew: (document.getElementById('job-crew')||{textContent:''}).textContent || ''
+    };
+    if (info.name && / Stage:| PO:| Crew:/.test(info.name)) {
+      info.name = info.name.split(/\s(?:Stage:|PO:|Crew:)/)[0].trim();
     }
-    function firstNonEmpty(arr){ for (var i=0;i<arr.length;i++){ var s=arr[i]; if (s && String(s).trim()) return String(s).trim(); } return ''; }
-
-    var address = val('job-address');
-    var po = val('job-po');
-    var stage = val('job-stage');
-    var crew = (document.getElementById('job-crew')||{textContent:''}).textContent || '';
-    var name = val('job-name') || chooseJobName();
-
-    var host = q('#job-header, .job-header') || ( $('print-job') ? $('print-job').closest('.card, .panel, .section, .container') : null );
-    var headerText = host ? (host.textContent||'') : document.body.textContent || '';
-
-    address = firstNonEmpty([address, pickFromText('Address', headerText)]);
-    if (!address){
-      var mAddr = headerText.match(/\b\d{1,6}\s+[^,]+,\s*[A-Za-z][A-Za-z .-]+(?:,\s*[A-Z]{2})?/);
-      if (mAddr) address = mAddr[0];
-    }
-    po = firstNonEmpty([po, pickFromText('PO', headerText)]);
-    stage = firstNonEmpty([stage, pickFromText('Stage', headerText)]);
-    crew = firstNonEmpty([crew, pickFromText('Crew', headerText)]);
-
-    // Clean & fallback
-    if (name && / Stage:| PO:| Crew:| Address:/i.test(name)) {
-      name = name.split(/\s(?:Stage:|PO:|Crew:|Address:)/i)[0].trim();
-    }
-    if (isGenericHeading(name) || !name) {
-      name = address || (po ? ('PO ' + po) : 'Job');
-    }
-    return { name:name, address:address, po:po, stage:stage, crew:crew };
+    return info;
   }
-
   function renderHeaderHTML(info){
     function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-    var rows=[];
-    if(info.address) rows.push(['Address', info.address]);
-    if(info.po) rows.push(['PO', info.po]);
-    if(info.stage) rows.push(['Stage', info.stage]);
-    if(info.crew) rows.push(['Crew', info.crew]);
-    var table = rows.length ? ('<table class="meta"><tbody>'+rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>') : '';
-    return '<div class="head"><div class="title">'+esc(info.name||'Job')+'</div>'+table+'</div>';
+    var rows = [];
+    if (info.address) rows.push(['Address', info.address]);
+    if (info.po) rows.push(['PO', info.po]);
+    if (info.stage) rows.push(['Stage', info.stage]);
+    if (info.crew) rows.push(['Crew', info.crew]);
+    var table = rows.length ? (
+      '<table class="meta"><tbody>' + rows.map(function(r){
+        return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>';
+      }).join('') + '</tbody></table>'
+    ) : '';
+    var title = esc(info.name || 'Job');
+    return '<div class="head"><div class="title">'+title+'</div>'+table+'</div>';
   }
 
   // ---------- Contacts store ----------
-  function parseContact(s){
-    if (typeof s === 'object' && s && s.email) return {name: s.name || s.email, email: s.email};
-    var m = String(s).match(/^\s*(.*?)\s*<\s*([^>]+@[^>]+)\s*>\s*$/);
-    if (m) return {name: m[1] || m[2], email: m[2]};
-    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s))) return {name: String(s), email: String(s)};
-    return null;
-  }
   function loadContacts(){
-    var keys = ['binder_contacts','pe_contacts','pe35_contacts','contacts'];
-    var seen = {}, out = [];
-    keys.forEach(function(k){
-      try{
-        var raw = localStorage.getItem(k); if (!raw) return;
-        var val; try{ val = JSON.parse(raw); } catch(e){ val = raw; }
-        var arr = Array.isArray(val) ? val : (typeof val === 'string' ? val.split(/[,\n]/) : []);
-        arr.forEach(function(s){ var o = parseContact(s); if(o && !seen[o.email.toLowerCase()]){ seen[o.email.toLowerCase()] = true; out.push(o); } });
-      }catch(_){}
-    });
-    return out;
+    var raw = null;
+    try{ raw = localStorage.getItem('binder_contacts'); }catch(_){}
+    var list = [];
+    if (raw){
+      try{ list = JSON.parse(raw) || []; }catch(_){ list = []; }
+    }
+    return Array.isArray(list) ? list.filter(Boolean) : [];
   }
   function saveContacts(list){
     try{ localStorage.setItem('binder_contacts', JSON.stringify(list)); }catch(_){}
@@ -169,6 +81,7 @@
     box.appendChild(title); box.appendChild(note);
 
     var contacts = loadContacts();
+
     var listWrap=document.createElement('div'); listWrap.style.maxHeight='220px'; listWrap.style.overflowY='auto'; listWrap.style.border='1px solid #e5e7eb'; listWrap.style.borderRadius='8px'; listWrap.style.padding='8px'; listWrap.style.fontSize='16px';
     box.appendChild(listWrap);
 
@@ -216,12 +129,13 @@
       var info = jobInfo();
       var subj = (info.name || 'Job') + ' - Log Update';
 
-      var headerTxt=[]; if(info.name) headerTxt.push(info.name);
-      if(info.address) headerTxt.push('Address: '+info.address);
-      if(info.po) headerTxt.push('PO: '+info.po);
-      if(info.stage) headerTxt.push('Stage: '+info.stage);
-      if(info.crew) headerTxt.push('Crew: '+info.crew);
-      var textBody = headerTxt.join('\\n') + '\\n\\n' + notes.map(function(n){ return n.date + '\\n' + n.text + '\\n'; }).join('\\n');
+      // text + html bodies
+      var headerTxt = []; if(info.name) headerTxt.push(info.name);
+      if(info.address) headerTxt.push('Address: ' + info.address);
+      if(info.po) headerTxt.push('PO: ' + info.po);
+      if(info.stage) headerTxt.push('Stage: ' + info.stage);
+      if(info.crew) headerTxt.push('Crew: ' + info.crew);
+      var textBody = headerTxt.join('\n') + '\\n\\n' + notes.map(function(n){ return n.date + '\\n' + n.text + '\\n'; }).join('\\n');
 
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
       var htmlBody = renderHeaderHTML(info) + notes.map(function(n){
