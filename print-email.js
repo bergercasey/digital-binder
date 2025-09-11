@@ -184,28 +184,13 @@
 function ensureRowCheckboxes(container){
   try{
     var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
-    if (dates.length) {
-      dates.forEach(function(dateEl){
-        var sig = hashNode(dateEl);
-        if (dateEl.querySelector('input.pe_cb_row[data-bind="'+sig+'"]')) return;
-        var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-        // insert as the last child so it's immediately after the date text
-        dateEl.appendChild(cb);
-      });
-      return;
+    if (!dates.length && container){
+      dates = Array.prototype.slice.call(container.querySelectorAll('.note-date'));
     }
-  }catch(e){}
-  try{
-    var list = document.getElementById('notes-list') || container;
-    if(!list) return;
-    var items = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
-    items.forEach(function(it){
-      var d = it.querySelector('.note-date');
-      if(!d) return;
-      var sig = hashNode(d);
-      if (it.querySelector('input.pe_cb_row[data-bind="'+sig+'"]')) return;
-      var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
-      d.appendChild(cb);
+    dates.forEach(function(dateEl){
+      if (dateEl.querySelector('input.pe_cb_row')) return;
+      var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row';
+      dateEl.appendChild(cb);
     });
   }catch(e){}
 }
@@ -265,7 +250,9 @@ function ensureSelectAllInline(head, container){
   span.appendChild(document.createTextNode(' Select all'));
   head.appendChild(span);
   cb.addEventListener('change', function(){
-    Array.prototype.slice.call(container.querySelectorAll('.pe_cb_row')).forEach(function(x){ x.checked = cb.checked; });
+    var boxScope = container || (document.getElementById('notes-list') || document.body);
+    Array.prototype.slice.call(boxScope.querySelectorAll('input.pe_cb_row')).forEach(function(x){ x.checked = cb.checked; });
+  });
   });
   // Hide the old tip line if it exists
   try{
