@@ -309,7 +309,7 @@
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    const pb = $("print-job"); if (pb) pb.textContent = "Email/Print";
+    const pb = $("print-job"); if (pb) { pb.textContent = "Email/Print"; }
     const list = $("notes-list"); list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
