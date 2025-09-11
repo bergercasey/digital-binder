@@ -177,7 +177,54 @@
     box.value='';
   }
 
-  function boot(){
+  
+function ensureRowCheckboxes(container){
+  try{
+    var dates = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-date, .note-item .note-date'));
+    // If there is a "tip" line immediately under the Log heading, hide it to keep the row tight.
+    try{
+      var head = Array.prototype.slice.call(document.querySelectorAll('h1,h2,h3,h4')).find(function(h){ return (h.textContent||'').trim().toLowerCase() === P.headingText.toLowerCase(); });
+      if (head && head.nextElementSibling && /tip/i.test((head.nextElementSibling.textContent||''))) head.nextElementSibling.style.display='none';
+    }catch(e){}
+    if (dates.length) {
+      dates.forEach(function(dateEl){
+        var sig = hashNode(dateEl);
+        if (dateEl.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
+        var label = document.createElement('label'); label.className = 'pe-date-inline';
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pe_cb_row'; cb.setAttribute('data-bind', sig);
+        label.appendChild(cb);
+        dateEl.appendChild(label);
+      });
+      return;
+    }
+  }catch(e){}
+  // Fallback: try to guess rows and then locate a date-like element
+  try{
+    var rows = [];
+    if (container) {
+      if (/^(UL|OL)$/i.test(container.tagName)) { rows = Array.prototype.slice.call(container.children); }
+      else if (/^TABLE$/i.test(container.tagName)) { rows = Array.prototype.slice.call((container.tBodies[0]||container).querySelectorAll('tr')); }
+      else { rows = Array.prototype.slice.call(container.children); }
+    }
+    rows.forEach(function(row){
+      var dateEl = row.querySelector('.note-date,.date,.log-date,[data-date],time');
+      if(!dateEl){
+        var cand = Array.prototype.slice.call(row.querySelectorAll('*')).find(function(el){
+          return /\\b\\d{4}\\-\\d{2}\\-\\d{2}\\b|\\b\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}\\b/.test((el.textContent||''));
+        });
+        if (cand) dateEl = cand;
+      }
+      if(!dateEl) return;
+      var sig = hashNode(dateEl);
+      if (row.querySelector('.pe_cb_row[data-bind="'+sig+'"]')) return;
+      var label = document.createElement('label'); label.className = 'pe-date-inline';
+      var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_cb_row'; cb.setAttribute('data-bind', sig);
+      label.appendChild(cb);
+      dateEl.appendChild(label);
+    });
+  }catch(e){}
+}
+function boot(){
     try { if (typeof hideOldSelectionUI === 'function') hideOldSelectionUI(); } catch(e){}
     const container = document.querySelector('#notes-list') || document.querySelector('.notes') || document.querySelector('.logs') || document.querySelector('#entries') || document.querySelector('.entries') || document.body;
     const head = findHeading();
