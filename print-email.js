@@ -84,18 +84,35 @@
     return path.join('/');
   }
 
-  function replaceAllPrintButtons(){
-    const cands = P.printBtnSelectors.flatMap(sel=> Array.from(document.querySelectorAll(sel)));
-    cands.filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()))
-      .forEach(btn=>{
-        if(btn.dataset.pe35) return;
-        const clone=btn.cloneNode(true);
-        clone.textContent='Email/Print';
-        clone.dataset.pe35='1';
-        btn.parentNode.replaceChild(clone, btn);
-        clone.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true});
+  
+function replaceAllPrintButtons(){
+  try{
+    const cands = P.printBtnSelectors.flatMap(sel => Array.from(document.querySelectorAll(sel)));
+    cands
+      .filter(b => /^(print\s*selection|print)$/i.test((b.textContent||'').trim()))
+      .forEach(btn => {
+        if (!btn || btn.dataset.pe35) return;
+        const label = 'Email/Print';
+        const addHandler = (node)=>{
+          try{ node.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); }, {capture:true}); }catch(e){}
+        };
+        if (btn.parentNode) {
+          const clone = btn.cloneNode(true);
+          clone.textContent = label;
+          clone.dataset.pe35 = '1';
+          btn.parentNode.replaceChild(clone, btn);
+          addHandler(clone);
+        } else {
+          try{
+            btn.textContent = label;
+            btn.dataset.pe35 = '1';
+            addHandler(btn);
+          }catch(e){}
+        }
       });
-  }
+  }catch(e){}
+}
+
 
   function ensureModal(){
     if(document.getElementById('pe_overlay')) return;
