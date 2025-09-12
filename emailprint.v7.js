@@ -89,6 +89,17 @@
   }
 
   // --- Modal ---
+  function parseContact(s){
+    s = String(s||'').trim();
+    if (!s) return null;
+    var m = s.match(/^\s*(.*?)\s*<\s*([^>]+@[^>]+)\s*>\s*$/);
+    if (m) return {name: m[1] || m[2], email: m[2]};
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)) return {name: s, email: s};
+    return null;
+  }
+  function saveContacts(arr){
+    try{ localStorage.setItem('binder_contacts', JSON.stringify(arr)); }catch(_){}
+  }
   function loadContacts(){
     var keys=['binder_contacts','pe_contacts','pe35_contacts','contacts']; var seen={}, out=[];
     keys.forEach(function(k){
@@ -126,30 +137,52 @@
     box.appendChild(head);
 
     var wrap = el('div',{style:'padding:12px 14px;'});
+var addRow = el('div',{style:'display:flex;gap:8px;align-items:center;margin:0 0 10px 0;'});
+var addInput = el('input',{type:'text',placeholder:'Name <email@domain.com>',style:'flex:1;padding:6px 8px;border:1px solid #ddd;border-radius:6px'});
+var addBtn = el('button',{style:'border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;'},['Add']);
+addRow.appendChild(addInput); addRow.appendChild(addBtn); wrap.appendChild(addRow);
+
     var contacts = loadContacts();
-    if (!contacts.length){
-      wrap.appendChild(el('div',{style:'color:#666;margin-bottom:8px;'},['No saved contacts found. Add entries to localStorage key "binder_contacts" as "Name <email@…>" or plain emails, separated by commas or new lines.']));
-    } else {
-      wrap.appendChild(el('div',{style:'font-size:14px;margin-bottom:6px;color:#444;'},['Recipients:']));
-      contacts.forEach(function(c,i){
-        var row = el('label',{style:'display:flex;align-items:center;gap:8px;padding:3px 0;'});
-        var cb = el('input',{type:'checkbox', value:c.email, 'data-email':c.email});
-        var sp = el('span', null, [document.createTextNode(c.name + ' <'+c.email+'>')]);
-        row.appendChild(cb); row.appendChild(sp); wrap.appendChild(row);
-      });
-    }
+var listTitle = el('div',{style:'font-size:14px;margin-bottom:6px;color:#444;'},['Recipients:']);
+var listBox = el('div',{});
+wrap.appendChild(listTitle);
+wrap.appendChild(listBox);
+function renderList(){
+  listBox.innerHTML = '';
+  if(!contacts.length){ listBox.appendChild(el('div',{style:'color:#666;margin-bottom:8px;'},['No saved contacts yet. Add one above.'])); return; }
+  contacts.forEach(function(c){
+    var row = el('label',{style:'display:flex;align-items:center;gap:8px;padding:3px 0;'});
+    var cb = el('input',{type:'checkbox','data-email':c.email});
+    var sp = el('span', null, [document.createTextNode((c.name||c.email)+' <'+c.email+'>')]);
+    row.appendChild(cb); row.appendChild(sp); listBox.appendChild(row);
+  });
+}
+renderList();
+addBtn.addEventListener('click', function(){
+  var v = addInput.value.trim(); if(!v) return;
+  var o = parseContact(v); if(!o){ alert('Use Name <email@domain.com> or an email'); return; }
+  var dup = contacts.some(function(x){ return (x.email||'').toLowerCase()===o.email.toLowerCase(); });
+  if(!dup){ contacts.push(o); saveContacts(contacts); }
+  renderList(); addInput.value='';
+  // auto-select the newly added contact
+  var last = listBox.querySelector('input[data-email="'+o.email.replace(/"/g,'&quot;')+'"]');
+  if(last){ last.checked = true; }
+});
+
     box.appendChild(wrap);
 
     var foot = el('div',{style:'padding:12px 14px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;'});
     var btnPreview = el('button',{style:'border:1px solid #ccc;border-radius:6px;background:#f8f8f8;padding:6px 10px;cursor:pointer;'},['Preview']);
+    var btnPrint = el('button',{style:'border:1px solid #ccc;border-radius:6px;background:#f8f8f8;padding:6px 10px;cursor:pointer;'},['Print']);
     var btnSend = el('button',{style:'border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;'},['Send Email']);
-    foot.appendChild(btnPreview); foot.appendChild(btnSend);
+    foot.appendChild(btnPreview); foot.appendChild(btnPrint); foot.appendChild(btnSend);
     box.appendChild(foot);
 
     btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
+    btnPrint.addEventListener('click', function(){ openPreview(info, notes); });
 
     btnSend.addEventListener('click', async function(){
-      var to = Array.prototype.map.call(wrap.querySelectorAll('input[type="checkbox"]:checked'), function(n){ return n.getAttribute('data-email'); });
+      var to = Array.prototype.map.call(listBox.querySelectorAll('input[type="checkbox"]:checked'), function(n){ return n.getAttribute('data-email'); });
       if (!to.length){ alert('Pick at least one recipient.'); return; }
       var subject = (info.name||'Job Log') + ' - Log Update';
       // Text body
