@@ -120,105 +120,164 @@
     return out;
   }
 
-  function openModal(){
-    var info = jobInfo();
-    var notes = selectedNotes();
-    if (!notes.length){ alert('Select at least one log entry.'); return; }
+  
+function openModal(){
+  var info = jobInfo();
+  var notes = selectedNotes();
+  if (!notes.length){ alert('Select at least one log entry.'); return; }
 
-    var ov = el('div', {id:'epv7_ov', style:'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9999;'});
-    var box = el('div', {style:'position:absolute;top:10%;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;max-width:740px;width:92%;box-shadow:0 10px 30px rgba(0,0,0,0.2);'});
-    ov.appendChild(box);
-
-    var head = el('div', {style:'padding:12px 14px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;'});
-    head.appendChild(el('div',{style:'font-weight:700;font-size:16px'},[document.createTextNode('Email / Print')]));
-    var xbtn = el('button',{style:'border:1px solid #ddd;background:#f8f8f8;border-radius:6px;padding:4px 8px;cursor:pointer;'},['Close']);
-    xbtn.addEventListener('click', function(){ document.body.removeChild(ov); });
-    head.appendChild(xbtn);
-    box.appendChild(head);
-
-    var wrap = el('div',{style:'padding:12px 14px;'});
-var addRow = el('div',{style:'display:flex;gap:8px;align-items:center;margin:0 0 10px 0;'});
-var addInput = el('input',{type:'text',placeholder:'Name <email@domain.com>',style:'flex:1;padding:6px 8px;border:1px solid #ddd;border-radius:6px'});
-var addBtn = el('button',{style:'border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;'},['Add']);
-addRow.appendChild(addInput); addRow.appendChild(addBtn); wrap.appendChild(addRow);
-
-    var contacts = loadContacts();
-var listTitle = el('div',{style:'font-size:14px;margin-bottom:6px;color:#444;'},['Recipients:']);
-var listBox = el('div',{});
-wrap.appendChild(listTitle);
-wrap.appendChild(listBox);
-function renderList(){
-  listBox.innerHTML = '';
-  if(!contacts.length){ listBox.appendChild(el('div',{style:'color:#666;margin-bottom:8px;'},['No saved contacts yet. Add one above.'])); return; }
-  contacts.forEach(function(c){
-    var row = el('label',{style:'display:flex;align-items:center;gap:8px;padding:3px 0;'});
-    var cb = el('input',{type:'checkbox','data-email':c.email});
-    var sp = el('span', null, [document.createTextNode((c.name||c.email)+' <'+c.email+'>')]);
-    row.appendChild(cb); row.appendChild(sp); listBox.appendChild(row);
-  });
-}
-renderList();
-addBtn.addEventListener('click', function(){
-  var v = addInput.value.trim(); if(!v) return;
-  var o = parseContact(v); if(!o){ alert('Use Name <email@domain.com> or an email'); return; }
-  var dup = contacts.some(function(x){ return (x.email||'').toLowerCase()===o.email.toLowerCase(); });
-  if(!dup){ contacts.push(o); saveContacts(contacts); }
-  renderList(); addInput.value='';
-  // auto-select the newly added contact
-  var last = listBox.querySelector('input[data-email="'+o.email.replace(/"/g,'&quot;')+'"]');
-  if(last){ last.checked = true; }
-});
-
-    box.appendChild(wrap);
-
-    var foot = el('div',{style:'padding:12px 14px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;'});
-    var btnPreview = el('button',{style:'border:1px solid #ccc;border-radius:6px;background:#f8f8f8;padding:6px 10px;cursor:pointer;'},['Preview']);
-    var btnPrint = el('button',{style:'border:1px solid #ccc;border-radius:6px;background:#f8f8f8;padding:6px 10px;cursor:pointer;'},['Print']);
-    var btnSend = el('button',{style:'border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;'},['Send Email']);
-    foot.appendChild(btnPreview); foot.appendChild(btnPrint); foot.appendChild(btnSend);
-    box.appendChild(foot);
-
-    btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
-    btnPrint.addEventListener('click', function(){ openPreview(info, notes); });
-
-    btnSend.addEventListener('click', async function(){
-      var to = Array.prototype.map.call(listBox.querySelectorAll('input[type="checkbox"]:checked'), function(n){ return n.getAttribute('data-email'); });
-      if (!to.length){ alert('Pick at least one recipient.'); return; }
-      var subject = (info.name||'Job Log') + ' - Log Update';
-      // Text body
-      var lines = [];
-      if (info.name) lines.push('Job Name: ' + info.name);
-      if (info.address) lines.push('Address: ' + info.address);
-      if (info.po) lines.push('PO: ' + info.po);
-      if (info.stage) lines.push('Status: ' + info.stage);
-      lines.push('');
-      notes.forEach(function(n, i){
-        lines.push('Job Notes');
-        if (n.date) lines.push('Date: ' + n.date);
-        if (n.text) lines.push(n.text);
-        if (i < notes.length-1) lines.push('---');
-      });
-      var text = lines.join('\n');
-
-      // HTML body same as preview
-      var html = buildPreviewHTML(info, notes);
-      try{
-        var resp = await fetch('/.netlify/functions/send-email', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ to: to, subject: subject, text: text, html: html })
-        });
-        if (!resp.ok){ var t = await resp.text(); throw new Error(t||('HTTP '+resp.status)); }
-        alert('Email sent.');
-        document.body.removeChild(ov);
-      }catch(e){
-        alert('Email failed: ' + e.message);
-      }
-    });
-
-    ov.addEventListener('click', function(e){ if(e.target===ov) document.body.removeChild(ov); });
-    document.body.appendChild(ov);
+  function parseContact(s){
+    s = String(s||'').trim();
+    var m = s.match(/^\s*(.*?)\s*<\s*([^>]+@[^>]+)\s*>\s*$/);
+    if (m) return {name: m[1] || m[2], email: m[2]};
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)) return {name: s, email: s};
+    return null;
   }
+  function saveContacts(arr){
+    try{ localStorage.setItem('binder_contacts', JSON.stringify(arr)); }catch(_){}
+  }
+  function loadContacts(){
+    try{
+      var raw = localStorage.getItem('binder_contacts');
+      if (!raw) return [];
+      var val = JSON.parse(raw);
+      if (Array.isArray(val)) return val.filter(Boolean).map(function(v){
+        if (typeof v==='string') return parseContact(v);
+        return {name: v.name || v.email, email: v.email};
+      }).filter(Boolean);
+      if (typeof val==='string') return val.split(/[\n,]/).map(parseContact).filter(Boolean);
+      return [];
+    }catch(_){ return []; }
+  }
+
+  var ov = el('div', {id:'epv7_ov', style:'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9999;'});
+  var box = el('div', {style:'position:absolute;top:10%;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;max-width:820px;width:94%;box-shadow:0 10px 30px rgba(0,0,0,0.2);'});
+  ov.appendChild(box);
+
+  var head = el('div', {style:'padding:12px 14px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;'});
+  head.appendChild(el('div',{style:'font-weight:700;font-size:16px'},[document.createTextNode('Email / Print')]));
+  var xbtn = el('button',{style:'border:1px solid #ddd;background:#f8f8f8;border-radius:6px;padding:4px 8px;cursor:pointer;'},['Close']);
+  xbtn.addEventListener('click', function(){ document.body.removeChild(ov); });
+  head.appendChild(xbtn);
+  box.appendChild(head);
+
+  var wrap = el('div',{style:'padding:12px 14px;'});
+
+  // Add Contact (two inputs)
+  var addRow = el('div',{style:'display:grid;grid-template-columns: 1fr 1fr auto;gap:8px;align-items:center;margin:0 0 10px 0;'});
+  var nameInput = el('input',{type:'text',placeholder:'Name',style:'padding:6px 8px;border:1px solid #ddd;border-radius:6px'});
+  var emailInput = el('input',{type:'email',placeholder:'email@domain.com',style:'padding:6px 8px;border:1px solid #ddd;border-radius:6px'});
+  var addBtn = el('button',{style:'border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;'},['Add']);
+  addRow.appendChild(nameInput); addRow.appendChild(emailInput); addRow.appendChild(addBtn);
+  wrap.appendChild(addRow);
+
+  // List title
+  wrap.appendChild(el('div',{style:'font-size:14px;margin:6px 0;color:#444;'},['Recipients:']));
+
+  // Two-column list container
+  var listHeader = el('div',{style:'display:grid;grid-template-columns:24px 1fr 1.2fr 40px;gap:8px;padding:6px 4px;color:#666;font-size:12px;border-bottom:1px solid #eee;margin-bottom:4px;'});
+  listHeader.appendChild(el('div',{},[])); // checkbox col
+  listHeader.appendChild(el('div',{},[document.createTextNode('Name')]));
+  listHeader.appendChild(el('div',{},[document.createTextNode('Email')]));
+  listHeader.appendChild(el('div',{},[document.createTextNode('')])); // actions
+  wrap.appendChild(listHeader);
+
+  var listBox = el('div',{});
+  wrap.appendChild(listBox);
+
+  var contacts = loadContacts();
+
+  function renderList(){
+    listBox.innerHTML='';
+    if(!contacts.length){
+      listBox.appendChild(el('div',{style:'color:#666;margin:8px 0;'},['No saved contacts. Add one above.']));
+      return;
+    }
+    contacts.forEach(function(c, idx){
+      var row = el('div',{style:'display:grid;grid-template-columns:24px 1fr 1.2fr 40px;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px dashed #f0f0f0;'});
+      var cb = el('input',{type:'checkbox','data-email':c.email});
+      var nm = el('div',{style:'font-size:14px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'},[document.createTextNode(c.name||c.email)]);
+      var em = el('div',{style:'font-size:14px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'},[document.createTextNode(c.email)]);
+      var del = el('button',{title:'Remove',style:'border:1px solid #ddd;background:#fff;border-radius:6px;padding:4px 6px;cursor:pointer'},['🗑']);
+      del.addEventListener('click', function(){
+        contacts.splice(idx,1);
+        saveContacts(contacts); renderList();
+      });
+      row.appendChild(cb); row.appendChild(nm); row.appendChild(em); row.appendChild(del);
+      listBox.appendChild(row);
+    });
+  }
+  renderList();
+
+  // Add button logic
+  addBtn.addEventListener('click', function(){
+    var nm = (nameInput.value||'').trim();
+    var em = (emailInput.value||'').trim();
+    if(!em){ alert('Enter an email'); return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ alert('Enter a valid email'); return; }
+    if(!nm) nm = em;
+    var o = {name:nm, email:em};
+    var dup = contacts.some(function(x){ return (x.email||'').toLowerCase()===em.toLowerCase(); });
+    if(!dup){ contacts.push(o); saveContacts(contacts); }
+    renderList();
+    nameInput.value=''; emailInput.value='';
+    // auto-select newly added contact
+    var last = listBox.querySelector('input[data-email="'+em.replace(/"/g,'&quot;')+'"]');
+    if(last){ last.checked = true; }
+  });
+
+  box.appendChild(wrap);
+
+  var foot = el('div',{style:'padding:12px 14px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;'});
+  var btnPreview = el('button',{style:'border:1px solid #ccc;border-radius:6px;background:#f8f8f8;padding:6px 10px;cursor:pointer;'},['Preview']);
+  var btnPrint = el('button',{style:'border:1px solid #ccc;border-radius:6px;background:#f8f8f8;padding:6px 10px;cursor:pointer;'},['Print']);
+  var btnSend = el('button',{style:'border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;'},['Send Email']);
+  foot.appendChild(btnPreview); foot.appendChild(btnPrint); foot.appendChild(btnSend);
+  box.appendChild(foot);
+
+  btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
+  btnPrint.addEventListener('click', function(){ openPreview(info, notes); setTimeout(function(){ try{ window.focus(); }catch(_){ } }, 0); });
+
+  btnSend.addEventListener('click', async function(){
+    var to = Array.prototype.map.call(listBox.querySelectorAll('input[type="checkbox"]:checked'), function(n){ return n.getAttribute('data-email'); });
+    if (!to.length){ alert('Pick at least one recipient.'); return; }
+    var subject = (info.name||'Job Log') + ' - Log Update';
+
+    // text body
+    var lines = [];
+    if (info.name) lines.push('Job Name: ' + info.name);
+    if (info.address) lines.push('Address: ' + info.address);
+    if (info.po) lines.push('PO: ' + info.po);
+    if (info.stage) lines.push('Status: ' + info.stage);
+    lines.push('');
+    notes.forEach(function(n, i){
+      lines.push('Job Notes');
+      if (n.date) lines.push('Date: ' + n.date);
+      if (n.text) lines.push(n.text);
+      if (i < notes.length-1) lines.push('---');
+    });
+    var text = lines.join('\\n');
+
+    var html = buildPreviewHTML(info, notes);
+
+    try{
+      var resp = await fetch('/.netlify/functions/send-email', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ to: to, subject: subject, text: text, html: html })
+      });
+      if (!resp.ok){ var t = await resp.text(); throw new Error(t||('HTTP '+resp.status)); }
+      alert('Email sent.');
+      document.body.removeChild(ov);
+    }catch(e){
+      alert('Email failed: ' + e.message);
+    }
+  });
+
+  ov.addEventListener('click', function(e){ if(e.target===ov) document.body.removeChild(ov); });
+  document.body.appendChild(ov);
+}
+
 
   function isPrintNode(n){
     if(!n) return false;
