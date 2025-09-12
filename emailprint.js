@@ -128,10 +128,8 @@
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = '';
-      if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>';
-      var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
-      if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
+      var headerHtml=''; // v4 no header
+font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
       
       
       var htmlBody = headerHtml + notes.map(function(n){
@@ -169,7 +167,12 @@ btnPrint.addEventListener('click', function(){
       var w=window.open('','_blank');
       var info = jobInfo();
       var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
+      var html='<!doctype html><html><head><!-- EP v4 --><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}
+/* v4 tight log layout */
+.log-entry{margin:0 0 8px 0;padding:0;}
+.log-entry div{line-height:1.25;font-size:14px;}
+hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0;}
+</style></head><body><h1>'+ title +'</h1>';
       var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
       if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
@@ -202,7 +205,7 @@ btnPrint.addEventListener('click', function(){
     });
   }
   function renameButton(){
-    var btn = $('print-job'); if (btn) btn.textContent = 'Email/Print';
+    var btn = $('print-job'); if (btn) btn.textContent = 'Email/Print ✓'; // v4
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
