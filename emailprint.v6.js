@@ -83,24 +83,33 @@
     return out;
   }
 
+  
   function buildPreviewHTML(info, notes){
     function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
     var html = '<!doctype html><html><head><meta charset="utf-8"><title>Log Preview</title>' +
       '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
       '<style>body{font:15px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:16px;color:#111}' +
-      '.log-entry{margin:0 0 8px 0} .log-entry div{line-height:1.25;font-size:15px} hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0}' +
+      '.header{margin:0 0 10px 0} .header div{line-height:1.25} .muted{color:#555;font-size:13px}' +
+      '.entry{margin:0 0 10px 0} .entry .date{font-weight:600; color:#444; margin:0 0 2px 0}' +
+      'hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0}' +
       '</style></head><body>';
+
+    html += '<div class="header">'
+      + '<div><strong>' + esc(info.name||'') + '</strong></div>'
+      + '<div class="muted">' + (info.address? ('Address: ' + esc(info.address)) : '') 
+      + (info.po? ( (info.address? ' • ' : '') + 'PO: ' + esc(info.po)) : '')
+      + (info.stage? ( ((info.address||info.po)? ' • ' : '') + 'Status: ' + esc(info.stage)) : '')
+      + '</div>'
+      + '</div><hr>';
+
     html += notes.map(function(n){
-      return '<div class="log-entry">' +
-        '<div><strong>' + esc(info.name||'') + '</strong></div>' +
-        '<div>Address: ' + esc(info.address||'') + '</div>' +
-        '<div>PO: ' + esc(info.po||'') + '</div>' +
-        '<div>Status: ' + esc(info.stage||'') + '</div>' +
-        '<div>Date: ' + esc(n.date||'') + '</div>' +
-        '<div><strong>Job Notes</strong></div>' +
-        '<div>' + esc(n.text||'') + '</div>' +
-      '</div><hr>';
+      return '<div class="entry">'
+        + '<div class="date">' + esc(n.date||'') + '</div>'
+        + '<div><strong>Job Notes</strong></div>'
+        + '<div>' + esc(n.text||'') + '</div>'
+        + '</div><hr>';
     }).join('');
+
     html += '</body></html>';
     return html;
   }
