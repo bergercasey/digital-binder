@@ -18,14 +18,57 @@
     return (el.textContent||'').trim();
   }
 
+  
   function jobInfo(){
-    return {
-      name:   getVal($('#job-name')) || getVal($('#job-summary')) || document.title,
-      address:getVal($('#job-address')),
-      po:     getVal($('#job-po')),
-      stage:  getVal($('#job-stage'))
-    };
+    function getVal(el){
+      if (!el) return '';
+      var tag=(el.tagName||'').toUpperCase();
+      if (tag==='INPUT' || tag==='TEXTAREA') return (el.value||'').trim();
+      if (tag==='SELECT'){
+        var t=(el.selectedOptions && el.selectedOptions[0] && (el.selectedOptions[0].text||'')) || (el.value||'');
+        return String(t).trim();
+      }
+      return (el.textContent||'').trim();
+    }
+    function parseFromSummary(txt){
+      var out = {name:'', address:'', po:'', stage:''};
+      if (!txt) return out;
+      var s = String(txt).replace(/\u00A0/g,' ').replace(/\s+\n/g,'\n').trim();
+      var lines = s.split(/\n+/).map(function(x){return x.trim();}).filter(Boolean);
+      // name: first non-empty line
+      if (lines.length) out.name = lines[0];
+      // Stage, PO via regex
+      var m;
+      m = s.match(/Stage:\s*([^\n•]+)/i); if (m) out.stage = m[1].trim();
+      m = s.match(/\bPO[:#]?\s*([^\n•]+)/i); if (m) out.po = m[1].trim();
+      // Address: try to find a line that is not a label line
+      var addr = '';
+      for (var i=1;i<Math.min(lines.length,6);i++){
+        var L = lines[i];
+        if (!/^(Stage:|PO\b|Crew:|Last updated|Updated|Status:)/i.test(L) && L.length>2){ addr = L; break; }
+      }
+      out.address = addr;
+      return out;
+    }
+    var nameEl = document.getElementById('job-name');
+    var addrEl = document.getElementById('job-address');
+    var poEl = document.getElementById('job-po');
+    var stageEl = document.getElementById('job-stage');
+    var sumEl = document.getElementById('job-summary');
+    var name = getVal(nameEl);
+    var address = getVal(addrEl);
+    var po = getVal(poEl);
+    var stage = getVal(stageEl);
+    if ((!name || !address || !po || !stage) && sumEl){
+      var parsed = parseFromSummary(getVal(sumEl));
+      if (!name) name = parsed.name;
+      if (!address) address = parsed.address;
+      if (!po) po = parsed.po;
+      if (!stage) stage = parsed.stage;
+    }
+    return {name:name || document.title, address:address, po:po, stage:stage};
   }
+
 
   function selectedNotes(){
     var out=[];
@@ -44,8 +87,8 @@
     function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
     var html = '<!doctype html><html><head><meta charset="utf-8"><title>Log Preview</title>' +
       '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '<style>body{font:14px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:16px;color:#111}' +
-      '.log-entry{margin:0 0 8px 0} .log-entry div{line-height:1.25;font-size:14px} hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0}' +
+      '<style>body{font:15px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:16px;color:#111}' +
+      '.log-entry{margin:0 0 8px 0} .log-entry div{line-height:1.25;font-size:15px} hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0}' +
       '</style></head><body>';
     html += notes.map(function(n){
       return '<div class="log-entry">' +
