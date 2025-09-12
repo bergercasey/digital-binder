@@ -84,28 +84,33 @@
   }
 
   
+  
+  
   function buildPreviewHTML(info, notes){
     function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
     var html = '<!doctype html><html><head><meta charset="utf-8"><title>Log Preview</title>' +
       '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '<style>body{font:15px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:16px;color:#111}' +
-      '.header{margin:0 0 10px 0} .header div{line-height:1.25} .muted{color:#555;font-size:13px}' +
-      '.entry{margin:0 0 10px 0} .entry .date{font-weight:600; color:#444; margin:0 0 2px 0}' +
-      'hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0}' +
+      '<style>body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}' +
+      '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}' +
+      '.jobname{font-size:22px;font-weight:700}' +
+      '.jobfield{font-size:18px;color:#222}' +
+      '.entry{margin:0 0 16px 0}' +
+      '.entry .label{font-weight:700;font-size:18px;margin:0 0 4px 0}' +
+      '.entry .date{color:#000;margin:0 0 6px 0;font-size:16px}' +
+      'hr{border:none;border-top:1px solid #ccc;margin:12px 0}' +
       '</style></head><body>';
 
     html += '<div class="header">'
-      + '<div><strong>' + esc(info.name||'') + '</strong></div>'
-      + '<div class="muted">' + (info.address? ('Address: ' + esc(info.address)) : '') 
-      + (info.po? ( (info.address? ' • ' : '') + 'PO: ' + esc(info.po)) : '')
-      + (info.stage? ( ((info.address||info.po)? ' • ' : '') + 'Status: ' + esc(info.stage)) : '')
-      + '</div>'
+      + '<div class="jobname">' + esc(info.name||'') + '</div>'
+      + (info.address? '<div class="jobfield">Address: ' + esc(info.address) + '</div>' : '')
+      + (info.po? '<div class="jobfield">PO: ' + esc(info.po) + '</div>' : '')
+      + (info.stage? '<div class="jobfield">Status: ' + esc(info.stage) + '</div>' : '')
       + '</div><hr>';
 
     html += notes.map(function(n){
       return '<div class="entry">'
+        + '<div class="label">Job Notes</div>'
         + '<div class="date">' + esc(n.date||'') + '</div>'
-        + '<div><strong>Job Notes</strong></div>'
         + '<div>' + esc(n.text||'') + '</div>'
         + '</div><hr>';
     }).join('');
