@@ -73,7 +73,24 @@
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
-  function toast(msg, ms=1800) {
+  
+  // ---- Expose a safe global for deleting selected notes (used by email/print modal) ----
+  // matches: array of {date, text}
+  window.__binderDeleteSelectedNotes = function(matches){
+    try {
+      const j = currentJob(); if (!j || !Array.isArray(j.notes)) return false;
+      const want = new Set(matches.map(m => (String(m.date||'').trim()+'||'+String(m.text||'').trim())));
+      j.notes = (j.notes || []).filter(n => {
+        const d = (n && (n.d || n.date)) ? String(n.d || n.date).trim() : '';
+        const t = (n && (n.text || n.html)) ? String(n.text || n.html).trim().replace(/<[^>]+>/g,'').trim() : '';
+        const key = d+'||'+t;
+        return !want.has(key);
+      });
+      markUpdated(j); save(); renderPanel();
+      return true;
+    } catch (e) { console.warn('DeleteSelectedNotes failed:', e); return false; }
+  };
+function toast(msg, ms=1800) {
     const wrap = $("toast-wrap"); if (!wrap) return;
     const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
     wrap.appendChild(t);
