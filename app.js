@@ -73,24 +73,7 @@
   };
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
-  
-  // ---- Expose a safe global for deleting selected notes (used by email/print modal) ----
-  // matches: array of {date, text}
-  window.__binderDeleteSelectedNotes = function(matches){
-    try {
-      const j = currentJob(); if (!j || !Array.isArray(j.notes)) return false;
-      const want = new Set(matches.map(m => (String(m.date||'').trim()+'||'+String(m.text||'').trim())));
-      j.notes = (j.notes || []).filter(n => {
-        const d = (n && (n.d || n.date)) ? String(n.d || n.date).trim() : '';
-        const t = (n && (n.text || n.html)) ? String(n.text || n.html).trim().replace(/<[^>]+>/g,'').trim() : '';
-        const key = d+'||'+t;
-        return !want.has(key);
-      });
-      markUpdated(j); save(); renderPanel();
-      return true;
-    } catch (e) { console.warn('DeleteSelectedNotes failed:', e); return false; }
-  };
-function toast(msg, ms=1800) {
+  function toast(msg, ms=1800) {
     const wrap = $("toast-wrap"); if (!wrap) return;
     const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
     wrap.appendChild(t);
@@ -331,48 +314,11 @@ function toast(msg, ms=1800) {
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
-      /* moved note-date/body creation above for checkbox injection */
-      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = sanitizeHtml(obj.html) ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
-      // add per-note selection checkbox (for delete & bulk actions)
-      const sel = document.createElement("input"); sel.type = "checkbox"; sel.className = "note-chk";
-      sel.setAttribute("data-index", i);
-      d.prepend(sel);
-      item.appendChild(d); item.appendChild(body);
-      list.appendChild(item);
-
-      /* moved note-date/body creation above for checkbox injection */
+      const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
       list.appendChild(item);
     });
-    // Ensure a top-row with "Select all" exists above the list
-    (function(){
-      const listEl = $("notes-list"); if (!listEl) return;
-      let top = $("notes-top-row");
-      if (!top) {
-        top = document.createElement("div");
-        top.id = "notes-top-row";
-        top.style.display = "flex"; top.style.alignItems = "center"; top.style.gap = "10px";
-        top.style.margin = "6px 0";
-        const wrap = document.createElement("label"); wrap.style.display = "inline-flex"; wrap.style.alignItems = "center"; wrap.style.gap = "6px";
-        const all = document.createElement("input"); all.type = "checkbox"; all.id = "notes-select-all";
-        const sp = document.createElement("span"); sp.textContent = "Select all";
-        wrap.appendChild(all); wrap.appendChild(sp);
-        top.appendChild(wrap);
-        listEl.parentNode.insertBefore(top, listEl);
-        all.addEventListener("change", (e)=>{
-          const on = !!e.target.checked;
-          Array.from(listEl.querySelectorAll(".note-chk")).forEach(cb => cb.checked = on);
-        });
-      } else {
-        const all = $("notes-select-all");
-        if (all) {
-          const boxes = Array.from(document.querySelectorAll("#notes-list .note-chk"));
-          all.checked = boxes.length > 0 && boxes.every(cb => cb.checked);
-        }
-      }
-    })();
-
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";$("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
@@ -415,34 +361,6 @@ function toast(msg, ms=1800) {
       item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
       list.appendChild(item);
     });
-    // Ensure a top-row with "Select all" exists above the list
-    (function(){
-      const listEl = $("notes-list"); if (!listEl) return;
-      let top = $("notes-top-row");
-      if (!top) {
-        top = document.createElement("div");
-        top.id = "notes-top-row";
-        top.style.display = "flex"; top.style.alignItems = "center"; top.style.gap = "10px";
-        top.style.margin = "6px 0";
-        const wrap = document.createElement("label"); wrap.style.display = "inline-flex"; wrap.style.alignItems = "center"; wrap.style.gap = "6px";
-        const all = document.createElement("input"); all.type = "checkbox"; all.id = "notes-select-all";
-        const sp = document.createElement("span"); sp.textContent = "Select all";
-        wrap.appendChild(all); wrap.appendChild(sp);
-        top.appendChild(wrap);
-        listEl.parentNode.insertBefore(top, listEl);
-        all.addEventListener("change", (e)=>{
-          const on = !!e.target.checked;
-          Array.from(listEl.querySelectorAll(".note-chk")).forEach(cb => cb.checked = on);
-        });
-      } else {
-        const all = $("notes-select-all");
-        if (all) {
-          const boxes = Array.from(document.querySelectorAll("#notes-list .note-chk"));
-          all.checked = boxes.length > 0 && boxes.every(cb => cb.checked);
-        }
-      }
-    })();
-
     count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
     state.ui.archiveSelected = selected;
     updateDeleteBtn();
@@ -870,26 +788,6 @@ $("archive-job").addEventListener("click", () => {
     renderAll();
   }
 
-  // Add a 'Delete Selected' button next to 'Add Note' in the Log controls
-  (function(){
-    const addBtn = $("add-note");
-    if (addBtn && !document.getElementById("delete-notes")) {
-      const del = document.createElement("button");
-      del.id = "delete-notes"; del.className = "danger"; del.textContent = "Delete Selected";
-      del.style.marginLeft = "8px";
-      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
-      del.addEventListener("click", () => {
-        const j = currentJob(); if (!j || !Array.isArray(j.notes)) return;
-        const listEl = $("notes-list"); if (!listEl) return;
-        const checks = Array.from(listEl.querySelectorAll(".note-chk"));
-        const toDeleteIdx = new Set(checks.filter(c => c.checked).map(c => parseInt(c.getAttribute("data-index"), 10)).filter(n => !isNaN(n)));
-        if (toDeleteIdx.size === 0) { alert("Select at least one log entry."); return; }
-        j.notes = (j.notes || []).filter((_, idx) => !toDeleteIdx.has(idx));
-        markUpdated(j); save(); renderPanel();
-      });
-    }
-  })();
-
   
   // Global delegated handler for Edit Job (more reliable on iPad/touch)
   document.addEventListener("click", (ev) => {
@@ -1037,3 +935,108 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
+
+/* --- begin: non-invasive notes UI enhancer (checkboxes + delete selected) --- */
+(function(){
+  function $id(x){ return document.getElementById(x); }
+
+  function addSelectAllRow() {
+    var list = $id('notes-list'); if (!list || !list.parentNode) return;
+    if ($id('notes-top-row')) return;
+    var top = document.createElement('div');
+    top.id = 'notes-top-row';
+    top.style.display = 'flex';
+    top.style.alignItems = 'center';
+    top.style.gap = '10px';
+    top.style.margin = '6px 0';
+    var label = document.createElement('label');
+    label.style.display = 'inline-flex';
+    label.style.alignItems = 'center';
+    label.style.gap = '6px';
+    var all = document.createElement('input');
+    all.type = 'checkbox';
+    all.id = 'notes-select-all';
+    var sp = document.createElement('span');
+    sp.textContent = 'Select all';
+    label.appendChild(all); label.appendChild(sp);
+    top.appendChild(label);
+    list.parentNode.insertBefore(top, list);
+    all.addEventListener('change', function(e){
+      var on = !!e.target.checked;
+      Array.prototype.forEach.call(list.querySelectorAll('.note-item .note-date input.note-chk'), function(cb){
+        cb.checked = on;
+      });
+    });
+  }
+
+  function enhanceNotesList() {
+    var list = $id('notes-list'); if (!list) return;
+    // add a checkbox to each note row (prepend to date)
+    Array.prototype.forEach.call(list.querySelectorAll('.note-item'), function(item){
+      var dateEl = item.querySelector('.note-date'); if (!dateEl) return;
+      if (!dateEl.querySelector('input.note-chk')) {
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'note-chk';
+        cb.style.marginRight = '6px';
+        dateEl.insertBefore(cb, dateEl.firstChild);
+      }
+    });
+    addSelectAllRow();
+  }
+
+  function addDeleteButton() {
+    var addBtn = $id('add-note'); if (!addBtn) return;
+    if ($id('delete-notes')) return;
+    var del = document.createElement('button');
+    del.id = 'delete-notes';
+    del.className = 'danger';
+    del.textContent = 'Delete Selected';
+    del.style.marginLeft = '8px';
+    addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
+    del.addEventListener('click', function(){
+      try {
+        var list = $id('notes-list'); if (!list) return;
+        var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
+        var toDeleteIdx = new Set();
+        rows.forEach(function(row, idx){
+          var cb = row.querySelector('.note-date input.note-chk');
+          if (cb && cb.checked) toDeleteIdx.add(idx);
+        });
+        if (toDeleteIdx.size === 0) { alert('Select at least one log entry.'); return; }
+        // Access current job notes via app's existing helpers
+        if (typeof currentJob !== 'function') { alert('Unable to access current job.'); return; }
+        var j = currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No job or notes found.'); return; }
+        j.notes = (j.notes || []).filter(function(_n, i){ return !toDeleteIdx.has(i); });
+        if (typeof markUpdated === 'function') markUpdated(j);
+        if (typeof save === 'function') save();
+        if (typeof renderPanel === 'function') renderPanel();
+      } catch(e){
+        console.warn('Delete Selected failed', e);
+        alert('Delete failed.');
+      }
+    });
+  }
+
+  function initEnhancer(){
+    enhanceNotesList();
+    addDeleteButton();
+  }
+
+  // Run on DOM ready and whenever the panel re-renders
+  document.addEventListener('DOMContentLoaded', initEnhancer);
+  // Observe changes to #notes-list to reapply checkboxes after renders
+  var mo = new MutationObserver(function(){ enhanceNotesList(); });
+  var moStart = function(){
+    var list = document.getElementById('notes-list');
+    if (list) { mo.observe(list, { childList: true, subtree: true }); }
+  };
+  document.addEventListener('DOMContentLoaded', moStart);
+  // Also poll a few times in case UI builds after async render
+  var tries = 0, t = setInterval(function(){
+    initEnhancer();
+    moStart();
+    tries++; if (tries > 10) clearInterval(t);
+  }, 400);
+})();
+/* --- end: non-invasive notes UI enhancer --- */
