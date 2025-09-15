@@ -70,53 +70,6 @@
     var title = document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent='Email / Print';
     var note = document.createElement('div'); note.style.fontSize='13px'; note.style.color='#555'; note.style.marginBottom='10px'; note.textContent='Choose recipients to email selected log entries, or print the selection.';
     box.appendChild(title); box.appendChild(note);
-    // --- Controls row: Select All + Delete Selected ---
-    var controls = document.createElement('div');
-    controls.style.display='flex'; controls.style.alignItems='center'; controls.style.gap='12px';
-    controls.style.margin='10px 0 6px';
-    var selWrap = document.createElement('label');
-    selWrap.style.display='inline-flex'; selWrap.style.alignItems='center'; selWrap.style.gap='6px';
-    var selAll = document.createElement('input'); selAll.type='checkbox'; selAll.id='ep_sel_all';
-    var selTxt = document.createElement('span'); selTxt.textContent='Select all';
-    selWrap.appendChild(selAll); selWrap.appendChild(selTxt);
-    var delBtn = document.createElement('button'); delBtn.className='btn danger'; delBtn.textContent='Delete Selected';
-    delBtn.title = 'Delete the checked log entries';
-    controls.appendChild(selWrap); controls.appendChild(delBtn);
-    box.appendChild(controls);
-
-    // Ensure each note row has a checkbox
-    var items = qsa('#notes-list .note-item');
-    items.forEach(function(it){
-      var dateEl = it.querySelector('.note-date');
-      if (!dateEl) return;
-      var has = dateEl.querySelector('input.pe_row_chk');
-      if (!has) {
-        var cb = document.createElement('input'); cb.type='checkbox'; cb.className='pe_row_chk';
-        cb.style.marginRight='6px';
-        dateEl.insertBefore(cb, dateEl.firstChild);
-      }
-    });
-
-    // select-all behavior
-    selAll.addEventListener('change', function(e){
-      var set = !!e.target.checked;
-      qsa('#notes-list .note-item .note-date input.pe_row_chk').forEach(function(x){ x.checked = set; });
-    });
-
-    // delete-selected behavior
-    delBtn.addEventListener('click', function(){
-      var notes = getSelectedNotes();
-      if (!notes.length) { alert('Select at least one log entry to delete.'); return; }
-      if (!window.__binderDeleteSelectedNotes) { alert('Delete not available in this view.'); return; }
-      var ok = window.__binderDeleteSelectedNotes(notes);
-      if (ok) {
-        // Close the modal and reflect changes
-        if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
-      } else {
-        alert('Delete failed.');
-      }
-    });
-
 
     var contacts = loadContacts();
 

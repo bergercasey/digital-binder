@@ -331,11 +331,48 @@ function toast(msg, ms=1800) {
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
-      const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
+      /* moved note-date/body creation above for checkbox injection */
+      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = sanitizeHtml(obj.html) ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
+      // add per-note selection checkbox (for delete & bulk actions)
+      const sel = document.createElement("input"); sel.type = "checkbox"; sel.className = "note-chk";
+      sel.setAttribute("data-index", i);
+      d.prepend(sel);
+      item.appendChild(d); item.appendChild(body);
+      list.appendChild(item);
+
+      /* moved note-date/body creation above for checkbox injection */
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
       list.appendChild(item);
     });
+    // Ensure a top-row with "Select all" exists above the list
+    (function(){
+      const listEl = $("notes-list"); if (!listEl) return;
+      let top = $("notes-top-row");
+      if (!top) {
+        top = document.createElement("div");
+        top.id = "notes-top-row";
+        top.style.display = "flex"; top.style.alignItems = "center"; top.style.gap = "10px";
+        top.style.margin = "6px 0";
+        const wrap = document.createElement("label"); wrap.style.display = "inline-flex"; wrap.style.alignItems = "center"; wrap.style.gap = "6px";
+        const all = document.createElement("input"); all.type = "checkbox"; all.id = "notes-select-all";
+        const sp = document.createElement("span"); sp.textContent = "Select all";
+        wrap.appendChild(all); wrap.appendChild(sp);
+        top.appendChild(wrap);
+        listEl.parentNode.insertBefore(top, listEl);
+        all.addEventListener("change", (e)=>{
+          const on = !!e.target.checked;
+          Array.from(listEl.querySelectorAll(".note-chk")).forEach(cb => cb.checked = on);
+        });
+      } else {
+        const all = $("notes-select-all");
+        if (all) {
+          const boxes = Array.from(document.querySelectorAll("#notes-list .note-chk"));
+          all.checked = boxes.length > 0 && boxes.every(cb => cb.checked);
+        }
+      }
+    })();
+
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";$("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
@@ -378,6 +415,34 @@ function toast(msg, ms=1800) {
       item.appendChild(cb); item.appendChild(main); item.appendChild(openBtn);
       list.appendChild(item);
     });
+    // Ensure a top-row with "Select all" exists above the list
+    (function(){
+      const listEl = $("notes-list"); if (!listEl) return;
+      let top = $("notes-top-row");
+      if (!top) {
+        top = document.createElement("div");
+        top.id = "notes-top-row";
+        top.style.display = "flex"; top.style.alignItems = "center"; top.style.gap = "10px";
+        top.style.margin = "6px 0";
+        const wrap = document.createElement("label"); wrap.style.display = "inline-flex"; wrap.style.alignItems = "center"; wrap.style.gap = "6px";
+        const all = document.createElement("input"); all.type = "checkbox"; all.id = "notes-select-all";
+        const sp = document.createElement("span"); sp.textContent = "Select all";
+        wrap.appendChild(all); wrap.appendChild(sp);
+        top.appendChild(wrap);
+        listEl.parentNode.insertBefore(top, listEl);
+        all.addEventListener("change", (e)=>{
+          const on = !!e.target.checked;
+          Array.from(listEl.querySelectorAll(".note-chk")).forEach(cb => cb.checked = on);
+        });
+      } else {
+        const all = $("notes-select-all");
+        if (all) {
+          const boxes = Array.from(document.querySelectorAll("#notes-list .note-chk"));
+          all.checked = boxes.length > 0 && boxes.every(cb => cb.checked);
+        }
+      }
+    })();
+
     count.textContent = rows.length ? `${rows.length} archived` : "No archived jobs";
     state.ui.archiveSelected = selected;
     updateDeleteBtn();
@@ -804,6 +869,26 @@ $("archive-job").addEventListener("click", () => {
     state.ui.selectedJobId = null;
     renderAll();
   }
+
+  // Add a 'Delete Selected' button next to 'Add Note' in the Log controls
+  (function(){
+    const addBtn = $("add-note");
+    if (addBtn && !document.getElementById("delete-notes")) {
+      const del = document.createElement("button");
+      del.id = "delete-notes"; del.className = "danger"; del.textContent = "Delete Selected";
+      del.style.marginLeft = "8px";
+      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
+      del.addEventListener("click", () => {
+        const j = currentJob(); if (!j || !Array.isArray(j.notes)) return;
+        const listEl = $("notes-list"); if (!listEl) return;
+        const checks = Array.from(listEl.querySelectorAll(".note-chk"));
+        const toDeleteIdx = new Set(checks.filter(c => c.checked).map(c => parseInt(c.getAttribute("data-index"), 10)).filter(n => !isNaN(n)));
+        if (toDeleteIdx.size === 0) { alert("Select at least one log entry."); return; }
+        j.notes = (j.notes || []).filter((_, idx) => !toDeleteIdx.has(idx));
+        markUpdated(j); save(); renderPanel();
+      });
+    }
+  })();
 
   
   // Global delegated handler for Edit Job (more reliable on iPad/touch)
