@@ -788,6 +788,43 @@ $("archive-job").addEventListener("click", () => {
     renderAll();
   }
 
+  // === Minimal: Add Delete Selected button that uses existing print checkboxes (pe_row_chk) ===
+  (function(){
+    function installDeleteBtn(){
+      var addBtn = document.getElementById('add-note');
+      if (!addBtn || document.getElementById('delete-notes')) return;
+      var del = document.createElement('button');
+      del.id = 'delete-notes'; del.className = 'danger'; del.textContent = 'Delete Selected';
+      del.style.marginLeft = '8px';
+      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
+    }
+    function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
+    onReady(installDeleteBtn);
+    var tries=0, t=setInterval(function(){ installDeleteBtn(); tries++; if(tries>=8) clearInterval(t); }, 400);
+    document.addEventListener('click', function(e){
+      var btn = e.target && (e.target.id === 'delete-notes' ? e.target : (e.target.closest && e.target.closest('#delete-notes')));
+      if (!btn) return;
+      try{
+        var j = currentJob && currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No job or notes found.'); return; }
+        var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found.'); return; }
+        var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
+        var toDelete = new Set();
+        rows.forEach(function(row, idx){
+          var cb = row.querySelector('.note-date input.pe_row_chk');
+          if (cb && cb.checked) toDelete.add(idx);
+        });
+        if (toDelete.size === 0) { alert('Select at least one log entry.'); return; }
+        j.notes = (j.notes || []).filter(function(_n, i){ return !toDelete.has(i); });
+        if (typeof markUpdated === 'function') markUpdated(j);
+        if (typeof save === 'function') save();
+        if (typeof renderPanel === 'function') renderPanel();
+      }catch(err){
+        console.warn('Delete Selected failed:', err);
+        alert('Delete failed.');
+      }
+    });
+  })();
+
   
   // Global delegated handler for Edit Job (more reliable on iPad/touch)
   document.addEventListener("click", (ev) => {
@@ -935,108 +972,3 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
-
-/* --- begin: non-invasive notes UI enhancer (checkboxes + delete selected) --- */
-(function(){
-  function $id(x){ return document.getElementById(x); }
-
-  function addSelectAllRow() {
-    var list = $id('notes-list'); if (!list || !list.parentNode) return;
-    if ($id('notes-top-row')) return;
-    var top = document.createElement('div');
-    top.id = 'notes-top-row';
-    top.style.display = 'flex';
-    top.style.alignItems = 'center';
-    top.style.gap = '10px';
-    top.style.margin = '6px 0';
-    var label = document.createElement('label');
-    label.style.display = 'inline-flex';
-    label.style.alignItems = 'center';
-    label.style.gap = '6px';
-    var all = document.createElement('input');
-    all.type = 'checkbox';
-    all.id = 'notes-select-all';
-    var sp = document.createElement('span');
-    sp.textContent = 'Select all';
-    label.appendChild(all); label.appendChild(sp);
-    top.appendChild(label);
-    list.parentNode.insertBefore(top, list);
-    all.addEventListener('change', function(e){
-      var on = !!e.target.checked;
-      Array.prototype.forEach.call(list.querySelectorAll('.note-item .note-date input.note-chk'), function(cb){
-        cb.checked = on;
-      });
-    });
-  }
-
-  function enhanceNotesList() {
-    var list = $id('notes-list'); if (!list) return;
-    // add a checkbox to each note row (prepend to date)
-    Array.prototype.forEach.call(list.querySelectorAll('.note-item'), function(item){
-      var dateEl = item.querySelector('.note-date'); if (!dateEl) return;
-      if (!dateEl.querySelector('input.note-chk')) {
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'note-chk';
-        cb.style.marginRight = '6px';
-        dateEl.insertBefore(cb, dateEl.firstChild);
-      }
-    });
-    addSelectAllRow();
-  }
-
-  function addDeleteButton() {
-    var addBtn = $id('add-note'); if (!addBtn) return;
-    if ($id('delete-notes')) return;
-    var del = document.createElement('button');
-    del.id = 'delete-notes';
-    del.className = 'danger';
-    del.textContent = 'Delete Selected';
-    del.style.marginLeft = '8px';
-    addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
-    del.addEventListener('click', function(){
-      try {
-        var list = $id('notes-list'); if (!list) return;
-        var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
-        var toDeleteIdx = new Set();
-        rows.forEach(function(row, idx){
-          var cb = row.querySelector('.note-date input.note-chk');
-          if (cb && cb.checked) toDeleteIdx.add(idx);
-        });
-        if (toDeleteIdx.size === 0) { alert('Select at least one log entry.'); return; }
-        // Access current job notes via app's existing helpers
-        if (typeof currentJob !== 'function') { alert('Unable to access current job.'); return; }
-        var j = currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No job or notes found.'); return; }
-        j.notes = (j.notes || []).filter(function(_n, i){ return !toDeleteIdx.has(i); });
-        if (typeof markUpdated === 'function') markUpdated(j);
-        if (typeof save === 'function') save();
-        if (typeof renderPanel === 'function') renderPanel();
-      } catch(e){
-        console.warn('Delete Selected failed', e);
-        alert('Delete failed.');
-      }
-    });
-  }
-
-  function initEnhancer(){
-    enhanceNotesList();
-    addDeleteButton();
-  }
-
-  // Run on DOM ready and whenever the panel re-renders
-  document.addEventListener('DOMContentLoaded', initEnhancer);
-  // Observe changes to #notes-list to reapply checkboxes after renders
-  var mo = new MutationObserver(function(){ enhanceNotesList(); });
-  var moStart = function(){
-    var list = document.getElementById('notes-list');
-    if (list) { mo.observe(list, { childList: true, subtree: true }); }
-  };
-  document.addEventListener('DOMContentLoaded', moStart);
-  // Also poll a few times in case UI builds after async render
-  var tries = 0, t = setInterval(function(){
-    initEnhancer();
-    moStart();
-    tries++; if (tries > 10) clearInterval(t);
-  }, 400);
-})();
-/* --- end: non-invasive notes UI enhancer --- */
