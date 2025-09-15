@@ -461,7 +461,22 @@ function renderAll() {
     else job.notes.push({ d: ymd(), ...(payload || {}) });
   }
 
-  const save = debounce(async () => {
+  
+  function ensureSystemLog(job){
+    job.notes = job.notes || [];
+    // If first note isn't a system log, create it
+    if (!job.notes.length || !job.notes[0] || !job.notes[0].sys){
+      job.notes.unshift({ d: ymd(), text: "Created", sys: true });
+    }
+  }
+  function appendSystemLog(job, line){
+    ensureSystemLog(job);
+    var stamp = new Date().toLocaleDateString();
+    var entry = "[" + stamp + "] " + line;
+    var n = job.notes[0];
+    n.text = (n.text ? (n.text + "\n" + entry) : entry);
+  }
+const save = debounce(async () => {
     status("Saving…");
     const payload = { ...state, version: 17 };
     try {
@@ -669,6 +684,7 @@ function renderAll() {
       const c = currentContractor(); if (!c) return;
       const j = { id: uuid(), name: "New Job", stage: "Bid", crew: [], notes: [], createdAt: Date.now(), updatedAt: null, po: "", address: "", ready: false, archived: false };
       c.jobs = c.jobs || []; c.jobs.push(j);
+      ensureSystemLog(j);
       state.ui.selectedJobId = j.id;
       // Switch to edit mode for brand-new jobs so fields are visible
       state.ui.editing = true;
@@ -689,7 +705,7 @@ $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
       j.archived = !j.archived;
-      pushNote(j, j.archived ? "Archived" : "Un-archived");
+      appendSystemLog(j, j.archived ? "Archived" : "Un-archived");
       markUpdated(j); save(); renderAll();
       toast(j.archived ? "Job archived" : "Job un-archived");
     });
@@ -742,7 +758,7 @@ $("archive-job").addEventListener("click", () => {
       const newStage = e.target.value;
       const prev = j.stage;
       j.stage = newStage;
-      if (j.initComplete && newStage !== prev) pushNote(j, `Stage changed to ${j.stage}`);
+      if (j.initComplete && newStage !== prev) appendSystemLog(j, "Status changed to " + j.stage);
       markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString(); renderTabs(); if (j.initComplete) toast("Stage updated");
     });
 
