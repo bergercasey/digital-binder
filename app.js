@@ -310,15 +310,79 @@
     });
 
     const pb = $("print-job"); if (pb) { pb.textContent = "Email/Print"; }
-    const list = $("notes-list"); list.innerHTML = "";
+    
+    const list = $("notes-list"); 
+    list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
-      const item = document.createElement("div"); item.className = "note-item";
-      const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
-      const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
-      item.appendChild(d); item.appendChild(body);
+      const item = document.createElement("div"); 
+      item.className = "note-item";
+
+      const top = document.createElement("div"); 
+      top.style.display = "flex"; 
+      top.style.justifyContent = "space-between"; 
+      top.style.alignItems = "center";
+
+      const d = document.createElement("div"); 
+      d.className = "note-date"; 
+      d.textContent = obj.d || ymd();
+
+      const actions = document.createElement("div"); 
+      actions.style.display = "flex"; 
+      actions.style.gap = "6px";
+
+      const btnEdit = document.createElement("button"); 
+      btnEdit.textContent = "Edit"; 
+      btnEdit.style.border = "1px solid #ddd"; 
+      btnEdit.style.background = "#f8f8f8"; 
+      btnEdit.style.borderRadius = "6px"; 
+      btnEdit.style.padding = "2px 6px"; 
+      btnEdit.style.cursor = "pointer";
+
+      const btnDel = document.createElement("button"); 
+      btnDel.textContent = "Delete"; 
+      btnDel.style.border = "1px solid #ddd"; 
+      btnDel.style.background = "#fff"; 
+      btnDel.style.borderRadius = "6px"; 
+      btnDel.style.padding = "2px 6px"; 
+      btnDel.style.cursor = "pointer";
+
+      actions.appendChild(btnEdit); 
+      actions.appendChild(btnDel);
+
+      top.appendChild(d); 
+      top.appendChild(actions);
+
+      const body = document.createElement("div"); 
+      body.className = "note-text"; 
+      body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
+
+      item.appendChild(top); 
+      item.appendChild(body);
+
+      btnEdit.addEventListener("click", () => {
+        const current = obj.html ? obj.html : (obj.text || "");
+        const next = prompt("Edit note:", current);
+        if (next == null) return;
+        delete obj.html; 
+        obj.text = next;
+        j.notes[i] = obj; 
+        markUpdated(j); 
+        save(); 
+        renderPanel();
+      });
+
+      btnDel.addEventListener("click", () => {
+        if (!confirm("Delete this note?")) return;
+        j.notes.splice(i, 1);
+        markUpdated(j); 
+        save(); 
+        renderPanel();
+      });
+
       list.appendChild(item);
     });
+});
     $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";$("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
