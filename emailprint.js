@@ -281,15 +281,28 @@ function openModal(){
 
   function isPrintNode(n){ return !!(n && n.id === 'print-job'); }
   function intercept(){
-  function handler(e){
-    var t = e.target && e.target.closest ? e.target.closest('#print-job') : e.target;
-    if (matchPrintNode(t)) { e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }
-  }
-  ['click','touchstart','pointerdown','mousedown'].forEach(function(tp){ document.addEventListener(tp, handler, true); });
-}
-['touchstart','pointerdown','mousedown','click'].forEach(function(tp){ document.addEventListener(tp, handler, true); });
+    function handler(e){
+      var t = e.target && e.target.closest ? e.target.closest('button, a[role="button"], #print-job') : e.target;
+      if (isPrintNode(t)){
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        openModal();
+      }
+    }
+    ['touchstart','pointerdown','mousedown','click'].forEach(function(tp){ document.addEventListener(tp, handler, true); });
   }
 
   function rename(){}
-  ready(function(){ intercept(); });
+  
+  // Ensure direct binding to #print-job (backup to intercept), no renaming or layout change
+  function ensureDirectBind(){
+    function handler(e){ e.preventDefault(); e.stopImmediatePropagation && e.stopImmediatePropagation(); e.stopPropagation && e.stopPropagation(); openModal(); }
+    var btn = document.getElementById('print-job');
+    if (btn && !btn.__epBound){
+      btn.addEventListener('click', handler, true);
+      btn.addEventListener('touchstart', handler, true);
+      btn.__epBound = true;
+    }
+  }
+  ready(function(){ ensureDirectBind(); });
+ready(function(){ intercept(); });
 })();
