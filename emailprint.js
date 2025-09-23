@@ -237,20 +237,40 @@ function openModal(){
 
   btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
   btnPrint.addEventListener('click', function(){
-      // OS print (no preview): render selected notes into a hidden sheet and call window.print()
-      var notes = getSelectedNotes(); if (!notes.length){ alert('Select at least one log entry.'); return; }
+      // Close modal overlay to avoid stacking/dimming
+      try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch(_){}
+
+      // Get selected notes
+      var notes = selectedNotes(); if (!notes.length){ alert('Select at least one log entry.'); return; }
+
+      // Target hidden print sheet
       var sheet = document.getElementById('print-sheet');
       if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
+
+      // Build print HTML (preserve note HTML if present)
       var info = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
+      function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
       var title = esc(info.name || currentJobTitle());
       var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
+
+      var items = notes.map(function(n){
+        var content = (n.html && n.html.trim()) ? n.html : txtToHtml(n.text||'');
+        return '<div class="ep-print-note">'
+             +   '<div class="ep-print-date">'+esc(n.date||'')+'</div>'
+             +   '<div class="ep-print-text">'+ content +'</div>'
+             + '</div>';
+      }).join('');
+
       var html = '<div class="ep-print-wrap">'
                +   '<h1 class="ep-print-h1">' + title + '</h1>'
                +   (meta.length ? '<div class="ep-print-meta">' + meta.join(' • ') + '</div>' : '')
-               +   notes.map(function(n){ return '<div class="ep-print-note"><div class="ep-print-date">'+esc(n.date||'')+'</div><div class="ep-print-text">'+esc(n.text||'').replace(/\\n/g,'<br>')+'</div></div>'; }).join('')
+               +   items
                + '</div>';
+
       sheet.innerHTML = html;
+
+      // Inject print-only CSS once
       if (!document.getElementById('ep-print-css')) {
         var css = [
           '@media print {',
@@ -262,14 +282,17 @@ function openModal(){
           '#print-sheet .ep-print-h1 { font-size: 20px; margin: 0 0 6px; }',
           '#print-sheet .ep-print-meta { color: #555; margin: 0 0 14px; }',
           '#print-sheet .ep-print-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }',
-          '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }'
+          '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }',
+          '#print-sheet .ep-print-text ul { margin: 6px 0 6px 20px; }',
+          '#print-sheet .ep-print-text li { margin: 4px 0; }'
         ].join('\\n');
         var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
       }
-      // Show and synchronously call the OS print dialog
+
+      // Show and trigger OS print
       sheet.style.display = 'block';
       window.print();
-      // Hide again after a brief moment
+      // Hide after OS captures content
       setTimeout(function(){ sheet.style.display = 'none'; }, 200);
 });
 
