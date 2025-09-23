@@ -236,7 +236,42 @@ function openModal(){
   box.appendChild(foot);
 
   btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
-  btnPrint.addEventListener('click', function(){ openPreview(info, notes); setTimeout(function(){ try{ window.focus(); }catch(_){ } }, 0); });
+  btnPrint.addEventListener('click', function(){
+      // OS print (no preview): render selected notes into a hidden sheet and call window.print()
+      var notes = getSelectedNotes(); if (!notes.length){ alert('Select at least one log entry.'); return; }
+      var sheet = document.getElementById('print-sheet');
+      if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
+      var info = jobInfo();
+      function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
+      var title = esc(info.name || currentJobTitle());
+      var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
+      var html = '<div class="ep-print-wrap">'
+               +   '<h1 class="ep-print-h1">' + title + '</h1>'
+               +   (meta.length ? '<div class="ep-print-meta">' + meta.join(' • ') + '</div>' : '')
+               +   notes.map(function(n){ return '<div class="ep-print-note"><div class="ep-print-date">'+esc(n.date||'')+'</div><div class="ep-print-text">'+esc(n.text||'').replace(/\\n/g,'<br>')+'</div></div>'; }).join('')
+               + '</div>';
+      sheet.innerHTML = html;
+      if (!document.getElementById('ep-print-css')) {
+        var css = [
+          '@media print {',
+          '  body * { visibility: hidden !important; }',
+          '  #print-sheet, #print-sheet * { visibility: visible !important; }',
+          '  #print-sheet { position: absolute; left: 0; top: 0; width: 100%; }',
+          '}',
+          '#print-sheet .ep-print-wrap { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; padding: 24px; }',
+          '#print-sheet .ep-print-h1 { font-size: 20px; margin: 0 0 6px; }',
+          '#print-sheet .ep-print-meta { color: #555; margin: 0 0 14px; }',
+          '#print-sheet .ep-print-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }',
+          '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }'
+        ].join('\\n');
+        var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
+      }
+      // Show and synchronously call the OS print dialog
+      sheet.style.display = 'block';
+      window.print();
+      // Hide again after a brief moment
+      setTimeout(function(){ sheet.style.display = 'none'; }, 200);
+});
 
   btnSend.addEventListener('click', async function(){
     var to = Array.prototype.map.call(listBox.querySelectorAll('input[type="checkbox"]:checked'), function(n){ return n.getAttribute('data-email'); });
@@ -279,7 +314,13 @@ function openModal(){
 }
 
 
-  function isPrintNode(n){ return !!(n && n.id === 'print-job'); }
+  function isPrintNode(n){
+    if(!n) return false;
+    if(n.id==='print-job') return true;
+    var t=(n.textContent||'').trim().toLowerCase();
+    return t==='print selected' || t==='print' || t==='email/print' || t==='email/print preview';
+  }
+
   function intercept(){
     function handler(e){
       var t = e.target && e.target.closest ? e.target.closest('button, a[role="button"], #print-job') : e.target;
@@ -292,17 +333,5 @@ function openModal(){
   }
 
   function rename(){}
-  
-  // Ensure direct binding to #print-job (backup to intercept), no renaming or layout change
-  function ensureDirectBind(){
-    function handler(e){ e.preventDefault(); e.stopImmediatePropagation && e.stopImmediatePropagation(); e.stopPropagation && e.stopPropagation(); openModal(); }
-    var btn = document.getElementById('print-job');
-    if (btn && !btn.__epBound){
-      btn.addEventListener('click', handler, true);
-      btn.addEventListener('touchstart', handler, true);
-      btn.__epBound = true;
-    }
-  }
-  ready(function(){ ensureDirectBind(); });
-ready(function(){ intercept(); });
+  ready(function(){ intercept(); });
 })();
