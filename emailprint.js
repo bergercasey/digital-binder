@@ -1,4 +1,4 @@
-/* FINAL PATCH 20250924-134721 */
+/* FINAL PATCH 2025-09-24 13:55:27 */
 var __epBlock=false;
 
 /* EP v7 — clean modal + preview + Gmail function; no auto-print */
@@ -134,7 +134,7 @@ var __epBlock=false;
   }
 
   
-function openModal(){ console.log('EP modal opened (FINAL)');
+function openModal(){ console.log('EP modal opened (FINAL+BADGE)');
   var info = jobInfo();
   var notes = selectedNotes();
   if (!notes.length){ alert('Select at least one log entry.'); return; }
@@ -253,15 +253,12 @@ function openModal(){ console.log('EP modal opened (FINAL)');
       var notes = selectedNotes();
       if (!notes.length){ alert('Select at least one log entry.'); return; }
 
-      // Block intercepts and close overlay to prevent darkening / re-open
       window.__epBlock = true;
       try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch(_){}
 
-      // Build/ensure print sheet
       var sheet = document.getElementById('print-sheet');
       if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
 
-      // Build HTML with bullets preserved
       var info = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
       function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
@@ -277,10 +274,9 @@ function openModal(){ console.log('EP modal opened (FINAL)');
       }).join('');
 
       sheet.innerHTML = '<div class="ep-print-wrap"><h1 class="ep-print-h1">'+title+'</h1>'
-                      + (meta.length ? '<div class="ep-print-meta">'+meta.join(' • ')+'</div>' : '')
+                      + (meta.length ? '<div class="ep-print-meta">'+meta.join(' • ') + '</div>' : '')
                       + items + '</div>';
 
-      // Print-only CSS (once)
       if (!document.getElementById('ep-print-css')) {
         var css = [
           '@media print {',
@@ -301,7 +297,6 @@ function openModal(){ console.log('EP modal opened (FINAL)');
         var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
       }
 
-      // Show and OS print; then release guard shortly after
       sheet.style.display = 'block';
       window.print();
       setTimeout(function(){ sheet.style.display = 'none'; window.__epBlock=false; }, 500);
