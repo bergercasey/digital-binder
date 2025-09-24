@@ -1,4 +1,4 @@
-console.log('emailprint.js — LIVE');
+console.log('emailprint.js — LIVE 021302');
 
 /* EP v7 — clean modal + preview + Gmail function; no auto-print */
 (function(){
@@ -47,20 +47,21 @@ console.log('emailprint.js — LIVE');
   }
 
   function selectedNotes(){
-      var out = [];
-      var rows = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-item'));
-      rows.forEach(function(row){
-        var cb = row.querySelector('.note-date input.pe_row_chk');
-        if (!cb || !cb.checked) return;
-        var dateEl = row.querySelector('.note-date');
-        var textEl = row.querySelector('.note-text');
-        var dateText = dateEl ? (dateEl.innerText || dateEl.textContent || '').trim() : '';
-        var bodyText = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
-        var bodyHtml = textEl ? (textEl.innerHTML || '').trim() : '';
-        out.push({ date: dateText, text: bodyText, html: bodyHtml });
-      });
-      return out;
-    }:\d{2}.*$/,'').trim();
+  var out = [];
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-item'));
+  rows.forEach(function(row){
+    var cb = row.querySelector('.note-date input.pe_row_chk');
+    if (!cb || !cb.checked) return;
+    var dateEl = row.querySelector('.note-date');
+    var textEl = row.querySelector('.note-text');
+    var dateText = dateEl ? (dateEl.innerText || dateEl.textContent || '').replace(/\s*\d{1,2}:\d{2}.*$/,'').trim() : '';
+    var bodyText = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
+    var bodyHtml = textEl ? (textEl.innerHTML || '').trim() : '';
+    out.push({date: dateText, text: bodyText, html: bodyHtml});
+  });
+  console.log('emailprint.js — selectedNotes count', out.length);
+  return out;
+}:\d{2}.*$/,'').trim();
       var body = it.querySelector('.note-text') || it.querySelector('.note-body') || it;
       var bodyText = body ? (body.innerText || body.textContent || '').trim() : '';
       out.push({date: dateText, text: bodyText});
@@ -247,62 +248,56 @@ function openModal(){
 
   btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
   btnPrint.addEventListener('click', function(){
-      // Close overlay so it doesn't stack/darken
-      try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch(_){}
+  try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch(_){}
 
-      // Get only CHECKED notes from the main list
-      var notes = selectedNotes();
-      if (!notes.length){ alert('Select at least one log entry.'); return; }
+  var notes = selectedNotes();
+  if (!notes.length){ alert('Select at least one log entry.'); return; }
 
-      // Ensure hidden print sheet
-      var sheet = document.getElementById('print-sheet');
-      if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
+  var sheet = document.getElementById('print-sheet');
+  if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
 
-      // Build HTML using note HTML when available (so bullets stay)
-      var info = jobInfo();
-      function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
-      function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
-      var title = esc(info.name || currentJobTitle());
-      var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
+  var info = jobInfo();
+  function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
+  function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
+  var title = esc(info.name || currentJobTitle());
+  var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
 
-      var items = notes.map(function(n){
-        var content = (n.html && n.html.trim()) ? n.html : txtToHtml(n.text||'');
-        return '<div class="ep-print-note">'
-             +   '<div class="ep-print-date">'+esc(n.date||'')+'</div>'
-             +   '<div class="ep-print-text">'+content+'</div>'
-             + '</div>';
-      }).join('');
+  var items = notes.map(function(n){
+    var content = (n.html && n.html.trim()) ? n.html : txtToHtml(n.text||'');
+    return '<div class="ep-print-note">'
+         +   '<div class="ep-print-date">'+esc(n.date||'')+'</div>'
+         +   '<div class="ep-print-text">'+content+'</div>'
+         + '</div>';
+  }).join('');
 
-      sheet.innerHTML = '<div class="ep-print-wrap"><h1 class="ep-print-h1">'+title+'</h1>'
-                      + (meta.length ? '<div class="ep-print-meta">'+meta.join(' • ')+'</div>' : '')
-                      + items + '</div>';
+  sheet.innerHTML = '<div class="ep-print-wrap"><h1 class="ep-print-h1">'+title+'</h1>'
+                  + (meta.length ? '<div class="ep-print-meta">'+meta.join(' • ')+'</div>' : '')
+                  + items + '</div>';
 
-      // Print-only CSS (once)
-      if (!document.getElementById('ep-print-css')) {
-        var css = [
-          '@media print {',
-          '  body * { visibility: hidden !important; }',
-          '  #print-sheet, #print-sheet * { visibility: visible !important; }',
-          '  #print-sheet { position: absolute; left: 0; top: 0; width: 100%; }',
-          '}',
-          '#print-sheet .ep-print-wrap { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; padding: 24px; }',
-          '#print-sheet .ep-print-h1 { font-size: 20px; margin: 0 0 6px; }',
-          '#print-sheet .ep-print-meta { color: #555; margin: 0 0 14px; }',
-          '#print-sheet .ep-print-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }',
-          '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }',
-          '#print-sheet .ep-print-text { white-space: pre-wrap; }',
-          '#print-sheet .ep-print-text ul { list-style: disc; padding-left: 20px; margin: 6px 0 6px 20px; }',
-          '#print-sheet .ep-print-text ol { list-style: decimal; padding-left: 20px; margin: 6px 0 6px 20px; }',
-          '#print-sheet .ep-print-text li { margin: 4px 0; }'
-        ].join('\\n');
-        var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
-      }
+  if (!document.getElementById('ep-print-css')) {
+    var css = [
+      '@media print {',
+      '  body * { visibility: hidden !important; }',
+      '  #print-sheet, #print-sheet * { visibility: visible !important; }',
+      '  #print-sheet { position: absolute; left: 0; top: 0; width: 100%; }',
+      '}',
+      '#print-sheet .ep-print-wrap { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; padding: 24px; }',
+      '#print-sheet .ep-print-h1 { font-size: 20px; margin: 0 0 6px; }',
+      '#print-sheet .ep-print-meta { color: #555; margin: 0 0 14px; }',
+      '#print-sheet .ep-print-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }',
+      '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }',
+      '#print-sheet .ep-print-text { white-space: pre-wrap; }',
+      '#print-sheet .ep-print-text ul { list-style: disc; padding-left: 20px; margin: 6px 0 6px 20px; }',
+      '#print-sheet .ep-print-text ol { list-style: decimal; padding-left: 20px; margin: 6px 0 6px 20px; }',
+      '#print-sheet .ep-print-text li { margin: 4px 0; }'
+    ].join('\\n');
+    var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
+  }
 
-      // Show and OS print immediately
-      sheet.style.display = 'block';
-      window.print();
-      setTimeout(function(){ sheet.style.display = 'none'; }, 200);
-    }); }
+  sheet.style.display = 'block';
+  window.print();
+  setTimeout(function(){ sheet.style.display = 'none'; }, 200);
+}); }
       function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
       var title = esc(info.name || currentJobTitle());
       var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
@@ -390,22 +385,36 @@ function openModal(){
 }
 
 
-  function isPrintNode(n){ return !!(n && n.id==='print-job'); }
-
-  function intercept(){
-  function handler(e){
-    var t = e.target && e.target.closest ? e.target.closest('#print-job') : null;
-    if (!t) return;
-    e.preventDefault();
-    e.stopPropagation();
-    try { openModal(); } catch(_){}
+  function isPrintNode(n){
+    if(!n) return false;
+    if(n.id==='print-job') return true;
+    var t=(n.textContent||'').trim().toLowerCase();
+    return t==='print selected' || t==='print' || t==='email/print' || t==='email/print preview';
   }
-  document.addEventListener('click', handler, true);
+
+  function intercept(){}
 }
-    }
     ['touchstart','pointerdown','mousedown','click'].forEach(function(tp){ document.addEventListener(tp, handler, true); });
   }
 
   function rename(){}
-  ready(function(){ intercept(); });
+  
+function hijackPrintButton(){
+  var btn = document.getElementById('print-job');
+  if (!btn || btn.__epHijacked) return;
+  var clone = btn.cloneNode(true);
+  clone.__epHijacked = true;
+  var handler = function(e){
+    try{
+      e.preventDefault();
+      e.stopPropagation();
+      openModal();
+    }catch(err){ console.warn('openModal failed', err); }
+  };
+  clone.addEventListener('click', handler, true);
+  if (btn.parentNode) btn.parentNode.replaceChild(clone, btn);
+  console.log('emailprint.js — hijacked #print-job');
+}
+ready(function(){ hijackPrintButton(); });
+ready(function(){ intercept(); });
 })();
