@@ -53,11 +53,9 @@
       var dateText = (dateEl.textContent||'').replace(/\s*\d{1,2}:\d{2}.*$/,'').trim();
       var body = it.querySelector('.note-text') || it.querySelector('.note-body') || it;
       var bodyText = body ? (body.innerText || body.textContent || '').trim() : '';
-      var bodyHtml = body ? (body.innerHTML || '').trim() : '';
-      out.push({date: dateText, text: bodyText, html: bodyHtml});
+      out.push({date: dateText, text: bodyText});
     });
     return out;
-
   }
 
   function buildPreviewHTML(info, notes){
@@ -238,109 +236,7 @@ function openModal(){
   box.appendChild(foot);
 
   btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
-  btnPrint.addEventListener('click', function(){
-
-      // Gather selected notes BEFORE closing overlay (so we can read DOM)
-      var notes = selectedNotes(); 
-      if (!notes.length){ alert('Select at least one log entry.'); return; }
-
-      // Now close the modal overlay to avoid stacking/dimming
-      try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch(_){}
-
-      // Ensure a dedicated print sheet
-      var sheet = document.getElementById('print-sheet');
-      if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
-
-      // Build print HTML (preserve lists if present, otherwise convert line breaks)
-      var info = jobInfo();
-      function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
-      function txtToHtml(s){ return esc(s).replace(/\n/g,'<br>'); }
-      var title = esc(info.name || currentJobTitle());
-      var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
-
-      var items = notes.map(function(n){
-        var content = (n.html && n.html.trim()) ? n.html : txtToHtml(n.text||'');
-        return '<div class="ep-print-note">'
-             +   '<div class="ep-print-date">'+esc(n.date||'')+'</div>'
-             +   '<div class="ep-print-text">'+ content +'</div>'
-             + '</div>';
-      }).join('');
-
-      document.getElementById('print-sheet').innerHTML = '<div class="ep-print-wrap"><h1 class="ep-print-h1">'+title+'</h1>'
-                      + (meta.length ? '<div class="ep-print-meta">'+meta.join(' • ') + '</div>' : '')
-                      + items + '</div>';
-
-      // Print-only CSS (once)
-      if (!document.getElementById('ep-print-css')) {
-        var css = [
-          '@media print {',
-          '  body * { visibility: hidden !important; }',
-          '  #print-sheet, #print-sheet * { visibility: visible !important; }',
-          '  #print-sheet { position: absolute; left: 0; top: 0; width: 100%; }',
-          '}',
-          '#print-sheet .ep-print-wrap { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; padding: 24px; }',
-          '#print-sheet .ep-print-h1 { font-size: 20px; margin: 0 0 6px; }',
-          '#print-sheet .ep-print-meta { color: #555; margin: 0 0 14px; }',
-          '#print-sheet .ep-print-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }',
-          '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }',
-          '#print-sheet .ep-print-text { white-space: pre-wrap; }',
-          '#print-sheet .ep-print-text ul { margin: 6px 0 6px 20px; }',
-          '#print-sheet .ep-print-text li { margin: 4px 0; }'
-        ].join('\n');
-        var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
-      }
-
-      // Show and trigger OS print
-      sheet.style.display = 'block';
-      window.print();
-      setTimeout(function(){ sheet.style.display = 'none'; }, 200);
-
-}); }
-      function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
-      var title = esc(info.name || currentJobTitle());
-      var meta = []; if(info.address) meta.push('Address: ' + esc(info.address)); if(info.po) meta.push('PO: ' + esc(info.po)); if(info.stage) meta.push('Status: ' + esc(info.stage));
-
-      var items = notes.map(function(n){
-        var content = (n.html && n.html.trim()) ? n.html : txtToHtml(n.text||'');
-        return '<div class="ep-print-note">'
-             +   '<div class="ep-print-date">'+esc(n.date||'')+'</div>'
-             +   '<div class="ep-print-text">'+ content +'</div>'
-             + '</div>';
-      }).join('');
-
-      var html = '<div class="ep-print-wrap">'
-               +   '<h1 class="ep-print-h1">' + title + '</h1>'
-               +   (meta.length ? '<div class="ep-print-meta">' + meta.join(' • ') + '</div>' : '')
-               +   items
-               + '</div>';
-
-      sheet.innerHTML = html;
-
-      // Inject print-only CSS once
-      if (!document.getElementById('ep-print-css')) {
-        var css = [
-          '@media print {',
-          '  body * { visibility: hidden !important; }',
-          '  #print-sheet, #print-sheet * { visibility: visible !important; }',
-          '  #print-sheet { position: absolute; left: 0; top: 0; width: 100%; }',
-          '}',
-          '#print-sheet .ep-print-wrap { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; padding: 24px; }',
-          '#print-sheet .ep-print-h1 { font-size: 20px; margin: 0 0 6px; }',
-          '#print-sheet .ep-print-meta { color: #555; margin: 0 0 14px; }',
-          '#print-sheet .ep-print-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }',
-          '#print-sheet .ep-print-date { font-weight: 700; margin-bottom: 4px; }',
-          '#print-sheet .ep-print-text ul { margin: 6px 0 6px 20px; }',
-          '#print-sheet .ep-print-text li { margin: 4px 0; }'
-        ].join('\\n');
-        var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
-      }
-
-      // Show and trigger OS print
-      sheet.style.display = 'block';
-      window.print();
-      // Hide after OS captures content
-      setTimeout(function(){ sheet.style.display = 'none'; }, 200);
-});
+  btnPrint.addEventListener('click', function(){ openPreview(info, notes); setTimeout(function(){ try{ window.focus(); }catch(_){ } }, 0); });
 
   btnSend.addEventListener('click', async function(){
     var to = Array.prototype.map.call(listBox.querySelectorAll('input[type="checkbox"]:checked'), function(n){ return n.getAttribute('data-email'); });
@@ -401,6 +297,13 @@ function openModal(){
     ['touchstart','pointerdown','mousedown','click'].forEach(function(tp){ document.addEventListener(tp, handler, true); });
   }
 
-  function rename(){}
-  ready(function(){ intercept(); });
+  function rename(){
+    var n = $('#print-job'); if (n) n.textContent='Email/Print';
+    $all('button, a[role="button"]').forEach(function(b){
+      var t=(b.textContent||'').trim().toLowerCase();
+      if (t==='print selected' || t==='print') b.textContent='Email/Print';
+    });
+  }
+
+  ready(function(){ rename(); intercept(); });
 })();
