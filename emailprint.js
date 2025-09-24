@@ -152,18 +152,42 @@
         alert('Send failed: ' + (e && e.message ? e.message : String(e)));
       }
     });
+
 btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
       var info = jobInfo();
       var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
-      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
-      notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
+      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+      function toBullets(s){
+        var raw = String(s||'').trim();
+        // try to split into bullet-ish items by periods followed by capital, semicolons, or newlines
+        var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
+        if (parts.length > 1){
+          return '<ul>' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
+        }
+        return '<p>'+ esc(raw) +'</p>';
+      }
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'+
+        '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px; color:#111}'+
+        'h1{font-size:22px;margin:0 0 4px 0} .meta{margin:0 0 16px 0} .meta div{margin:2px 0}'+
+        '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}'+
+        '.d{font-weight:600;margin-bottom:8px} ul{margin:0;padding-left:22px} p{margin:0}'+
+        '</style></head><body>';
+      if (title) html += '<h1>'+ esc(title) +'</h1>';
+      html += '<div class="meta">';
+      if (info.address) html += '<div><strong>Address:</strong> '+ esc(info.address) +'</div>';
+      if (info.po) html += '<div><strong>PO:</strong> '+ esc(info.po) +'</div>';
+      if (info.stage) html += '<div><strong>Stage:</strong> '+ esc(info.stage) +'</div>';
+      html += '</div>';
+      notes.forEach(function(n){
+        html+='<div class="n"><div class="d">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
+      });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     });
+
 
     document.body.appendChild(ov);
   }
