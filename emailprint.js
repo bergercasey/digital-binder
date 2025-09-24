@@ -153,12 +153,13 @@
       }
     });
 
+
 btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
       var info = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      // --- Header helpers (only used for header/meta) ---
+      // Helpers
       function cleanTitle(s){
         s = String(s||'').trim();
         var cut = [' Stage:', ' PO:', ' Crew:', ' Last updated'];
@@ -173,7 +174,17 @@ btnPrint.addEventListener('click', function(){
         var parts = raw.split(/[|/,\n]+/).map(function(t){return t.trim();}).filter(Boolean);
         return parts[parts.length-1] || raw;
       }
-      // --- Notes formatting ---
+      function deriveStage(){
+        // 1) explicit current-stage node
+        var el = document.getElementById('job-stage-current') || document.querySelector('.current-stage, .stage-current, [data-stage-current=\"true\"]');
+        if (el){ var t=(el.textContent||'').trim(); if(t) return t; }
+        // 2) parse 'Stage: XYZ' from a header line
+        var header = document.querySelector('#header, .header, .topbar, h1, h2, h3');
+        var txt = (header ? header.textContent : document.body.textContent) || '';
+        var m = txt.match(/Stage:\s*([A-Za-z][A-Za-z\- ]*?)(?:\s+PO:|\s+Crew:|$)/i);
+        if (m && m[1]) return m[1].trim();
+        return '';
+      }
       function toBullets(s){
         var raw = String(s||'').trim();
         var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
@@ -183,25 +194,28 @@ btnPrint.addEventListener('click', function(){
         return '<p>'+ esc(raw) +'</p>';
       }
       var title = cleanTitle(info.name || currentJobTitle());
+      var currStage = deriveStage() || pickStage(info.stage);
       var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
         '<meta name="viewport" content="width=device-width, initial-scale=1">'+
         '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px;color:#111}'+
-        'h1{font-size:20px;font-weight:600;margin:0 0 4px 0}.meta{margin:0 0 16px 0}.meta div{margin:2px 0;font-weight:400}'+
+        'h1{font-size:20px;font-weight:600;margin:0} .address{margin:2px 0 8px 0}'+
+        '.meta{margin:0 0 16px 0} .meta div{margin:2px 0;font-weight:400}'+
         '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}'+
         'ul{margin:0;padding-left:22px} p{margin:0}'+
         '</style></head><body>';
       if (title) html += '<h1>'+ esc(title) +'</h1>';
-      html += '<div class="meta">';
-      if (info.address) html += '<div>Address: '+ esc(info.address) +'</div>';
+      if (info.address) html += '<div class=\"address\">'+ esc(info.address) +'</div>';
+      html += '<div class=\"meta\">';
       if (info.po) html += '<div>PO: '+ esc(info.po) +'</div>';
-      if (info.stage) html += '<div>Stage: '+ esc(pickStage(info.stage)) +'</div>';
+      if (currStage) html += '<div>Stage: '+ esc(currStage) +'</div>';
       html += '</div>';
       notes.forEach(function(n){
-        html+='<div class="n"><div class="d">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
+        html+='<div class=\"n\"><div class=\"d\">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
       });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     });
+
 
 
     document.body.appendChild(ov);
