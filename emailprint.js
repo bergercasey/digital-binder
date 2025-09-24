@@ -157,53 +157,34 @@ btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
       var info = jobInfo();
-      var title = cleanTitle(info.name || currentJobTitle());
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+      function cleanTitle(s){
+        s = String(s||'').trim();
+        var cutMarkers = [' Stage:', ' PO:', ' Crew:', ' Last updated'];
+        for (var i=0;i<cutMarkers.length;i++){ var k = cutMarkers[i]; var idx = s.indexOf(k); if (idx>0){ s = s.slice(0, idx); break; } }
+        return s.trim();
+      }
+      function pickStage(raw){
+        raw = String(raw||'').trim(); if(!raw) return '';
+        var stages = ['Job Created','Measured','Rough-In','Rough-In Complete','Underground','Underground Complete','Waiting on Contractors','Trim-Out','Trim-Out Complete'];
+        var found=[]; stages.forEach(function(n){ if(raw.indexOf(n)!==-1) found.push(n); });
+        if(found.length) return found[found.length-1];
+        var parts = raw.split(/[|/,
+]+/).map(function(t){return t.trim();}).filter(Boolean);
+        return parts[parts.length-1] || raw;
+      }
       function toBullets(s){
         var raw = String(s||'').trim();
-        // try to split into bullet-ish items by periods followed by capital, semicolons, or newlines
         var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
         if (parts.length > 1){
           return '<ul>' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
         }
         return '<p>'+ esc(raw) +'</p>';
       }
-      
-      function cleanTitle(s){
-        s = String(s||'').trim();
-        // If the title string contains extra descriptors like "Stage:" or "PO:" etc., keep only the leading job name
-        var cutMarkers = [' Stage:', ' PO:', ' Crew:', ' Last updated', ' – ', ' — '];
-        for (var i=0;i<cutMarkers.length;i++){
-          var k = cutMarkers[i];
-          var idx = s.indexOf(k);
-          if (idx > 0){ s = s.slice(0, idx); break; }
-        }
-        return s.trim();
-      }
-      function pickStage(raw){
-        raw = String(raw||'').trim();
-        if (!raw) return '';
-        // Map of known stage names; choose the last present as "current"
-        var stages = [
-          'Job Created','Measured','Rough-In','Rough-In Complete','Underground','Underground Complete',
-          'Waiting on Contractors','Trim-Out','Trim-Out Complete'
-        ];
-        var found = [];
-        stages.forEach(function(name){ if (raw.indexOf(name) !== -1) found.push(name); });
-        if (found.length) return found[found.length-1];
-        // Fallback: if delimited by pipes/slashes/commas/newlines
-        var parts = raw.split(/[|/,
-]+/).map(function(t){return t.trim();}).filter(Boolean);
-        if (parts.length) return parts[parts.length-1];
-        return raw;
-      }
-var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
+      var title = cleanTitle(info.name || currentJobTitle());
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
         '<meta name="viewport" content="width=device-width, initial-scale=1">'+
-        '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px; color:#111}'+
-        'h1{font-size:20px;font-weight:600;margin:0 0 4px 0} .meta{margin:0 0 16px 0} .meta div{margin:2px 0; font-weight:400}'+
-        '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}'+
-        '.d{font-weight:600;margin-bottom:8px} ul{margin:0;padding-left:22px} p{margin:0}'+
-        '</style></head><body>';
+        '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px;color:#111}h1{font-size:20px;font-weight:600;margin:0 0 4px 0}.meta{margin:0 0 16px 0}.meta div{margin:2px 0;font-weight:400}.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}ul{margin:0;padding-left:22px} p{margin:0}</style></head><body>';
       if (title) html += '<h1>'+ esc(title) +'</h1>';
       html += '<div class="meta">';
       if (info.address) html += '<div>Address: '+ esc(info.address) +'</div>';
@@ -226,7 +207,7 @@ var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'
     if(!n) return false;
     if(n.id==='print-job') return true;
     var t=(n.textContent||'').trim().toLowerCase();
-    return t==='print selected' || t==='print';
+    return t==='print selected' || t==='print' || t==='email/print' || t==='email / print';
   }
   function interceptEvents(){
     function handle(e){
@@ -247,10 +228,25 @@ var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){
-    renameButton();
+  
+  function ensureButtonHook(){
+    var btn = document.getElementById('print-job');
+    if (!btn){
+      btn = Array.prototype.find.call(document.querySelectorAll('button, a[role="button"]'), function(n){
+        var t=(n.textContent||'').trim().toLowerCase();
+        return t==='email/print' || t==='print selected' || t==='print';
+      });
+      if (btn) btn.id = 'print-job';
+    }
+    if (btn && !btn.__ep_bound){
+      btn.__ep_bound = true;
+      btn.addEventListener('click', function(e){ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); openModal(); }, true);
+    }
+  }
+onReady(function(){
+    renameButton(); ensureButtonHook();
     interceptEvents();
-    var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
+    var tries=0, t=setInterval(function(){ renameButton(); ensureButtonHook(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
   function jobInfo(){
