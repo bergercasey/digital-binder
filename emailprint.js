@@ -1,3 +1,4 @@
+console.log('emailprint.js — LIVE');
 
 /* EP v7 — clean modal + preview + Gmail function; no auto-print */
 (function(){
@@ -46,11 +47,20 @@
   }
 
   function selectedNotes(){
-    var out=[];
-    $all('#notes-list .note-item').forEach(function(it){
-      var dateEl = it.querySelector('.note-date'); if(!dateEl) return;
-      var cb = dateEl.querySelector('input.pe_row_chk'); if(!cb || !cb.checked) return;
-      var dateText = (dateEl.textContent||'').replace(/\s*\d{1,2}:\d{2}.*$/,'').trim();
+      var out = [];
+      var rows = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-item'));
+      rows.forEach(function(row){
+        var cb = row.querySelector('.note-date input.pe_row_chk');
+        if (!cb || !cb.checked) return;
+        var dateEl = row.querySelector('.note-date');
+        var textEl = row.querySelector('.note-text');
+        var dateText = dateEl ? (dateEl.innerText || dateEl.textContent || '').trim() : '';
+        var bodyText = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
+        var bodyHtml = textEl ? (textEl.innerHTML || '').trim() : '';
+        out.push({ date: dateText, text: bodyText, html: bodyHtml });
+      });
+      return out;
+    }:\d{2}.*$/,'').trim();
       var body = it.querySelector('.note-text') || it.querySelector('.note-body') || it;
       var bodyText = body ? (body.innerText || body.textContent || '').trim() : '';
       out.push({date: dateText, text: bodyText});
@@ -237,15 +247,18 @@ function openModal(){
 
   btnPreview.addEventListener('click', function(){ openPreview(info, notes); });
   btnPrint.addEventListener('click', function(){
-      // prevent the intercept() from re-opening the modal by closing overlay before printing
+      // Close overlay so it doesn't stack/darken
       try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch(_){}
 
+      // Get only CHECKED notes from the main list
       var notes = selectedNotes();
       if (!notes.length){ alert('Select at least one log entry.'); return; }
 
+      // Ensure hidden print sheet
       var sheet = document.getElementById('print-sheet');
       if (!sheet) { sheet = document.createElement('div'); sheet.id = 'print-sheet'; sheet.style.display='none'; document.body.appendChild(sheet); }
 
+      // Build HTML using note HTML when available (so bullets stay)
       var info = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
       function txtToHtml(s){ return esc(s).replace(/\\n/g,'<br>'); }
@@ -256,7 +269,7 @@ function openModal(){
         var content = (n.html && n.html.trim()) ? n.html : txtToHtml(n.text||'');
         return '<div class="ep-print-note">'
              +   '<div class="ep-print-date">'+esc(n.date||'')+'</div>'
-             +   '<div class="ep-print-text">'+ content +'</div>'
+             +   '<div class="ep-print-text">'+content+'</div>'
              + '</div>';
       }).join('');
 
@@ -264,6 +277,7 @@ function openModal(){
                       + (meta.length ? '<div class="ep-print-meta">'+meta.join(' • ')+'</div>' : '')
                       + items + '</div>';
 
+      // Print-only CSS (once)
       if (!document.getElementById('ep-print-css')) {
         var css = [
           '@media print {',
@@ -284,6 +298,7 @@ function openModal(){
         var st = document.createElement('style'); st.id='ep-print-css'; st.textContent = css; document.head.appendChild(st);
       }
 
+      // Show and OS print immediately
       sheet.style.display = 'block';
       window.print();
       setTimeout(function(){ sheet.style.display = 'none'; }, 200);
@@ -378,12 +393,15 @@ function openModal(){
   function isPrintNode(n){ return !!(n && n.id==='print-job'); }
 
   function intercept(){
-    function handler(e){
-      var t = e.target && e.target.closest ? e.target.closest('button, a[role="button"], #print-job') : e.target;
-      if (isPrintNode(t)){
-        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-        openModal();
-      }
+  function handler(e){
+    var t = e.target && e.target.closest ? e.target.closest('#print-job') : null;
+    if (!t) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { openModal(); } catch(_){}
+  }
+  document.addEventListener('click', handler, true);
+}
     }
     ['touchstart','pointerdown','mousedown','click'].forEach(function(tp){ document.addEventListener(tp, handler, true); });
   }
