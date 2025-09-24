@@ -253,8 +253,19 @@ btnPrint.addEventListener('click', function(){
     var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
-  function jobInfo(){
-    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
+  
+function jobInfo(){
+    function gt(id){
+      var n = document.getElementById(id);
+      if (!n) return '';
+      var tag = (n.tagName||'').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return (n.value||'').trim();
+      if (tag === 'select'){
+        var opt = n.options && n.options[n.selectedIndex];
+        return opt ? (opt.text||opt.value||'').trim() : (n.value||'').trim();
+      }
+      return (n.textContent||'').trim();
+    }
     var name = gt('job-name') || gt('job-summary') || currentJobTitle();
     var address = gt('job-address');
     var po = gt('job-po');
