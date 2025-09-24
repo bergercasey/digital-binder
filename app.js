@@ -934,43 +934,4 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
     });
  wire(); boot(); });
-
-  // === Minimal: Delete Selected (uses existing .pe_row_chk from checks.js) ===
-  (function(){
-    function installBtn(){
-      var addBtn = document.getElementById('add-note');
-      if (!addBtn || document.getElementById('delete-notes')) return;
-      var del = document.createElement('button');
-      del.id = 'delete-notes';
-      del.className = 'danger';
-      del.textContent = 'Delete Selected';
-      del.style.marginLeft = '8px';
-      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
-      del.addEventListener('click', function(){
-        try{
-          if (typeof currentJob !== 'function') { alert('No job context'); return; }
-          var j = currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No notes found'); return; }
-          var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
-          var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
-          var toDelete = new Set();
-          rows.forEach(function(row, idx){
-            var cb = row.querySelector('.note-date input.pe_row_chk');
-            if (cb && cb.checked) toDelete.add(idx);
-          });
-          if (toDelete.size === 0) { alert('Select at least one log entry.'); return; }
-          j.notes = (j.notes || []).filter(function(_n, i){ return !toDelete.has(i); });
-          if (typeof markUpdated === 'function') markUpdated(j);
-          if (typeof save === 'function') save();
-          if (typeof renderPanel === 'function') renderPanel();
-        }catch(e){ console.warn('Delete Selected failed', e); alert('Delete failed.'); }
-      });
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', installBtn);
-    } else {
-      installBtn();
-    }
-    // also retry a few times for late DOM
-    var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
-  })();
 })();
