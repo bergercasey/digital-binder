@@ -118,69 +118,28 @@
     actions.appendChild(btnCancel); actions.appendChild(btnPrint); actions.appendChild(btnEmail); box.appendChild(actions);
 
     btnCancel.addEventListener('click', function(){ document.body.removeChild(ov); });
-    
-btnEmail.addEventListener('click', async function(){
+    btnEmail.addEventListener('click', async function(){
       var picks = qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
       if(!picks.length){ alert('Pick at least one recipient.'); return; }
       var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
-
-      // Plain text body
-      var bodyLines = [];
-      notes.forEach(function(n){
-        bodyLines.push(n.date);
-        bodyLines.push(n.text);
-        bodyLines.push('');
-      });
+      var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
       var textBody = bodyLines.join('\n');
-
-      // Email HTML body - mirror print layout
+      var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      function cleanTitle(s){
-        s = String(s||'').trim();
-        var cut = [' Stage:', ' PO:', ' Crew:', ' Last updated'];
-        for (var i=0;i<cut.length;i++){ var k=cut[i], j=s.indexOf(k); if(j>0){ s=s.slice(0,j); break; } }
-        return s.trim();
-      }
-      function toBullets(s){
-        var raw = String(s||'').trim();
-        var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
-        if (parts.length > 1){
-          return '<ul style="margin:0;padding-left:22px">' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
-        }
-        return '<p style="margin:0">'+ esc(raw) +'</p>';
-      }
-      // Prefer selected option text for Stage (jobInfo() already does this now)
-      var title = cleanTitle(info.name || currentJobTitle());
-      var currStage = info.stage;
-
-      var htmlHead = '<meta charset="utf-8">' +
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'+
-        '<meta name="color-scheme" content="light dark">'+
-        '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:16px}'+
-        '.card{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}'+
-        '.date{font-weight:600;margin-bottom:8px} h1{font-size:20px;font-weight:600;margin:0}'+
-        '.address{margin:2px 0 8px 0} .meta{margin:0 0 16px 0} .meta div{margin:2px 0;font-weight:400}'+
-        '</style>';
-
-      var htmlBody = '';
-      if (title) htmlBody += '<h1>'+ esc(title) +'</h1>';
-      if (info.address) htmlBody += '<div class="address">'+ esc(info.address) +'</div>';
-      htmlBody += '<div class="meta">';
-      if (info.po) htmlBody += '<div>PO: '+ esc(info.po) +'</div>';
-      if (currStage) htmlBody += '<div>Stage: '+ esc(currStage) +'</div>';
-      htmlBody += '</div>';
-      notes.forEach(function(n){
-        htmlBody += '<div class="card"><div class="date">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
-      });
-
+      var headerHtml = '';
+      if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>';
+      var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
+      if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
+      var htmlBody = headerHtml + notes.map(function(n){
+        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
+      }).join('');
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: '<!doctype html><html><head>'+ htmlHead +'</head><body>'+ htmlBody +'</body></html>' })
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
         });
         if (!resp.ok) {
           var txt = await resp.text();
@@ -193,7 +152,6 @@ btnEmail.addEventListener('click', async function(){
         alert('Send failed: ' + (e && e.message ? e.message : String(e)));
       }
     });
-);
 
 
 btnPrint.addEventListener('click', function(){
