@@ -126,7 +126,6 @@ btnEmail.addEventListener('click', async function(){
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
 
-      // Plain text fallback
       var textParts = [];
       if (info.name) textParts.push('Job: ' + info.name);
       if (info.address) textParts.push('Address: ' + info.address);
@@ -153,11 +152,8 @@ btnEmail.addEventListener('click', async function(){
       if (info.po) htmlBody += '<div style="margin:2px 0">PO: '+ esc(info.po) +'</div>';
       if (info.stage) htmlBody += '<div style="margin:2px 0">Stage: '+ esc(info.stage) +'</div>';
       htmlBody += '</div>';
-      notes.forEach(function(n){
-        htmlBody += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0">' +
-                    '<div style="font-weight:600;margin-bottom:8px">'+ esc(n.date) +'</div>' +
-                    toBullets(n.text) + '</div>';
-      });
+      notes.forEach(function(n){ htmlBody += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0">' +
+                    '<div style="font-weight:600;margin-bottom:8px">'+ esc(n.date) +'</div>' + toBullets(n.text) + '</div>'; });
 
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
@@ -165,16 +161,9 @@ btnEmail.addEventListener('click', async function(){
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"></head><body style="font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:16px">' + htmlBody + '</body></html>' })
         });
-        if (!resp.ok) {
-          var txt = await resp.text();
-          alert('Send failed: ' + txt);
-          return;
-        }
-        alert('Email sent!');
-        document.body.removeChild(ov);
-      } catch(e){
-        alert('Send failed: ' + (e && e.message ? e.message : String(e)));
-      }
+        if (!resp.ok) { var txt = await resp.text(); alert('Send failed: ' + txt); return; }
+        alert('Email sent!'); document.body.removeChild(ov);
+      } catch(e){ alert('Send failed: ' + (e && e.message ? e.message : String(e))); }
     });
 );
 btnPrint.addEventListener('click', function(){
@@ -186,7 +175,7 @@ btnPrint.addEventListener('click', function(){
       var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
       if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
-      html+='<script>window.print();<\/script></body></html>';
+      html+='<script>(function(){var d=false;function c(){try{window.close()}catch(e){}}window.onafterprint=function(){d=true;c()};setTimeout(function(){window.print()},30);window.addEventListener("focus",function(){if(d)c()});})();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     });
 
@@ -198,7 +187,7 @@ btnPrint.addEventListener('click', function(){
     if(!n) return false;
     if(n.id==='print-job') return true;
     var t=(n.textContent||'').trim().toLowerCase();
-    return t==='print selected' || t==='print';
+    return t==='print selected' || t==='print' || t.indexOf('email/print')!==-1;
   }
   function interceptEvents(){
     function handle(e){
@@ -220,32 +209,15 @@ btnPrint.addEventListener('click', function(){
   }
 
   
-  function takeOverPrintButton(){
-    // Look for a primary "Email/Print" or "Print" control and replace it with our own safe handler.
-    var candidates = Array.prototype.slice.call(document.querySelectorAll('button, a[role="button"], #print-job'));
-    var btn = candidates.find(function(n){
-      if (!n) return false;
-      var txt = (n.textContent||'').trim().toLowerCase();
-      return n.id==='print-job' || txt.indexOf('email/print')!==-1 || txt==='print' || txt==='print selected' || txt.indexOf('print')!==-1;
-    });
-    if (!btn) return;
-    // If already ours, skip
-    if (btn.__ep_taken) return;
-    // Clone to strip other listeners
-    var clone = btn.cloneNode(true);
-    clone.id = 'print-job';
-    clone.__ep_taken = true;
-    clone.textContent = 'Email/Print';
-    clone.addEventListener('click', function(e){
-      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-      openModal();
-    }, true);
-    btn.parentNode.replaceChild(clone, btn);
-  }
+  (function(){
+    if (window.top===window){
+      try{ var __orig=window.print; window.__ep_build="EPv12-20250925-112355"; window.print=function(){ try{ if(typeof openModal==='function') openModal(); }catch(_){ } return false; }; }catch(_){}
+    }
+  })();
 onReady(function(){
-    renameButton(); takeOverPrintButton();
+    renameButton();
     interceptEvents();
-    var tries=0, t=setInterval(function(){ renameButton(); takeOverPrintButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
+    var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
   
