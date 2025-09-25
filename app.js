@@ -679,7 +679,10 @@ function renderAll() {
     });
 
     $("print-job").addEventListener("click", () => {
-  try { if (typeof openModal === 'function') { openModal(); return; } } catch(_) {}
+  const j = currentJob(); if (!j) return;
+  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
+  buildPrintSheet(j, idx);
+  window.print();
 });
 
 $("archive-job").addEventListener("click", () => {
