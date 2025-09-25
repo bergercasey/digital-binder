@@ -127,6 +127,7 @@ btnEmail.addEventListener('click', async function(){
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
 
+      // Plain text fallback
       var textParts = [];
       if (info.name) textParts.push('Job: ' + info.name);
       if (info.address) textParts.push('Address: ' + info.address);
@@ -136,34 +137,14 @@ btnEmail.addEventListener('click', async function(){
       notes.forEach(function(n){ textParts.push(n.date); textParts.push(n.text); textParts.push(''); });
       var textBody = textParts.join('\n');
 
-      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      function toBullets(s){
-        var raw = String(s||'').trim();
-        var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
-        if (parts.length > 1){
-          return '<ul style="margin:0;padding-left:22px;list-style:disc">' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
-        }
-        return '<p style="margin:0">'+ esc(raw) +'</p>';
-      }
-
-      var htmlBody = '';
-      if (info.name) htmlBody += '<h1 style="font-size:20px;font-weight:600;margin:0">'+ esc(info.name) +'</h1>';
-      if (info.address) htmlBody += '<div style="margin:2px 0 8px 0">'+ esc(info.address) +'</div>';
-      htmlBody += '<div style="margin:0 0 16px 0">';
-      if (info.po) htmlBody += '<div style="margin:2px 0">PO: '+ esc(info.po) +'</div>';
-      if (info.stage) htmlBody += '<div style="margin:2px 0">Stage: '+ esc(info.stage) +'</div>';
-      htmlBody += '</div>';
-      notes.forEach(function(n){
-        htmlBody += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0">' +
-                    '<div style="font-weight:600;margin-bottom:8px">'+ esc(n.date) +'</div>' +
-                    toBullets(n.text) + '</div>';
-      });
+      // Reuse print HTML exactly
+      var html = __ep_buildPrintHTML(info, notes);
 
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"></head><body style="font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:16px">' + htmlBody + '</body></html>' })
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: html })
         });
         if (!resp.ok) {
           var txt = await resp.text();
@@ -177,18 +158,49 @@ btnEmail.addEventListener('click', async function(){
       }
     });
 );
+
+// === Binder: single source of truth for print/email HTML ===
+function __ep_buildPrintHTML(info, notes){
+  function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+  function toBullets(s){
+    var raw = String(s||'').trim();
+    var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
+    if (parts.length > 1){
+      return '<ul style="margin:0;padding-left:22px;list-style:disc">' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
+    }
+    return '<p style="margin:0">'+ esc(raw) +'</p>';
+  }
+  var title = info.name || currentJobTitle();
+  var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">' +
+             '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:24px}'+
+             'h1{font-size:20px;font-weight:600;margin:0}.address{margin:2px 0 8px 0}.meta{margin:0 0 16px 0}.meta div{margin:2px 0;font-weight:400}'+
+             '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}</style>';
+  var body = '';
+  if (title) body += '<h1>'+ esc(title) +'</h1>';
+  if (info.address) body += '<div class="address">'+ esc(info.address) +'</div>';
+  if (info.po || info.stage){
+    body += '<div class="meta">';
+    if (info.po) body += '<div>PO: '+ esc(info.po) +'</div>';
+    if (info.stage) body += '<div>Stage: '+ esc(info.stage) +'</div>';
+    body += '</div>';
+  }
+  notes.forEach(function(n){
+    body += '<div class="n"><div class="d">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
+  });
+  return '<!doctype html><html><head>'+ head +'</head><body>'+ body +'</body></html>';
+}
+// === End Binder builder ===
+
 btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
       var info = jobInfo();
-      var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
-      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
-      notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
-      html+='<script>window.print();<\/script></body></html>';
+      var html = __ep_buildPrintHTML(info, notes);
+      // Auto-print
+      html = html.replace('</body>', '<script>window.print();<\/script></body>');
       w.document.open(); w.document.write(html); w.document.close();
     });
+
 
     document.body.appendChild(ov);
   }
@@ -220,34 +232,31 @@ btnPrint.addEventListener('click', function(){
   }
 
   
-// === Begin Binder minimal interceptor (capture-phase) ===
+// === Binder: hijack only the #print-job button to stop legacy OS print ===
 (function(){
-  function isEPButton(el){
-    if (!el) return false;
-    if (el.id === 'print-job') return true;
-    var role = el.getAttribute && el.getAttribute('role');
-    var isBtn = (el.tagName === 'BUTTON') || (role === 'button') || (el.matches && el.matches('a[role="button"]'));
-    if (!isBtn) return false;
-    var t = ((el.textContent||'') + ' ' + (el.value||'')).toLowerCase().replace(/\s+/g,' ').trim();
-    return (t.includes('email') && t.includes('print'));
+  function hijack(){
+    var btn = document.getElementById('print-job');
+    if (!btn || btn.__ep_hijacked) return;
+    var clone = btn.cloneNode(true);
+    clone.__ep_hijacked = true;
+    clone.addEventListener('click', function(e){
+      try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
+      try{ if (typeof openModal==='function') openModal(); }catch(_){}
+      return false;
+    }, true); // capture on the element
+    btn.parentNode.replaceChild(clone, btn);
   }
-  function intercept(e){
-    var el = e.target;
-    while (el && el !== document){
-      if (isEPButton(el)){
-        try { e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); } catch(_){}
-        try { if (typeof openModal === 'function') openModal(); } catch(_){}
-        return;
-      }
-      el = el.parentNode;
-    }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hijack, {once:true});
+  } else {
+    hijack();
   }
-  if (!window.__ep_intercept_bound){
-    window.__ep_intercept_bound = true;
-    document.addEventListener('click', intercept, true);
-  }
+  // In case frameworks replace the node later
+  var mo = new MutationObserver(function(){ hijack(); });
+  mo.observe(document.documentElement, {childList:true, subtree:true});
+  window.__ep_hijack_print_job = hijack;
 })();
-// === End Binder minimal interceptor ===
+// === End Binder hijack ===
 onReady(function(){
     renameButton();
     interceptEvents();
