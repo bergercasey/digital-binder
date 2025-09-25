@@ -127,7 +127,6 @@ btnEmail.addEventListener('click', async function(){
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
 
-      // Plain text fallback
       var textParts = [];
       if (info.name) textParts.push('Job: ' + info.name);
       if (info.address) textParts.push('Address: ' + info.address);
@@ -220,7 +219,36 @@ btnPrint.addEventListener('click', function(){
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){
+  
+// === Begin Binder minimal interceptor (capture-phase) ===
+(function(){
+  function isEPButton(el){
+    if (!el) return false;
+    if (el.id === 'print-job') return true;
+    var role = el.getAttribute && el.getAttribute('role');
+    var isBtn = (el.tagName === 'BUTTON') || (role === 'button') || (el.matches && el.matches('a[role="button"]'));
+    if (!isBtn) return false;
+    var t = ((el.textContent||'') + ' ' + (el.value||'')).toLowerCase().replace(/\s+/g,' ').trim();
+    return (t.includes('email') && t.includes('print'));
+  }
+  function intercept(e){
+    var el = e.target;
+    while (el && el !== document){
+      if (isEPButton(el)){
+        try { e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); } catch(_){}
+        try { if (typeof openModal === 'function') openModal(); } catch(_){}
+        return;
+      }
+      el = el.parentNode;
+    }
+  }
+  if (!window.__ep_intercept_bound){
+    window.__ep_intercept_bound = true;
+    document.addEventListener('click', intercept, true);
+  }
+})();
+// === End Binder minimal interceptor ===
+onReady(function(){
     renameButton();
     interceptEvents();
     var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
