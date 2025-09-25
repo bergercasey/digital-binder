@@ -1,0 +1,11 @@
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/emailprint.v18.js
+  Cache-Control: no-store
+
+/*\.html
+  Cache-Control: no-cache
+
+/*.js
+  Cache-Control: no-cache

@@ -118,28 +118,31 @@
     actions.appendChild(btnCancel); actions.appendChild(btnPrint); actions.appendChild(btnEmail); box.appendChild(actions);
 
     btnCancel.addEventListener('click', function(){ document.body.removeChild(ov); });
-    btnEmail.addEventListener('click', async function(){
+    
+btnEmail.addEventListener('click', async function(){
       var picks = qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
       if(!picks.length){ alert('Pick at least one recipient.'); return; }
       var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
+
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
-      var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
-      var textBody = bodyLines.join('\n');
-      var info2 = jobInfo();
-      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = '';
-      if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>';
-      var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
-      if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
-      var htmlBody = headerHtml + notes.map(function(n){
-        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
-      }).join('');
+
+      var textParts = [];
+      if (info.name) textParts.push('Job: ' + info.name);
+      if (info.address) textParts.push('Address: ' + info.address);
+      if (info.po) textParts.push('PO: ' + info.po);
+      if (info.stage) textParts.push('Stage: ' + info.stage);
+      textParts.push('');
+      notes.forEach(function(n){ textParts.push(n.date); textParts.push(n.text); textParts.push(''); });
+      var textBody = textParts.join('\n');
+
+      var html = __ep_buildPrintHTML(info, notes);
+
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: html })
         });
         if (!resp.ok) {
           var txt = await resp.text();
@@ -152,18 +155,49 @@
         alert('Send failed: ' + (e && e.message ? e.message : String(e)));
       }
     });
+);
+
+// === EPv18: Single source for print/email HTML ===
+function __ep_buildPrintHTML(info, notes){
+  function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+  function toBullets(s){
+    var raw = String(s||'').trim();
+    var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
+    if (parts.length > 1){
+      return '<ul style="margin:0;padding-left:22px;list-style:disc">' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
+    }
+    return '<p style="margin:0">'+ esc(raw) +'</p>';
+  }
+  var title = info.name || currentJobTitle();
+  var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">' +
+             '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:24px}'+
+             'h1{font-size:20px;font-weight:600;margin:0}.address{margin:2px 0 8px 0}.meta{margin:0 0 16px 0}.meta div{margin:2px 0;font-weight:400}'+
+             '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}</style>';
+  var body = '';
+  if (title) body += '<h1>'+ esc(title) +'</h1>';
+  if (info.address) body += '<div class="address">'+ esc(info.address) +'</div>';
+  if (info.po || info.stage){
+    body += '<div class="meta">';
+    if (info.po) body += '<div>PO: '+ esc(info.po) +'</div>';
+    if (info.stage) body += '<div>Stage: '+ esc(info.stage) +'</div>';
+    body += '</div>';
+  }
+  notes.forEach(function(n){
+    body += '<div class="n"><div class="d">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
+  });
+  return '<!doctype html><html><head>'+ head +'</head><body>'+ body +'</body></html>';
+}
+// === End EPv18 builder ===
+
 btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
       var info = jobInfo();
-      var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
-      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
-      notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
-      html+='<script>window.print();<\/script></body></html>';
+      var html = __ep_buildPrintHTML(info, notes);
+      html = html.replace('</body>', '<script>window.print();<\/script></body>');
       w.document.open(); w.document.write(html); w.document.close();
     });
+
 
     document.body.appendChild(ov);
   }
@@ -194,14 +228,71 @@ btnPrint.addEventListener('click', function(){
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){
+  
+// === Binder EPv18 hijack to ensure popup opens (no OS preview) ===
+(function(){
+  function isEPButton(el){
+    if (!el) return false;
+    if (el.id === 'print-job') return true;
+    var role = el.getAttribute && el.getAttribute('role');
+    var isBtn = (el.tagName === 'BUTTON') || (role === 'button') || (el.matches && el.matches('a[role="button"]'));
+    if (!isBtn) return false;
+    var t = ((el.textContent||'') + ' ' + (el.value||'')).toLowerCase();
+    return (t.includes('email') && t.includes('print'));
+  }
+  function openEP(e){
+    try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
+    try{ if (typeof openModal==='function') openModal(); }catch(_){}
+  }
+  function hijackPrintJob(){
+    var btn = document.getElementById('print-job');
+    if (btn && !btn.__ep18){
+      btn.__ep18 = true;
+      // Replace node to strip legacy listeners
+      var clone = btn.cloneNode(true);
+      clone.__ep18 = true;
+      clone.addEventListener('click', openEP, true);
+      if (btn.parentNode) btn.parentNode.replaceChild(clone, btn);
+    }
+  }
+  function onDocClick(e){
+    var el = e.target;
+    while (el && el !== document){
+      if (isEPButton(el)){ return openEP(e); }
+      el = el.parentNode;
+    }
+  }
+  if (!window.__ep18_bound){
+    window.__ep18_bound = true;
+    document.addEventListener('click', onDocClick, true); // capture
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', hijackPrintJob, {once:true});
+    } else { hijackPrintJob(); }
+    // Reapply if frameworks swap buttons
+    var mo = new MutationObserver(hijackPrintJob);
+    mo.observe(document.documentElement, {childList:true, subtree:true});
+  }
+})();
+// === End EPv18 hijack ===
+onReady(function(){
     renameButton();
     interceptEvents();
     var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
-  function jobInfo(){
-    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
+  
+function jobInfo(){
+    function gt(id){
+      var n = document.getElementById(id);
+      if (!n) return '';
+      var tag = (n.tagName||'').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return (n.value||'').trim();
+      if (tag === 'select'){
+        var opt = n.options && n.options[n.selectedIndex];
+        return opt ? (opt.text||opt.value||'').trim() : (n.value||'').trim();
+      }
+      return (n.textContent||'').trim();
+    }
     var name = gt('job-name') || gt('job-summary') || currentJobTitle();
     var address = gt('job-address');
     var po = gt('job-po');
