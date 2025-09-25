@@ -314,7 +314,7 @@
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
-      const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
+       item.setAttribute("data-index", i); const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
       list.appendChild(item);
@@ -935,3 +935,50 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
+
+// === Binder: note selection + delete ===
+(function(){
+  const listEl = $("notes-list");
+  function bindNoteSelection(){
+    const list = $("notes-list"); if (!list) return;
+    // Clear previous handler
+    if (list.__noteClickBound) return;
+    list.__noteClickBound = true;
+    list.addEventListener("click", function(e){
+      let item = e.target;
+      while (item && item !== list && !item.classList.contains("note-item")) item = item.parentNode;
+      if (!item || item === list) return;
+      // remove selection from others
+      list.querySelectorAll(".note-item.selected").forEach(n => n.classList.remove("selected"));
+      item.classList.add("selected");
+      const i = parseInt(item.getAttribute("data-index") || "-1", 10);
+      state.ui = state.ui || {}; state.ui.selectedNoteIndex = isNaN(i) ? null : i;
+      const btn = $("delete-note"); if (btn) btn.disabled = (state.ui.selectedNoteIndex == null);
+    });
+  }
+  // Hook after each renderPanel call to rebind
+  const _renderPanel = renderPanel;
+  renderPanel = function(){ _renderPanel.apply(this, arguments); try{ bindNoteSelection(); }catch(_){ } };
+  // Initial bind on DOM ready
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindNoteSelection, {once:true}); else bindNoteSelection();
+
+  // Delete button handler
+  const delBtn = $("delete-note");
+  if (delBtn){
+    delBtn.addEventListener("click", () => {
+      const j = currentJob(); if (!j) return;
+      const idx = (state.ui && typeof state.ui.selectedNoteIndex==='number') ? state.ui.selectedNoteIndex : null;
+      if (idx == null || !Array.isArray(j.notes) || idx < 0 || idx >= j.notes.length){
+        alert("Tap a note in the Log to select it, then press Delete.");
+        return;
+      }
+      if (!confirm("Delete this note?")) return;
+      j.notes.splice(idx, 1);
+      state.ui.selectedNoteIndex = null;
+      markUpdated(j); save(); renderPanel(); toast("Note deleted");
+      const btn2 = $("delete-note"); if (btn2) btn2.disabled = true;
+    });
+    delBtn.disabled = true;
+  }
+})();
+

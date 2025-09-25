@@ -209,13 +209,14 @@ function __ep_buildPrintHTML(info, notes){
   return html;
 }
 
+
 btnPrint.addEventListener('click', function(){
   var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
   var info = jobInfo();
   var html = __ep_buildPrintHTML(info, notes);
   var w = window.open('', '_blank');
-  // Inject onafterprint auto-close
-  html = html.replace('</body>', '<script>window.onafterprint = function(){ try{ window.close(); }catch(e){} }; window.print();<\/script></body>');
+  var closer = '<script>(function(){function c(){try{window.close()}catch(e){}} window.onafterprint=c; setTimeout(c,3000); setTimeout(c,7000); setTimeout(c,12000); window.print();})();<\/script>';
+  html = html.replace('</body>', closer + '</body>');
   w.document.open(); w.document.write(html); w.document.close();
 });
 
