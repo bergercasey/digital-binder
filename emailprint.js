@@ -126,18 +126,15 @@ btnEmail.addEventListener('click', async function(){
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
 
-      var bodyLines = [];
-      if (info.name) bodyLines.push('Job: ' + info.name);
-      if (info.address) bodyLines.push('Address: ' + info.address);
-      if (info.po) bodyLines.push('PO: ' + info.po);
-      if (info.stage) bodyLines.push('Stage: ' + info.stage);
-      bodyLines.push('');
-      notes.forEach(function(n){
-        bodyLines.push(n.date);
-        bodyLines.push(n.text);
-        bodyLines.push('');
-      });
-      var textBody = bodyLines.join('\n');
+      // Plain text fallback
+      var textParts = [];
+      if (info.name) textParts.push('Job: ' + info.name);
+      if (info.address) textParts.push('Address: ' + info.address);
+      if (info.po) textParts.push('PO: ' + info.po);
+      if (info.stage) textParts.push('Stage: ' + info.stage);
+      textParts.push('');
+      notes.forEach(function(n){ textParts.push(n.date); textParts.push(n.text); textParts.push(''); });
+      var textBody = textParts.join('\n');
 
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
       function toBullets(s){
@@ -222,10 +219,33 @@ btnPrint.addEventListener('click', function(){
     qsa('button, a[role=\"button\"]').forEach(function(n){ var t=(n.textContent||'').trim().toLowerCase(); if(t==='print selected') n.textContent='Email/Print'; });
   }
 
-  onReady(function(){
-    renameButton();
+  
+  function takeOverPrintButton(){
+    // Look for a primary "Email/Print" or "Print" control and replace it with our own safe handler.
+    var candidates = Array.prototype.slice.call(document.querySelectorAll('button, a[role="button"], #print-job'));
+    var btn = candidates.find(function(n){
+      if (!n) return false;
+      var txt = (n.textContent||'').trim().toLowerCase();
+      return n.id==='print-job' || txt.indexOf('email/print')!==-1 || txt==='print' || txt==='print selected' || txt.indexOf('print')!==-1;
+    });
+    if (!btn) return;
+    // If already ours, skip
+    if (btn.__ep_taken) return;
+    // Clone to strip other listeners
+    var clone = btn.cloneNode(true);
+    clone.id = 'print-job';
+    clone.__ep_taken = true;
+    clone.textContent = 'Email/Print';
+    clone.addEventListener('click', function(e){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      openModal();
+    }, true);
+    btn.parentNode.replaceChild(clone, btn);
+  }
+onReady(function(){
+    renameButton(); takeOverPrintButton();
     interceptEvents();
-    var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
+    var tries=0, t=setInterval(function(){ renameButton(); takeOverPrintButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
   
