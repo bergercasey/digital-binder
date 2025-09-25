@@ -118,33 +118,28 @@
     actions.appendChild(btnCancel); actions.appendChild(btnPrint); actions.appendChild(btnEmail); box.appendChild(actions);
 
     btnCancel.addEventListener('click', function(){ document.body.removeChild(ov); });
-    
     btnEmail.addEventListener('click', async function(){
       var picks = qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
       if(!picks.length){ alert('Pick at least one recipient.'); return; }
       var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
-
-      // build plain text
-      var textBody = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; }).join('\n');
-
-      var html = (window.__lastPrintHTML && window.__lastPrintHTML.length) ? window.__lastPrintHTML : (function(){
-        // fallback: mirror print structure roughly
-        function esc(s){ return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); }
-        var title = info.name || currentJobTitle();
-        var html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:24px}h1{font-size:20px;font-weight:600;margin:0}.meta{color:#555;margin:0 0 14px}.n{margin:0 0 10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px}.d{font-weight:600;margin-bottom:4px}</style></head><body><h1>'+esc(title)+'</h1>';
-        var meta=[]; if(info.address) meta.push('Address: '+esc(info.address)); if(info.po) meta.push('PO: '+esc(info.po)); if(info.stage) meta.push('Stage: '+esc(info.stage));
-        if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
-        notes.forEach(function(n){ html+='<div class="n"><div class="d">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>'; });
-        return html+'</body></html>';
-      })();
-
+      var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
+      var textBody = bodyLines.join('\n');
+      var info2 = jobInfo();
+      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+      var headerHtml = '';
+      if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>';
+      var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
+      if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
+      var htmlBody = headerHtml + notes.map(function(n){
+        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
+      }).join('');
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: html })
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: (window.__lastPrintHTML && window.__lastPrintHTML.length ? window.__lastPrintHTML : html) })
         });
         if (!resp.ok) {
           var txt = await resp.text();
@@ -157,7 +152,6 @@
         alert('Send failed: ' + (e && e.message ? e.message : String(e)));
       }
     });
-);
 btnPrint.addEventListener('click', function(){
       var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var w=window.open('','_blank');
@@ -168,8 +162,7 @@ btnPrint.addEventListener('click', function(){
       if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
       notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
       html+='<script>window.print();<\/script></body></html>';
-      window.__lastPrintHTML = html;
-      w.document.open(); w.document.write(html); w.document.close();
+      window.__lastPrintHTML = html; w.document.open(); w.document.write(html); w.document.close();
     });
 
     document.body.appendChild(ov);
@@ -179,10 +172,8 @@ btnPrint.addEventListener('click', function(){
   function matchPrintNode(n){
     if(!n) return false;
     if(n.id==='print-job') return true;
-    var t=((n.textContent||'')+' '+(n.value||'')).trim().toLowerCase();
-    if (t==='print selected' || t==='print') return true;
-    if (t.indexOf('email')!==-1 && t.indexOf('print')!==-1) return true;
-    return false;
+    var t=(n.textContent||'').trim().toLowerCase();
+    return t==='print selected' || t==='print';
   }
   function interceptEvents(){
     function handle(e){
@@ -209,19 +200,8 @@ btnPrint.addEventListener('click', function(){
     var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
-  
   function jobInfo(){
-    function gt(id){
-      var n = document.getElementById(id);
-      if (!n) return '';
-      var tag = (n.tagName||'').toLowerCase();
-      if (tag === 'input' || tag === 'textarea') return (n.value||'').trim();
-      if (tag === 'select'){
-        var opt = n.options && n.options[n.selectedIndex];
-        return opt ? (opt.text||opt.value||'').trim() : (n.value||'').trim();
-      }
-      return (n.textContent||'').trim();
-    }
+    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
     var name = gt('job-name') || gt('job-summary') || currentJobTitle();
     var address = gt('job-address');
     var po = gt('job-po');
