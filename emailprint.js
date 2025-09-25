@@ -126,6 +126,7 @@
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
       var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
       var textBody = bodyLines.join('\n');
+      // Build HTML using the exact print template
       var html = __ep_buildPrintHTML_fromPrint(info, notes);
 
       var info2 = jobInfo();
@@ -141,7 +142,7 @@
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: html})
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: html })
         });
         if (!resp.ok) {
           var txt = await resp.text();
@@ -156,6 +157,7 @@
     });
 
 
+// === Binder: reuse PRINT HTML for email & iframe print ===
 function __ep_buildPrintHTML_fromPrint(info, notes){
 
       if(!notes.length){ alert('Select at least one log entry.'); return; }
@@ -208,64 +210,33 @@ function __ep_buildPrintHTML_fromPrint(info, notes){
   return html;
 }
 
+
 btnPrint.addEventListener('click', function(){
-      var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var w=window.open('','_blank');
+      var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var info = jobInfo();
-      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      // Helpers
-      function cleanTitle(s){
-        s = String(s||'').trim();
-        var cut = [' Stage:', ' PO:', ' Crew:', ' Last updated'];
-        for (var i=0;i<cut.length;i++){ var k=cut[i], j=s.indexOf(k); if(j>0){ s=s.slice(0,j); break; } }
-        return s.trim();
+      var html = __ep_buildPrintHTML_fromPrint(info, notes);
+
+      // Create hidden iframe
+      var iframe = document.getElementById('_ep_print_iframe');
+      if (!iframe){
+        iframe = document.createElement('iframe');
+        iframe.id = '_ep_print_iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0'; iframe.style.bottom = '0';
+        iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+        document.body.appendChild(iframe);
       }
-      function pickStage(raw){
-        raw = String(raw||'').trim(); if(!raw) return '';
-        var stages = ['Job Created','Measured','Rough-In','Rough-In Complete','Underground','Underground Complete','Waiting on Contractors','Trim-Out','Trim-Out Complete'];
-        var found=[]; stages.forEach(function(n){ if(raw.indexOf(n)!==-1) found.push(n); });
-        if (found.length) return found[found.length-1];
-        var parts = raw.split(/[|/,\n]+/).map(function(t){return t.trim();}).filter(Boolean);
-        return parts[parts.length-1] || raw;
-      }
-      function deriveStage(){
-        // 1) explicit current-stage node
-        var el = document.getElementById('job-stage-current') || document.querySelector('.current-stage, .stage-current, [data-stage-current=\"true\"]');
-        if (el){ var t=(el.textContent||'').trim(); if(t) return t; }
-        // 2) parse 'Stage: XYZ' from a header line
-        var header = document.querySelector('#header, .header, .topbar, h1, h2, h3');
-        var txt = (header ? header.textContent : document.body.textContent) || '';
-        var m = txt.match(/Stage:\s*([A-Za-z][A-Za-z\- ]*?)(?:\s+PO:|\s+Crew:|$)/i);
-        if (m && m[1]) return m[1].trim();
-        return '';
-      }
-      function toBullets(s){
-        var raw = String(s||'').trim();
-        var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
-        if (parts.length > 1){
-          return '<ul>' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
-        }
-        return '<p>'+ esc(raw) +'</p>';
-      }
-      var title = cleanTitle(info.name || currentJobTitle());
-      var currStage = deriveStage() || pickStage(info.stage);
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'+
-        '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px;color:#111}'+
-        'h1{font-size:20px;font-weight:600;margin:0} .address{margin:2px 0 8px 0}'+
-        '.meta{margin:0 0 16px 0} .meta div{margin:2px 0;font-weight:400}'+
-        '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}'+
-        'ul{margin:0;padding-left:22px} p{margin:0}'+
-        '</style></head><body>';
-      if (title) html += '<h1>'+ esc(title) +'</h1>';
-      if (info.address) html += '<div class=\"address\">'+ esc(info.address) +'</div>';
-      html += '<div class=\"meta\">';
-      if (info.po) html += '<div>PO: '+ esc(info.po) +'</div>';
-      if (currStage) html += '<div>Stage: '+ esc(currStage) +'</div>';
-      html += '</div>';
-      notes.forEach(function(n){
-        html+='<div class=\"n\"><div class=\"d\">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
-      });
+      var doc = iframe.contentWindow || iframe.contentDocument;
+      if (doc.document) doc = doc.document;
+      doc.open(); doc.write(html); doc.close();
+
+      // Trigger OS print, then clean up
+      var w = iframe.contentWindow;
+      var cleanup = function(){ try{ document.body.removeChild(iframe); }catch(_){ } };
+      w.onafterprint = cleanup;
+      setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){ cleanup(); } }, 50);
+    });
+
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     });
