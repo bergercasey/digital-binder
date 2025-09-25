@@ -183,14 +183,17 @@
       }
     });
 btnPrint.addEventListener('click', function(){
-      var notes=getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var w=window.open('','_blank');
+      var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var info = jobInfo();
-      var title = info.name || currentJobTitle();
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px}h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 14px} .n{margin:0 0 10px;padding:10px 12px;border:1px solid #ddd;border-radius:8px} .d{font-weight:700;margin-bottom:4px}</style></head><body><h1>'+ title +'</h1>';
-      var meta=[]; if(info.address) meta.push('Address: '+info.address); if(info.po) meta.push('PO: '+info.po); if(info.stage) meta.push('Stage: '+info.stage);
-      if(meta.length) html += '<div class="meta">'+ meta.join(' • ') +'</div>';
-      notes.forEach(function(n){ html+='<div class=\"n\"><div class=\"d\">'+n.date+'</div><div class=\"t\">'+n.text.replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);})+'</div></div>'; });
+      // Build unified HTML (same as email)
+      var html = renderEmailPrintHTML(info, notes);
+      // Close overlay before opening print window to avoid stuck overlay
+      try { var ovv = document.getElementById('ep_overlay'); if (ovv) ovv.remove(); } catch(_){}
+      var w = window.open('', '_blank', 'noopener');
+      var autoScript = "<script>window.onafterprint=function(){setTimeout(function(){window.close();},10);};setTimeout(function(){window.print();},0);<\/script>";
+      var out = html.replace('</body></html>', autoScript + '</body></html>');
+      w.document.open(); w.document.write(out); w.document.close();
+    });
       html+='<script>window.print();<\/script></body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     });
