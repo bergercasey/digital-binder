@@ -137,7 +137,6 @@ btnEmail.addEventListener('click', async function(){
       notes.forEach(function(n){ textParts.push(n.date); textParts.push(n.text); textParts.push(''); });
       var textBody = textParts.join('\n');
 
-      // HTML body to MATCH THE PRINT LAYOUT (no changes to print code)
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
       function toBullets(s){
         var raw = String(s||'').trim();
@@ -165,7 +164,7 @@ btnEmail.addEventListener('click', async function(){
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"></meta></head><body style="font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:16px">' + htmlBody + '</body></html>' })
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"></head><body style="font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:16px">' + htmlBody + '</body></html>' })
         });
         if (!resp.ok) {
           var txt = await resp.text();
