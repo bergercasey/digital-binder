@@ -126,8 +126,7 @@
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
       var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
       var textBody = bodyLines.join('\n');
-      // Build HTML using the exact print template
-      var html = __ep_buildPrintHTML_fromPrint(info, notes);
+      var html = __ep_buildHTML(info, notes);
 
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
@@ -156,91 +155,56 @@
       }
     });
 
-
-// === Binder: reuse PRINT HTML for email & iframe print ===
-function __ep_buildPrintHTML_fromPrint(info, notes){
-
-      if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var w=window.open('','_blank');
-      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      // Helpers
-      function cleanTitle(s){
-        s = String(s||'').trim();
-        var cut = [' Stage:', ' PO:', ' Crew:', ' Last updated'];
-        for (var i=0;i<cut.length;i++){ var k=cut[i], j=s.indexOf(k); if(j>0){ s=s.slice(0,j); break; } }
-        return s.trim();
-      }
-      function pickStage(raw){
-        raw = String(raw||'').trim(); if(!raw) return '';
-        var stages = ['Job Created','Measured','Rough-In','Rough-In Complete','Underground','Underground Complete','Waiting on Contractors','Trim-Out','Trim-Out Complete'];
-        var found=[]; stages.forEach(function(n){ if(raw.indexOf(n)!==-1) found.push(n); });
-        if (found.length) return found[found.length-1];
-        var parts = raw.split(/[|/,\n]+/).map(function(t){return t.trim();}).filter(Boolean);
-        return parts[parts.length-1] || raw;
-      }
-      function deriveStage(){
-        // 1) explicit current-stage node
-        var el = document.getElementById('job-stage-current') || document.querySelector('.current-stage, .stage-current, [data-stage-current=\"true\"]');
-        if (el){ var t=(el.textContent||'').trim(); if(t) return t; }
-        // 2) parse 'Stage: XYZ' from a header line
-        var header = document.querySelector('#header, .header, .topbar, h1, h2, h3');
-        var txt = (header ? header.textContent : document.body.textContent) || '';
-        var m = txt.match(/Stage:\s*([A-Za-z][A-Za-z\- ]*?)(?:\s+PO:|\s+Crew:|$)/i);
-        if (m && m[1]) return m[1].trim();
-        return '';
-      }
-      function toBullets(s){
-        var raw = String(s||'').trim();
-        var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
-        if (parts.length > 1){
-          return '<ul>' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
-        }
-        return '<p>'+ esc(raw) +'</p>';
-      }
-      var title = cleanTitle(info.name || currentJobTitle());
-      var currStage = deriveStage() || pickStage(info.stage);
-      var html='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'+
-        '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;padding:24px;color:#111}'+
-        'h1{font-size:20px;font-weight:600;margin:0} .address{margin:2px 0 8px 0}'+
-        '.meta{margin:0 0 16px 0} .meta div{margin:2px 0;font-weight:400}'+
-        '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}'+
-        'ul{margin:0;padding-left:22px} p{margin:0}'+
-        '</style></head><body>';
-  return html;
+function __ep_buildHTML(info, notes){
+  function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+  function toBullets(s){
+    var raw = String(s||'').trim();
+    var parts = raw.split(/(?<=\.)\s+(?=[A-Z])|;\s+|\n+/).map(function(t){return t.trim();}).filter(Boolean);
+    if (parts.length > 1){
+      return '<ul style="margin:0;padding-left:22px;list-style:disc">' + parts.map(function(t){ return '<li>'+ esc(t) +'</li>'; }).join('') + '</ul>';
+    }
+    return '<p style="margin:0">'+ esc(raw) +'</p>';
+  }
+  var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">' +
+             '<style>body{font:16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;color:#111;padding:24px}'+
+             'h1{font-size:20px;font-weight:600;margin:0}.address{margin:2px 0 8px 0}.meta{margin:0 0 16px 0}.meta div{margin:2px 0}'+
+             '.n{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:14px 0}.d{font-weight:600;margin-bottom:8px}</style>';
+  var body = '';
+  var title = (info && (info.name||'')) || currentJobTitle();
+  if (title) body += '<h1>'+ esc(title) +'</h1>';
+  if (info && info.address) body += '<div class="address">'+ esc(info.address) +'</div>';
+  if (info && (info.po || info.stage)){
+    body += '<div class="meta">';
+    if (info.po) body += '<div>PO: '+ esc(info.po) +'</div>';
+    if (info.stage) body += '<div>Stage: '+ esc(info.stage) +'</div>';
+    body += '</div>';
+  }
+  (notes||[]).forEach(function(n){
+    body += '<div class="n"><div class="d">'+ esc(n.date) +'</div>'+ toBullets(n.text) +'</div>';
+  });
+  return '<!doctype html><html><head>'+ head +'</head><body>'+ body +'</body></html>';
 }
 
 
 btnPrint.addEventListener('click', function(){
-      var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
-      var info = jobInfo();
-      var html = __ep_buildPrintHTML_fromPrint(info, notes);
-
-      // Create hidden iframe
-      var iframe = document.getElementById('_ep_print_iframe');
-      if (!iframe){
-        iframe = document.createElement('iframe');
-        iframe.id = '_ep_print_iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0'; iframe.style.bottom = '0';
-        iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
-        document.body.appendChild(iframe);
-      }
-      var doc = iframe.contentWindow || iframe.contentDocument;
-      if (doc.document) doc = doc.document;
-      doc.open(); doc.write(html); doc.close();
-
-      // Trigger OS print, then clean up
-      var w = iframe.contentWindow;
-      var cleanup = function(){ try{ document.body.removeChild(iframe); }catch(_){ } };
-      w.onafterprint = cleanup;
-      setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){ cleanup(); } }, 50);
-    });
-
-      html+='<script>window.print();<\/script></body></html>';
-      w.document.open(); w.document.write(html); w.document.close();
-    });
-
+  var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
+  var info = jobInfo();
+  var html = __ep_buildHTML(info, notes);
+  var iframe = document.getElementById('_ep_print_iframe');
+  if (!iframe){
+    iframe = document.createElement('iframe');
+    iframe.id = '_ep_print_iframe';
+    iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0';
+    iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+    document.body.appendChild(iframe);
+  }
+  var doc = iframe.contentWindow || iframe.contentDocument; if (doc.document) doc = doc.document;
+  doc.open(); doc.write(html); doc.close();
+  var w = iframe.contentWindow;
+  var cleanup = function(){ try{ document.body.removeChild(iframe); }catch(_){ } };
+  w.onafterprint = cleanup;
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){ cleanup(); } }, 50);
+});
 
 
     document.body.appendChild(ov);
@@ -278,19 +242,8 @@ btnPrint.addEventListener('click', function(){
     var tries=0, t=setInterval(function(){ renameButton(); tries++; if(tries>=6) clearInterval(t); }, 500);
   });
 })();
-  
-function jobInfo(){
-    function gt(id){
-      var n = document.getElementById(id);
-      if (!n) return '';
-      var tag = (n.tagName||'').toLowerCase();
-      if (tag === 'input' || tag === 'textarea') return (n.value||'').trim();
-      if (tag === 'select'){
-        var opt = n.options && n.options[n.selectedIndex];
-        return opt ? (opt.text||opt.value||'').trim() : (n.value||'').trim();
-      }
-      return (n.textContent||'').trim();
-    }
+  function jobInfo(){
+    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
     var name = gt('job-name') || gt('job-summary') || currentJobTitle();
     var address = gt('job-address');
     var po = gt('job-po');
