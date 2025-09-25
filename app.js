@@ -314,7 +314,7 @@
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
-       item.setAttribute("data-index", i); const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
+      const d = document.createElement("div"); d.className = "note-date"; d.textContent = obj.d || ymd();
       const body = document.createElement("div"); body.className = "note-text"; body.innerHTML = obj.html ? sanitizeHtml(obj.html) : formatMarkdownLite(obj.text || String(n));
       item.appendChild(d); item.appendChild(body);
       list.appendChild(item);
@@ -679,7 +679,10 @@ function renderAll() {
     });
 
     $("print-job").addEventListener("click", () => {
-  try { if (typeof openModal === 'function') { openModal(); return; } } catch(_) {}
+  const j = currentJob(); if (!j) return;
+  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
+  buildPrintSheet(j, idx);
+  window.print();
 });
 
 $("archive-job").addEventListener("click", () => {
@@ -932,70 +935,3 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
-
-// === Binder: note selection + delete (no '$' dependency) ===
-(function(){
-  function gid(id){ return document.getElementById(id); }
-  function qs(sel, root){ return (root||document).querySelector(sel); }
-  function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
-
-  function bindNoteSelection(){
-    var list = gid("notes-list"); if (!list) return;
-    if (list.__noteClickBound) return;
-    list.__noteClickBound = true;
-    list.addEventListener("click", function(e){
-      var item = e.target;
-      while (item && item !== list && !(item.classList && item.classList.contains("note-item"))) item = item.parentNode;
-      if (!item || item === list) return;
-      qsa(".note-item.selected", list).forEach(function(n){ n.classList.remove("selected"); });
-      item.classList.add("selected");
-      var i = parseInt(item.getAttribute("data-index") || "-1", 10);
-      if (isNaN(i)){
-        i = qsa(".note-item", list).indexOf(item);
-      }
-      window.state = window.state || {}; window.state.ui = window.state.ui || {};
-      window.state.ui.selectedNoteIndex = (typeof i === "number" ? i : null);
-      var btn = gid("delete-note"); if (btn) btn.disabled = (window.state.ui.selectedNoteIndex == null);
-    });
-  }
-
-  // Hook renderPanel to rebind after each render
-  if (typeof window.renderPanel === "function"){
-    var _renderPanel = window.renderPanel;
-    window.renderPanel = function(){
-      var r = _renderPanel.apply(this, arguments);
-      try{ bindNoteSelection(); }catch(_){}
-      return r;
-    };
-  } else {
-    document.addEventListener("DOMContentLoaded", bindNoteSelection, {once:true});
-  }
-
-  // Delete button handler
-  document.addEventListener("DOMContentLoaded", function(){
-    var delBtn = gid("delete-note");
-    if (!delBtn) return;
-    delBtn.disabled = true;
-    delBtn.addEventListener("click", function(){
-      try{
-        var j = (typeof window.currentJob === "function") ? window.currentJob() : null;
-        if (!j) return;
-        var idx = window.state && window.state.ui ? window.state.ui.selectedNoteIndex : null;
-        if (idx == null || !Array.isArray(j.notes) || idx < 0 || idx >= j.notes.length){
-          alert("Tap a note in the Log to select it, then press Delete.");
-          return;
-        }
-        if (!confirm("Delete this note?")) return;
-        j.notes.splice(idx, 1);
-        if (typeof window.markUpdated === "function") window.markUpdated(j);
-        if (typeof window.save === "function") window.save();
-        if (typeof window.renderPanel === "function") window.renderPanel();
-        var btn2 = gid("delete-note"); if (btn2) btn2.disabled = true;
-      }catch(e){
-        console.error(e);
-        alert("Couldn't delete this note.");
-      }
-    });
-  });
-})();
-// === End Binder block ===
