@@ -679,10 +679,7 @@ function renderAll() {
     });
 
     $("print-job").addEventListener("click", () => {
-  const j = currentJob(); if (!j) return;
-  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
-  buildPrintSheet(j, idx);
-  window.print();
+  try { if (typeof openModal === 'function') { openModal(); return; } } catch(_) {}
 });
 
 $("archive-job").addEventListener("click", () => {
@@ -936,49 +933,69 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
  wire(); boot(); });
 })();
 
-// === Binder: note selection + delete ===
+// === Binder: note selection + delete (no '$' dependency) ===
 (function(){
-  const listEl = $("notes-list");
+  function gid(id){ return document.getElementById(id); }
+  function qs(sel, root){ return (root||document).querySelector(sel); }
+  function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+
   function bindNoteSelection(){
-    const list = $("notes-list"); if (!list) return;
-    // Clear previous handler
+    var list = gid("notes-list"); if (!list) return;
     if (list.__noteClickBound) return;
     list.__noteClickBound = true;
     list.addEventListener("click", function(e){
-      let item = e.target;
-      while (item && item !== list && !item.classList.contains("note-item")) item = item.parentNode;
+      var item = e.target;
+      while (item && item !== list && !(item.classList && item.classList.contains("note-item"))) item = item.parentNode;
       if (!item || item === list) return;
-      // remove selection from others
-      list.querySelectorAll(".note-item.selected").forEach(n => n.classList.remove("selected"));
+      qsa(".note-item.selected", list).forEach(function(n){ n.classList.remove("selected"); });
       item.classList.add("selected");
-      const i = parseInt(item.getAttribute("data-index") || "-1", 10);
-      state.ui = state.ui || {}; state.ui.selectedNoteIndex = isNaN(i) ? null : i;
-      const btn = $("delete-note"); if (btn) btn.disabled = (state.ui.selectedNoteIndex == null);
+      var i = parseInt(item.getAttribute("data-index") || "-1", 10);
+      if (isNaN(i)){
+        i = qsa(".note-item", list).indexOf(item);
+      }
+      window.state = window.state || {}; window.state.ui = window.state.ui || {};
+      window.state.ui.selectedNoteIndex = (typeof i === "number" ? i : null);
+      var btn = gid("delete-note"); if (btn) btn.disabled = (window.state.ui.selectedNoteIndex == null);
     });
   }
-  // Hook after each renderPanel call to rebind
-  const _renderPanel = renderPanel;
-  renderPanel = function(){ _renderPanel.apply(this, arguments); try{ bindNoteSelection(); }catch(_){ } };
-  // Initial bind on DOM ready
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindNoteSelection, {once:true}); else bindNoteSelection();
+
+  // Hook renderPanel to rebind after each render
+  if (typeof window.renderPanel === "function"){
+    var _renderPanel = window.renderPanel;
+    window.renderPanel = function(){
+      var r = _renderPanel.apply(this, arguments);
+      try{ bindNoteSelection(); }catch(_){}
+      return r;
+    };
+  } else {
+    document.addEventListener("DOMContentLoaded", bindNoteSelection, {once:true});
+  }
 
   // Delete button handler
-  const delBtn = $("delete-note");
-  if (delBtn){
-    delBtn.addEventListener("click", () => {
-      const j = currentJob(); if (!j) return;
-      const idx = (state.ui && typeof state.ui.selectedNoteIndex==='number') ? state.ui.selectedNoteIndex : null;
-      if (idx == null || !Array.isArray(j.notes) || idx < 0 || idx >= j.notes.length){
-        alert("Tap a note in the Log to select it, then press Delete.");
-        return;
-      }
-      if (!confirm("Delete this note?")) return;
-      j.notes.splice(idx, 1);
-      state.ui.selectedNoteIndex = null;
-      markUpdated(j); save(); renderPanel(); toast("Note deleted");
-      const btn2 = $("delete-note"); if (btn2) btn2.disabled = true;
-    });
+  document.addEventListener("DOMContentLoaded", function(){
+    var delBtn = gid("delete-note");
+    if (!delBtn) return;
     delBtn.disabled = true;
-  }
+    delBtn.addEventListener("click", function(){
+      try{
+        var j = (typeof window.currentJob === "function") ? window.currentJob() : null;
+        if (!j) return;
+        var idx = window.state && window.state.ui ? window.state.ui.selectedNoteIndex : null;
+        if (idx == null || !Array.isArray(j.notes) || idx < 0 || idx >= j.notes.length){
+          alert("Tap a note in the Log to select it, then press Delete.");
+          return;
+        }
+        if (!confirm("Delete this note?")) return;
+        j.notes.splice(idx, 1);
+        if (typeof window.markUpdated === "function") window.markUpdated(j);
+        if (typeof window.save === "function") window.save();
+        if (typeof window.renderPanel === "function") window.renderPanel();
+        var btn2 = gid("delete-note"); if (btn2) btn2.disabled = true;
+      }catch(e){
+        console.error(e);
+        alert("Couldn't delete this note.");
+      }
+    });
+  });
 })();
-
+// === End Binder block ===

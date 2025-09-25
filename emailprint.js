@@ -120,14 +120,14 @@
     btnCancel.addEventListener('click', function(){ document.body.removeChild(ov); });
     btnEmail.addEventListener('click', async function(){
       var picks = qsa('.ep_rec', listWrap).filter(function(x){return x.checked;}).map(function(x){return x.value;});
+      var html = __ep_buildPrintHTML(info, notes);
+
       if(!picks.length){ alert('Pick at least one recipient.'); return; }
       var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var info = jobInfo();
       var subj = (info.name || currentJobTitle()) + ' - Log Update';
       var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
       var textBody = bodyLines.join('\n');
-      var html = __ep_buildPrintHTML(info, notes);
-
       var info2 = jobInfo();
       function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
       var headerHtml = '';
@@ -141,7 +141,7 @@
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: html })
+          body: JSON.stringify({ to: picks, subject: subj, text: textBody, html: htmlBody })
         });
         if (!resp.ok) {
           var txt = await resp.text();
@@ -215,7 +215,7 @@ btnPrint.addEventListener('click', function(){
   var info = jobInfo();
   var html = __ep_buildPrintHTML(info, notes);
   var w = window.open('', '_blank');
-  var closer = '<script>(function(){function c(){try{window.close()}catch(e){}} window.onafterprint=c; setTimeout(c,3000); setTimeout(c,7000); setTimeout(c,12000); window.print();})();<\/script>';
+  var closer = '<script>(function(){function c(){try{window.close()}catch(e){} } window.onafterprint=c; setTimeout(c,3000); setTimeout(c,7000); setTimeout(c,12000); window.print();})();<\/script>';
   html = html.replace('</body>', closer + '</body>');
   w.document.open(); w.document.write(html); w.document.close();
 });
