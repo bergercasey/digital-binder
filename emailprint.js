@@ -45,7 +45,7 @@
       var dateText = (dateEl.textContent||'').replace(/\s*\d{1,2}:\d{2}.*$/,'').trim();
       var body = it.querySelector('.note-text') || it.querySelector('.note-body') || it;
       var bodyText = body ? (body.innerText || body.textContent || '').trim() : '';
-      sel.push({date: dateText, text: bodyText});
+      sel.push({date: dateText, text: bodyText, html: (body ? body.innerHTML : bodyText)});
     });
     return sel;
   }
@@ -57,7 +57,43 @@
     return document.title || 'Job Log';
   }
 
-  // ---- Modal ----
+  
+  // ---- Shared template for Email and Print ----
+  function escHtml(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
+  function buildHeaderHTML(info){
+    var parts = [];
+    if (info.name) parts.push('<div style="font-size:18px;font-weight:700;margin:0 0 4px;">'+escHtml(info.name)+'</div>');
+    if (info.address) parts.push('<div style="margin:0 0 2px;">'+escHtml(info.address)+'</div>');
+    if (info.stage) parts.push('<div style="margin:0 0 12px;">Stage: '+escHtml(info.stage)+'</div>');
+    return parts.join('');
+  }
+  function normalizeNoteHTML(n){
+    // prefer existing HTML if present; otherwise convert plain text newlines to <br>
+    var h = (n && n.html) ? String(n.html) : '';
+    if (h) return h;
+    var t = (n && n.text) ? String(n.text) : '';
+    return escHtml(t).replace(/\n/g,'<br>');
+  }
+  function renderEmailPrintHTML(info, notes){
+    var header = buildHeaderHTML(info);
+    var items = notes.map(function(n){
+      return '<div style="margin:0 0 12px;">'
+           +   '<div style="font-weight:600; margin-bottom:4px;">'+escHtml(n.date || '')+'</div>'
+           +   '<div>'+ normalizeNoteHTML(n) +'</div>'
+           + '</div>';
+    }).join('');
+    var body = ''
+      + '<!DOCTYPE html><html><head><meta charset="utf-8"/>'
+      + '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
+      + '<title>Job Notes</title>'
+      + '<style>body{font:14px/1.4 -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; padding:18px;}'
+      + '.meta{color:#444;margin:0 0 10px;} h2{margin:14px 0 8px 0;font-size:16px;}</style>'
+      + '</head><body>' + header
+      + '<h2>Job Notes</h2>' + items
+      + '</body></html>';
+    return body;
+  }
+// ---- Modal ----
   function openModal(){
     var ov = document.createElement('div'); ov.id='ep_overlay';
     ov.style.position='fixed'; ov.style.inset='0'; ov.style.background='rgba(0,0,0,0.35)'; ov.style.zIndex='9999';
@@ -127,14 +163,8 @@
       var bodyLines = notes.map(function(n){ return n.date + '\n' + n.text + '\n'; });
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
-      function esc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-      var headerHtml = '';
-      if (info2.name) headerHtml += '<div style="font-size:16px;font-weight:600;margin:0 0 6px">'+esc(info2.name)+'</div>';
-      var meta=[]; if(info2.address) meta.push('Address: '+esc(info2.address)); if(info2.po) meta.push('PO: '+esc(info2.po)); if(info2.stage) meta.push('Stage: '+esc(info2.stage));
-      if (meta.length) headerHtml += '<div style="color:#555;font-size:13px;margin:0 0 12px">'+meta.join(' • ')+'</div>';
-      var htmlBody = headerHtml + notes.map(function(n){
-        return '<div style="margin:0 0 12px"><div style="font-weight:600;margin-bottom:4px">'+esc(n.date)+'</div><div>'+esc(n.text).replace(/\n/g,'<br>')+'</div></div>';
-      }).join('');
+      var htmlBody = renderEmailPrintHTML(info2, notes);
+      var textBody = (info2.name?(""+info2.name+"\n"):"") + (info2.address?(""+info2.address+"\n"):"") + (info2.stage?("Stage: "+info2.stage+"\n\n"):"") + notes.map(function(n){ return (n.date? (n.date+"\n"):"") + (n.text||"") + "\n\n"; }).join("");
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
