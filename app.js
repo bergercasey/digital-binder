@@ -964,3 +964,59 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     } catch(err) { console.error(err); }
   }, true);
 })();
+
+
+// === Checkbox delete by content match (Build 1758886347-Z5ESGF) ===
+(function() {
+  if (window.__checkboxDeleteApplied2) return; window.__checkboxDeleteApplied2 = true;
+  function $(id) { return document.getElementById(id); }
+  function strip(s){ return (s||'').replace(/\s+/g,' ').trim(); }
+  function textFromHTML(html){ try{ var d=document.createElement('div'); d.innerHTML=html||''; return strip(d.textContent||d.innerText||''); }catch(_){ return strip(html||''); }}
+  function gatherSelected(list){ 
+    const items = Array.from(list.querySelectorAll('.note-item'));
+    const selected = [];
+    for (const el of items){
+      const cb = el.querySelector('input[type="checkbox"]');
+      if (cb && cb.checked){
+        const body = strip((el.querySelector('.note-body')||{}).innerText || (el.querySelector('.note-body')||{}).textContent || el.innerText || '');
+        const date = strip((el.querySelector('.note-date')||{}).innerText || '');
+        selected.push({body, date});
+      }
+    }
+    return selected;
+  }
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
+    if (!btn) return;
+    e.preventDefault();
+    const list = $('notes-list'); if (!list) return;
+    const picks = gatherSelected(list);
+    if (!picks.length) return;
+    try {
+      const j = (typeof currentJob==='function') ? currentJob() : null;
+      if (j && Array.isArray(j.notes)) {
+        // For each picked item, find the first matching note by text/date and delete it
+        for (const pick of picks){
+          const nidx = j.notes.findIndex(n => {
+            const t = strip(n && n.text ? n.text : textFromHTML(n && n.html));
+            const dt = strip(n && (n.date || n.created || n.ts || ''));
+            if (pick.body && t && pick.body===t) return true;
+            if (pick.body && t && t.startsWith(pick.body.slice(0,60))) return true;
+            if (pick.date && dt && dt.indexOf(pick.date)>=0) return true;
+            return false;
+          });
+          if (nidx >= 0) j.notes.splice(nidx, 1);
+        }
+        if (typeof markUpdated==='function') markUpdated(j);
+        if (typeof save==='function') save();
+        if (typeof renderAll==='function') renderAll();
+      } else {
+        // Fallback: remove DOM nodes only
+        const items = Array.from(list.querySelectorAll('.note-item'));
+        for (const el of items){
+          const cb = el.querySelector('input[type="checkbox"]'); if (cb && cb.checked) el.remove();
+        }
+      }
+    } catch(err) { console.error(err); }
+  }, true);
+})();
