@@ -678,7 +678,13 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    if ($("print-job")) { $("print-job").addEventListener("click", () => { /* disabled for Step 1 */ return; }); }
+    $("print-job").addEventListener("click", () => {
+  const j = currentJob(); if (!j) return;
+  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
+  buildPrintSheet(j, idx);
+  window.print();
+});
+
 $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
@@ -929,68 +935,8 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
-
-
-
-
-// ==== Notes selection + persistent delete (Build 1758856966-W7YXEB) ====
-(function(){
-  if (window.__notesSelDelApplied) return; window.__notesSelDelApplied = true;
-  function $(id){ return document.getElementById(id); }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const list = $('notes-list');
-    if (list) {
-      // Click to select: compute index from current DOM order and store on dataset
-      list.addEventListener('click', (e) => {
-        const it = e.target && e.target.closest ? e.target.closest('.note-item') : null;
-        if (!it || !list.contains(it)) return;
-        const items = Array.from(list.querySelectorAll('.note-item'));
-        const idx = items.indexOf(it);
-        items.forEach(n => n.classList.remove('selected'));
-        it.classList.add('selected');
-        list.dataset.selIndex = String(idx);
-      });
-    }
-
-    // Delete: delete by stored index from the job model, then save+render
-    const del = $('delete-note');
-    if (del) del.addEventListener('click', (e) => {
-      e.preventDefault();
-      const list = $('notes-list'); if (!list) return;
-      const items = Array.from(list.querySelectorAll('.note-item'));
-      if (!items.length) return;
-
-      let idx = -1;
-      if (list.dataset && typeof list.dataset.selIndex !== 'undefined') {
-        idx = parseInt(list.dataset.selIndex, 10);
-        if (Number.isNaN(idx)) idx = -1;
-      }
-      if (idx < 0 || idx >= items.length) {
-        // fallback to visual selection if any
-        idx = items.findIndex(n => n.classList.contains('selected'));
-      }
-      if (idx < 0 || idx >= items.length) {
-        // final fallback: last item
-        idx = items.length - 1;
-      }
-
-      try {
-        const j = (typeof currentJob==='function') ? currentJob() : null;
-        if (j && Array.isArray(j.notes)) {
-          if (idx >= 0 && idx < j.notes.length) j.notes.splice(idx, 1);
-          else if (j.notes.length) j.notes.pop();
-          if (typeof markUpdated==='function') markUpdated(j);
-          if (typeof save==='function') save();
-          if (typeof renderAll==='function') renderAll();
-          // Clear selection
-          delete list.dataset.selIndex;
-        } else {
-          // UI fallback (shouldn't be needed)
-          const target = items[idx];
-          if (target && target.parentNode) target.parentNode.removeChild(target);
-        }
-      } catch(err) { console.error(err); }
-    });
-  });
-})();
+// No-op for Email/Print during rebuild (build 1758858299-2MMS4U)
+document.addEventListener('DOMContentLoaded', function() {
+  var ep = document.getElementById('email-print');
+  if (ep) ep.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); });
+});
