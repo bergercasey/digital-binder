@@ -125,6 +125,38 @@ function __getSelectedJob(){
     return null;
   } catch(_){ return null; }
 }
+
+// --- SAVE STATUS + ROBUST SAVE ---
+function __showSaveStatus(text, ok){
+  try{
+    var el = document.getElementById('save-status'); if(!el) return;
+    el.textContent = text;
+    el.style.background = ok ? '#065f46' : '#7f1d1d';
+    el.style.opacity = '0.95';
+    setTimeout(()=>{ el.style.opacity = '0.0'; }, 1400);
+  }catch(_){}
+}
+async function __persistAll(){
+  try{
+    if (typeof API !== 'undefined' && API && typeof API.save==='function'){
+      const res = await API.save(state);
+      __showSaveStatus('save: ok', true);
+      return res;
+    }
+    if (typeof save === 'function'){
+      const r = await save();
+      __showSaveStatus('save: ok', true);
+      return r;
+    }
+    localStorage.setItem('binder-data', JSON.stringify(state));
+    __showSaveStatus('save: local', true);
+    return { ok:true, local:true };
+  }catch(err){
+    console.error('persist error', err);
+    __showSaveStatus('save: fail', false);
+    throw err;
+  }
+}
 };
 
   let state = {
