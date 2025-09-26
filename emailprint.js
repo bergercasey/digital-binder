@@ -6,6 +6,25 @@
   function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
 
+  function hijackPrintButton(){
+    try{
+      var btn = document.getElementById('print-job');
+      if (!btn || btn.__hijacked) return;
+      var clone = btn.cloneNode(true);
+      clone.id = 'print-job'; // keep the same id
+      clone.textContent = 'Email/Print';
+      clone.__hijacked = true;
+      // Remove original then insert clone
+      btn.parentNode.replaceChild(clone, btn);
+      // Our handler: open modal, no OS print
+      clone.addEventListener('click', function(e){
+        try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
+        openModal();
+      }, true);
+    }catch(_){}
+  }
+
+
   // ---- Contacts (normalize to {name,email}) ----
   function parseContact(s){
     if (typeof s === 'object' && s && s.email) return {name: s.name || s.email, email: s.email};
@@ -249,3 +268,12 @@ btnPrint.addEventListener('click', function(){
     if (stage) lines.push('Stage: ' + stage);
     return { name: name, address: address, po: po, stage: stage, lines: lines };
   }
+
+  // Boot / observers
+  onReady(function(){
+    try { hijackPrintButton(); } catch(_){}
+    try {
+      var mo = new MutationObserver(function(){ hijackPrintButton(); });
+      mo.observe(document.body, { childList: true, subtree: true });
+    } catch(_){}
+  });
