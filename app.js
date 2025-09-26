@@ -930,42 +930,37 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
  wire(); boot(); });
 })();
 
-// ==== Checkbox delete only (Build 1758885366-KS6AA7) ====
+// === Delete selected notes by checkbox only (Build 1758885703-6NAGTH) ===
 (function() {
+  if (window.__checkboxDeleteApplied) return; window.__checkboxDeleteApplied = true;
   function $(id) { return document.getElementById(id); }
-  document.addEventListener('DOMContentLoaded', function() {
-    var del = $('delete-note');
-    if (!del) return;
-    del.addEventListener('click', function(e) {
-      e.preventDefault();
-      try {
-        var list = $('notes-list'); if (!list) return;
-        var boxes = Array.from(list.querySelectorAll('input[type="checkbox"]:checked'));
-        if (!boxes.length) return;
-        var items = Array.from(list.querySelectorAll('.note-item'));
-        var idxs = boxes.map(function(cb) {
-          var it = cb.closest('.note-item');
-          return items.indexOf(it);
-        }).filter(function(i) { return i >= 0; });
-        if (!idxs.length) return;
-        idxs.sort(function(a,b){ return b-a; });
-        var j = (typeof currentJob === 'function') ? currentJob() : null;
-        if (j && Array.isArray(j.notes)) {
-          idxs.forEach(function(i) {
-            if (i >= 0 && i < j.notes.length) j.notes.splice(i, 1);
-          });
-          if (typeof markUpdated === 'function') markUpdated(j);
-          if (typeof save === 'function') save();
-          if (typeof renderAll === 'function') renderAll();
-        } else {
-          idxs.forEach(function(i) {
-            var target = items[i];
-            if (target && target.parentNode) target.parentNode.removeChild(target);
-          });
-        }
-      } catch (err) {
-        console.error(err);
+  function getCheckedIndexes(list) {
+    const items = Array.from(list.querySelectorAll('.note-item'));
+    const idxs = [];
+    for (let i = 0; i < items.length; i++) {
+      const cb = items[i].querySelector('input[type="checkbox"]');
+      if (cb && cb.checked) idxs.push(i);
+    }
+    return idxs;
+  }
+  document.addEventListener('click', function(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
+    if (!btn) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    const list = $('notes-list'); if (!list) return;
+    const idxs = getCheckedIndexes(list);
+    if (!idxs.length) return; // require checked; do nothing if none
+    try {
+      const j = (typeof currentJob==='function') ? currentJob() : null;
+      if (j && Array.isArray(j.notes)) {
+        idxs.sort((a,b)=>b-a).forEach(i => { if (i>=0 && i<j.notes.length) j.notes.splice(i,1); });
+        if (typeof markUpdated==='function') markUpdated(j);
+        if (typeof save==='function') save();
+        if (typeof renderAll==='function') renderAll();
+      } else {
+        const items = Array.from(list.querySelectorAll('.note-item'));
+        idxs.sort((a,b)=>b-a).forEach(i => { const el = items[i]; if (el && el.parentNode) el.parentNode.removeChild(el); });
       }
-    });
-  });
+    } catch(err) { console.error(err); }
+  }, true);
 })();
