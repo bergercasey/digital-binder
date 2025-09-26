@@ -148,7 +148,7 @@ header { position: relative; }
   <meta name="theme-color" content="#0b7ef2">
 </head>
 <body>
-<div style="position:sticky;top:0;left:0;right:0;background:#111;color:#8ff542;font:12px/1.4 monospace;padding:6px 10px;z-index:10000;">BUILD ID: 1758848808</div>
+<div style="position:sticky;top:0;left:0;right:0;background:#111;color:#8ff542;font:12px/1.4 monospace;padding:6px 10px;z-index:10000;">BUILD ID: 1758849230</div>
 
   <div class="errbar" id="errbar"></div>
 
@@ -207,7 +207,7 @@ header { position: relative; }
         <!-- Job fields -->
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
-            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button id="print-job" class="btn" onclick="try{event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();if(window.__epOpenModal){window.__epOpenModal();}else if(window.openModal){openModal();}else if(window.__epOpenFallback){window.__epOpenFallback();}}catch(e){}" >Email/Print</button>
+            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button id="print-job" class="btn">Print</button>
 <button class="danger" id="delete-job">Delete</button></div>
             </div>
           <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
@@ -340,193 +340,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script src="checks.js?v=1758848808"></script>
-  <script src="emailprint.js?v=1758848808"></script>
-
-<!-- Email/Print enforcer -->
-<script>
-(function(){
-  function replaceBtn(){
-    var b = document.getElementById('print-job');
-    if(!b || b.__epFixed) return;
-    var clone = b.cloneNode(true);
-    clone.id = 'print-job';
-    clone.textContent = 'Email/Print';
-    clone.__epFixed = true;
-    clone.setAttribute('type','button');
-    clone.addEventListener('click', function(e){
-      try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
-      if (window.__epOpenModal) { try{ window.__epOpenModal(); return; }catch(_){ } }
-    }, true);
-    b.parentNode.replaceChild(clone, b);
-  }
-  function boot(){ replaceBtn(); var tries=0; var iv=setInterval(function(){ tries++; replaceBtn(); if(tries>60) clearInterval(iv); }, 200); }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-})();
-</script>
-
-
-<script>
-/* ep_capture_print */
-document.addEventListener('click', function(e){
-  try{
-    var btn = document.getElementById('print-job');
-    if (btn && (e.target === btn || (btn.contains && btn.contains(e.target)))) {
-      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-      if (window.__epOpenModal) { window.__epOpenModal(); }
-    }
-  }catch(_){}
-}, true);
-</script>
-
-
-<script>
-/* ep_capture_print_v2 */
-(function(){
-  function epText(el){ return el ? (el.textContent||'').trim() : ''; }
-  function epHTML(el){ return el ? (el.innerHTML||'').trim() : ''; }
-  function epCollect(){
-    var items = Array.prototype.slice.call(document.querySelectorAll('#notes-list .note-item'));
-    var res = [];
-    items.forEach(function(it){
-      var dEl = it.querySelector('.note-date');
-      if (!dEl) return;
-      var cb = dEl.querySelector('input.pe_row_chk');
-      if (!cb || !cb.checked) return;
-      var dTxt = epText(dEl).replace(/\s*\d{1,2}:\d{2}.*$/,'');
-      var body = it.querySelector('.note-text') || it.querySelector('.note-body') || it;
-      res.push({ date: dTxt, html: epHTML(body), text: epText(body) });
-    });
-    return res;
-  }
-  function epJobInfo(){
-    function gt(id){ var n=document.getElementById(id); return n ? (n.textContent||'').trim() : ''; }
-    var name = gt('job-name') || gt('job-summary') || document.title;
-    var address = gt('job-address'); var stage = gt('job-stage');
-    return { name: name, address: address, stage: stage };
-  }
-  function epEsc(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-  function epNormalize(n){ return n && n.html ? n.html : epEsc(n && n.text ? n.text : '').replace(/\n/g,'<br>'); }
-  function epRender(info, notes){
-    var header = '';
-    if (info.name) header += '<div style="font-size:18px;font-weight:700;margin:0 0 4px;">'+epEsc(info.name)+'</div>';
-    if (info.address) header += '<div style="margin:0 0 2px;">'+epEsc(info.address)+'</div>';
-    if (info.stage) header += '<div style="margin:0 0 12px;">Stage: '+epEsc(info.stage)+'</div>';
-    var items = notes.map(function(n){
-      return '<div style="margin:0 0 12px;"><div style="font-weight:600;margin-bottom:4px;">'+epEsc(n.date||'')+'</div><div>'+epNormalize(n)+'</div></div>';
-    }).join('');
-    return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Job Notes</title><style>body{font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;padding:18px;}h2{margin:14px 0 8px;font-size:16px}</style></head><body>'+header+'<h2>Job Notes</h2>'+items+'
-<script>
-/* ep_capture_print_v3 1758848808 */
-(function(){
-  function handle(e){
-    try{
-      var btn = document.getElementById('print-job');
-      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
-        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-        if (window.__epOpenModal) { window.__epOpenModal(); return; }
-        if (window.openModal) { try{ openModal(); return; }catch(_){} }
-        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
-      }
-    }catch(_)!==undefined{}
-  }
-  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
-    document.addEventListener(t, handle, true);
-  });
-})();
-</script>
-
-</body></html>';
-  }
-  function epOpenFallback(){
-    var notes = epCollect();
-    if (!notes.length){ alert('Select at least one log entry.'); return; }
-    var info = epJobInfo();
-    var html = epRender(info, notes);
-    var w = window.open('', '_blank', 'noopener');
-    var auto = "<script>window.onafterprint=function(){setTimeout(function(){window.close();},10);};setTimeout(function(){window.print();},0);<\/script>";
-    var out = html.replace('
-<script>
-/* ep_capture_print_v3 1758848808 */
-(function(){
-  function handle(e){
-    try{
-      var btn = document.getElementById('print-job');
-      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
-        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-        if (window.__epOpenModal) { window.__epOpenModal(); return; }
-        if (window.openModal) { try{ openModal(); return; }catch(_){} }
-        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
-      }
-    }catch(_)!==undefined{}
-  }
-  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
-    document.addEventListener(t, handle, true);
-  });
-})();
-</script>
-
-</body></html>', auto + '
-<script>
-/* ep_capture_print_v3 1758848808 */
-(function(){
-  function handle(e){
-    try{
-      var btn = document.getElementById('print-job');
-      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
-        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-        if (window.__epOpenModal) { window.__epOpenModal(); return; }
-        if (window.openModal) { try{ openModal(); return; }catch(_){} }
-        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
-      }
-    }catch(_)!==undefined{}
-  }
-  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
-    document.addEventListener(t, handle, true);
-  });
-})();
-</script>
-
-</body></html>');
-    w.document.open(); w.document.write(out); w.document.close();
-  }
-  // Global so we can call it from anywhere
-  window.__epOpenFallback = epOpenFallback;
-  // Document-level capture with robust fallbacks
-  document.addEventListener('click', function(e){
-    try{
-      var btn = document.getElementById('print-job');
-      if (btn && (e.target === btn || (btn.contains && btn.contains(e.target)))){
-        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-        if (window.__epOpenModal) { window.__epOpenModal(); return; }
-        if (window.openModal) { try{ window.openModal(); return; }catch(_){} }
-        window.__epOpenFallback();
-      }
-    }catch(_){}
-  }, true);
-})();
-</script>
-
-
-<script>
-/* ep_capture_print_v3 1758848808 */
-(function(){
-  function handle(e){
-    try{
-      var btn = document.getElementById('print-job');
-      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
-        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-        if (window.__epOpenModal) { window.__epOpenModal(); return; }
-        if (window.openModal) { try{ openModal(); return; }catch(_){} }
-        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
-      }
-    }catch(_)!==undefined{}
-  }
-  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
-    document.addEventListener(t, handle, true);
-  });
-})();
-</script>
-
+  <script src="checks.js?v=1758849230"></script>
+  <script src="emailprint.js?v=1758849230"></script>
 </body>
 </html>
