@@ -105,7 +105,27 @@ function __renderNotesIfKnown(jobId){
         return { ok: true, local: true };
       }
     }
-  };
+  
+// --- PERSISTENT DELETE HELPERS ---
+function __getSelectedJob(){
+  try{
+    // Prefer app's own getter if present
+    if (typeof currentJob === 'function') { const j = currentJob(); if (j) return j; }
+  }catch(_){}
+  try{
+    // Fallback: use global state + selected IDs
+    const s = (typeof state !== 'undefined') ? state : window.state;
+    if (!s) return null;
+    const jid = s?.ui?.selectedJobId;
+    if (!jid) return null;
+    for (const c of (s.contractors||[])){
+      const j = (c.jobs||[]).find(x=>x && x.id===jid);
+      if (j) return j;
+    }
+    return null;
+  } catch(_){ return null; }
+}
+};
 
   let state = {
     companyLogoDataUrl: "",
