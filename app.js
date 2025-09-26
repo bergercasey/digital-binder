@@ -427,7 +427,21 @@
   }
 
   // --- Printing helpers ---
-  </div><div class="print-body">${inner}</div></div>`;
+  function buildPrintSheet(job, idx) {
+    const el = $("print-sheet"); if (!el) return;
+    const title = escapeHtml(job.name || "Job");
+    const crew = (job.crew || []).join(", ");
+    const meta = [
+      job.stage ? "Stage: " + escapeHtml(job.stage) : null,
+      job.po ? "PO: " + escapeHtml(job.po) : null,
+      crew ? "Crew: " + escapeHtml(crew) : null,
+      job.address ? "Address: " + escapeHtml(job.address) : null
+    ].filter(Boolean).join(" \u2022 ");
+    let notes = job.notes || [];
+    if (typeof idx === "number" && idx >= 0 && idx < notes.length) notes = [notes[idx]];
+    const body = notes.map(n => {
+      const inner = n.html ? sanitizeHtml(n.html) : formatMarkdownLite(n.text || "").replace(/\n/g,"<br>");
+      return `<div class="print-note"><div class="print-date">${escapeHtml(n.d||"")}</div><div class="print-body">${inner}</div></div>`;
     }).join("");
     el.innerHTML = `<div class="print-head"><div class="print-title">${title}</div><div class="print-meta">${meta}</div></div>` + body;
   }
@@ -664,10 +678,8 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    if (!j) return;
-  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
-  buildPrintSheet(j, idx);
-  window.print();
+    $("print-job").addEventListener("click", () => {
+  /* disabled for Step 1 */ return;
 });
 
 $("archive-job").addEventListener("click", () => {
@@ -920,24 +932,13 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
-
-// ==== Step 1 cleanup listeners (build 1758853518-D00M0N) ====
+// ==== Step 1 cleanup listeners (build 1758853860-LY7392) ====
 document.addEventListener('DOMContentLoaded', () => {
-  const toast = (msg) => { try { const t = document.getElementById('toast-wrap'); if (!t) return alert(msg); 
-    const div = document.createElement('div'); div.className='toast'; div.textContent=msg; 
-    t.appendChild(div); setTimeout(()=>div.remove(), 2000); } catch (e) { console.log(msg); } };
-
-  // Placeholder for Email/Print (disabled for Step 1)
-  const ep = document.getElementById('email-print');
-  if (ep) ep.addEventListener('click', (e) => { e.preventDefault(); toast('Email/Print disabled — rebuilding fresh.'); });
-
-  // Note selection + delete
   const list = document.getElementById('notes-list');
   if (list) {
     list.addEventListener('click', (e) => {
       const item = e.target.closest('.note-item');
       if (!item) return;
-      // Clear others, mark selected
       [...list.querySelectorAll('.note-item')].forEach(n => n.classList.remove('selected'));
       item.classList.add('selected');
     });
@@ -950,14 +951,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!j) return;
       const items = list ? [...list.querySelectorAll('.note-item')] : [];
       let idx = items.findIndex(n => n.classList.contains('selected'));
-      if (idx < 0) idx = items.length - 1; // default to last
+      if (idx < 0) idx = items.length - 1;
       if (idx < 0) return;
       j.notes = (j.notes || []);
       j.notes.splice(idx, 1);
       if (typeof markUpdated === 'function') markUpdated(j);
       if (typeof save === 'function') save();
       if (typeof renderAll === 'function') renderAll();
-      toast('Note deleted');
     } catch (err) { console.error(err); }
   });
+  const ep = document.getElementById('email-print');
+  if (ep) ep.addEventListener('click', (e) => { e.preventDefault(); (window.alert||console.log)('Email/Print disabled — rebuilding fresh.'); });
 });
