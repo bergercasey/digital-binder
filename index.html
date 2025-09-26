@@ -148,7 +148,7 @@ header { position: relative; }
   <meta name="theme-color" content="#0b7ef2">
 </head>
 <body>
-<div style="position:sticky;top:0;left:0;right:0;background:#111;color:#8ff542;font:12px/1.4 monospace;padding:6px 10px;z-index:10000;">BUILD ID: 1758847522</div>
+<div style="position:sticky;top:0;left:0;right:0;background:#111;color:#8ff542;font:12px/1.4 monospace;padding:6px 10px;z-index:10000;">BUILD ID: 1758848808</div>
 
   <div class="errbar" id="errbar"></div>
 
@@ -207,7 +207,7 @@ header { position: relative; }
         <!-- Job fields -->
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
-            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button id="print-job" class="btn">Print</button>
+            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button id="print-job" class="btn" onclick="try{event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();if(window.__epOpenModal){window.__epOpenModal();}else if(window.openModal){openModal();}else if(window.__epOpenFallback){window.__epOpenFallback();}}catch(e){}" >Email/Print</button>
 <button class="danger" id="delete-job">Delete</button></div>
             </div>
           <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
@@ -340,8 +340,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script src="checks.js?v=1758847522"></script>
-  <script src="emailprint.js?v=1758847522"></script>
+  <script src="checks.js?v=1758848808"></script>
+  <script src="emailprint.js?v=1758848808"></script>
 
 <!-- Email/Print enforcer -->
 <script>
@@ -415,7 +415,28 @@ document.addEventListener('click', function(e){
     var items = notes.map(function(n){
       return '<div style="margin:0 0 12px;"><div style="font-weight:600;margin-bottom:4px;">'+epEsc(n.date||'')+'</div><div>'+epNormalize(n)+'</div></div>';
     }).join('');
-    return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Job Notes</title><style>body{font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;padding:18px;}h2{margin:14px 0 8px;font-size:16px}</style></head><body>'+header+'<h2>Job Notes</h2>'+items+'</body></html>';
+    return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Job Notes</title><style>body{font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;padding:18px;}h2{margin:14px 0 8px;font-size:16px}</style></head><body>'+header+'<h2>Job Notes</h2>'+items+'
+<script>
+/* ep_capture_print_v3 1758848808 */
+(function(){
+  function handle(e){
+    try{
+      var btn = document.getElementById('print-job');
+      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        if (window.__epOpenModal) { window.__epOpenModal(); return; }
+        if (window.openModal) { try{ openModal(); return; }catch(_){} }
+        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
+      }
+    }catch(_)!==undefined{}
+  }
+  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+    document.addEventListener(t, handle, true);
+  });
+})();
+</script>
+
+</body></html>';
   }
   function epOpenFallback(){
     var notes = epCollect();
@@ -424,7 +445,49 @@ document.addEventListener('click', function(e){
     var html = epRender(info, notes);
     var w = window.open('', '_blank', 'noopener');
     var auto = "<script>window.onafterprint=function(){setTimeout(function(){window.close();},10);};setTimeout(function(){window.print();},0);<\/script>";
-    var out = html.replace('</body></html>', auto + '</body></html>');
+    var out = html.replace('
+<script>
+/* ep_capture_print_v3 1758848808 */
+(function(){
+  function handle(e){
+    try{
+      var btn = document.getElementById('print-job');
+      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        if (window.__epOpenModal) { window.__epOpenModal(); return; }
+        if (window.openModal) { try{ openModal(); return; }catch(_){} }
+        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
+      }
+    }catch(_)!==undefined{}
+  }
+  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+    document.addEventListener(t, handle, true);
+  });
+})();
+</script>
+
+</body></html>', auto + '
+<script>
+/* ep_capture_print_v3 1758848808 */
+(function(){
+  function handle(e){
+    try{
+      var btn = document.getElementById('print-job');
+      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        if (window.__epOpenModal) { window.__epOpenModal(); return; }
+        if (window.openModal) { try{ openModal(); return; }catch(_){} }
+        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
+      }
+    }catch(_)!==undefined{}
+  }
+  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+    document.addEventListener(t, handle, true);
+  });
+})();
+</script>
+
+</body></html>');
     w.document.open(); w.document.write(out); w.document.close();
   }
   // Global so we can call it from anywhere
@@ -441,6 +504,27 @@ document.addEventListener('click', function(e){
       }
     }catch(_){}
   }, true);
+})();
+</script>
+
+
+<script>
+/* ep_capture_print_v3 1758848808 */
+(function(){
+  function handle(e){
+    try{
+      var btn = document.getElementById('print-job');
+      if (btn && (e.target===btn || (btn.contains && btn.contains(e.target)))) {
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        if (window.__epOpenModal) { window.__epOpenModal(); return; }
+        if (window.openModal) { try{ openModal(); return; }catch(_){} }
+        if (window.__epOpenFallback) { window.__epOpenFallback(); return; }
+      }
+    }catch(_)!==undefined{}
+  }
+  ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+    document.addEventListener(t, handle, true);
+  });
 })();
 </script>
 
