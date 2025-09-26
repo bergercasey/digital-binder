@@ -1005,3 +1005,20 @@ document.addEventListener('DOMContentLoaded', () => {
     deleteSelected();
   }, true);
 })();
+
+
+// Minimal toast for delete feedback (Build 1758854558-CETV9P)
+(function(){ 
+  if (window.__delToast) return; window.__delToast = true;
+  function toast(msg){ try{ 
+    const w = document.getElementById('toast-wrap'); 
+    if (!w) return console.log(msg);
+    const d = document.createElement('div'); d.className='toast'; d.textContent=msg;
+    w.appendChild(d); setTimeout(()=>d.remove(), 1500);
+  }catch(_){} }
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
+    if (!btn) return;
+    setTimeout(()=>toast('Note deleted'), 50);
+  }, true);
+})();
