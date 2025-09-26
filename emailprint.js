@@ -309,3 +309,125 @@ btnPrint.addEventListener('click', function(){
       }, 200);
     }catch(_){}
   })();
+
+  // ==== DEBUG PANEL & INSTRUMENTATION (visible on page) ====
+  (function(){
+    if (window.__epDebugLoaded) return; window.__epDebugLoaded = true;
+
+    function makePanel(){
+      var p = document.createElement('div');
+      p.id = 'ep_debug_panel';
+      p.style.position = 'fixed';
+      p.style.bottom = '10px';
+      p.style.right = '10px';
+      p.style.width = '320px';
+      p.style.maxHeight = '40vh';
+      p.style.background = 'rgba(0,0,0,0.8)';
+      p.style.color = '#0f0';
+      p.style.font = '12px/1.3 monospace';
+      p.style.border = '1px solid #444';
+      p.style.borderRadius = '8px';
+      p.style.zIndex = 1000000;
+      p.style.display = 'flex';
+      p.style.flexDirection = 'column';
+      var head = document.createElement('div');
+      head.style.display='flex'; head.style.alignItems='center'; head.style.justifyContent='space-between';
+      head.style.padding='6px 8px'; head.style.background='#111'; head.style.borderBottom='1px solid #333';
+      var title = document.createElement('div'); title.textContent = 'EP Debug';
+      var btns = document.createElement('div');
+      var btnClear = document.createElement('button'); btnClear.textContent='Clear'; btnClear.style.marginRight='6px';
+      var btnScan = document.createElement('button'); btnScan.textContent='Scan';
+      [btnClear, btnScan].forEach(function(b){ b.style.font='11px monospace'; b.style.padding='2px 6px'; b.style.cursor='pointer'; });
+      btns.appendChild(btnClear); btns.appendChild(btnScan);
+      head.appendChild(title); head.appendChild(btns);
+      var body = document.createElement('div');
+      body.id='ep_debug_body';
+      body.style.overflow='auto'; body.style.padding='8px';
+      body.style.whiteSpace='pre-wrap';
+      body.style.wordBreak='break-word';
+      body.style.flex='1 1 auto';
+      p.appendChild(head); p.appendChild(body);
+      document.body.appendChild(p);
+
+      btnClear.addEventListener('click', function(){ body.textContent=''; });
+      btnScan.addEventListener('click', scanButtons);
+
+      function log(msg){
+        var t = new Date().toLocaleTimeString();
+        body.textContent += '['+t+'] ' + msg + '\n';
+        body.scrollTop = body.scrollHeight;
+      }
+      window.__epLog = log;
+
+      scanButtons();
+    }
+
+    function scanButtons(){
+      try{
+        var list = Array.prototype.slice.call(document.querySelectorAll('button, a'));
+        var matches = list.filter(function(n){
+          var t = (n.textContent||'').trim().toLowerCase();
+          return t.indexOf('print') !== -1 || n.id === 'print-job';
+        });
+        __epLog('--- Scan: found '+matches.length+' print-like buttons ---');
+        matches.forEach(function(n,i){
+          var info = '#'+(n.id||'') + ' .' + (n.className||'') + ' <'+(n.tagName)+'> text="'+(n.textContent||'').trim()+'"';
+          __epLog('['+i+'] '+info);
+        });
+      }catch(e){ try{ __epLog('scanButtons err: '+e.message); }catch(_){} }
+    }
+
+    // Monkey-patch addEventListener to log anything bound to #print-job
+    try{
+      var _add = EventTarget.prototype.addEventListener;
+      EventTarget.prototype.addEventListener = function(type, listener, options){
+        try{
+          var isPrintEl = false;
+          if (this && this.nodeType === 1){ // element
+            if (this.id === 'print-job') isPrintEl = true;
+            else if (this.matches) isPrintEl = this.matches('#print-job');
+          }
+          if (isPrintEl) {
+            var linfo = (listener && listener.name) ? listener.name : (''+listener).slice(0,80);
+            __epLog('Listener added to #print-job: '+type+' -> '+linfo);
+          }
+        }catch(_){}
+        return _add.call(this, type, listener, options);
+      };
+    }catch(_){}
+
+    // Global capture to log/stop events targeted at #print-job
+    function capture(e){
+      try{
+        var pj = document.getElementById('print-job');
+        var inside = pj && (e.target === pj || (pj.contains && pj.contains(e.target)));
+        if (inside){
+          __epLog('CAPTURE '+e.type+' on #print-job (preventing default & propagation)');
+          e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+          // open our modal to confirm the intercept
+          if (e.type === 'click' || e.type === 'pointerup' || e.type === 'mouseup' || e.type === 'touchend'){
+            try{ openModal(); }catch(_){}
+          }
+        }
+      }catch(err){ try{ __epLog('capture err: '+err.message); }catch(_){} }
+    }
+    ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+      document.addEventListener(t, capture, true);
+    });
+
+    // Visual confirmation on the button itself
+    function tagButton(){
+      try{
+        var pj = document.getElementById('print-job');
+        if (!pj || pj.__epTagged) return;
+        pj.__epTagged = true;
+        pj.textContent = 'Email/Print (captured)';
+        pj.style.outline = '2px dashed #0f0';
+        pj.style.outlineOffset = '2px';
+      }catch(_){}
+    }
+
+    if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ makePanel(); tagButton(); }); else { makePanel(); tagButton(); }
+    var mo = new MutationObserver(function(){ tagButton(); });
+    mo.observe(document.documentElement || document.body, {childList:true, subtree:true});
+  })();
