@@ -929,110 +929,44 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
-// ==== Step 1 cleanup listeners (build 1758853860-LY7392) ====
-document.addEventListener('DOMContentLoaded', () => {
-  const list = document.getElementById('notes-list');
+
+
+// ==== Notes-only selection & delete (clean) ====
+(function() {
+  function $(id){ return document.getElementById(id); }
+  const list = $('notes-list');
   if (list) {
     list.addEventListener('click', (e) => {
-      const item = e.target.closest('.note-item');
-      if (!item) return;
+      const item = e.target.closest && e.target.closest('.note-item');
+      if (!item || !list.contains(item)) return;
       [...list.querySelectorAll('.note-item')].forEach(n => n.classList.remove('selected'));
       item.classList.add('selected');
     });
   }
-  const delBtn = document.getElementById('delete-note');
-  if (delBtn) delBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    try {
-      const j = (typeof currentJob === 'function') ? currentJob() : null;
-      if (!j) return;
-      const items = list ? [...list.querySelectorAll('.note-item')] : [];
-      let idx = items.findIndex(n => n.classList.contains('selected'));
-      if (idx < 0) idx = items.length - 1;
-      if (idx < 0) return;
-      j.notes = (j.notes || []);
-      j.notes.splice(idx, 1);
-      if (typeof markUpdated === 'function') markUpdated(j);
-      if (typeof save === 'function') save();
-      if (typeof renderAll === 'function') renderAll();
-    } catch (err) { console.error(err); }
-  });
-  const ep = document.getElementById('email-print');
-  if (ep) ep.addEventListener('click', (e) => { e.preventDefault(); (window.alert||console.log)('Email/Print disabled — rebuilding fresh.'); });
-});
-
-
-// Minimal toast for delete feedback (Build 1758854558-CETV9P)
-(function(){ 
-  if (window.__delToast) return; window.__delToast = true;
-  function toast(msg){ try{ 
-    const w = document.getElementById('toast-wrap'); 
-    if (!w) return console.log(msg);
-    const d = document.createElement('div'); d.className='toast'; d.textContent=msg;
-    w.appendChild(d); setTimeout(()=>d.remove(), 1500);
-  }catch(_){} }
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
-    if (!btn) return;
-    setTimeout(()=>toast('Note deleted'), 50);
-  }, true);
-})();
-
-
-// ==== Notes: robust selection + delete (Build 1758854857-VJD3TD) ====
-(function(){
-  function $(id){ return document.getElementById(id); }
-  function listEl(){ return $('notes-list'); }
-  function job(){
-    try { return (typeof currentJob==='function') ? currentJob() : null; } catch(_){
-      return null;
-    }
-  }
-  function toast(msg){
-    try {
-      const t = $('toast-wrap'); if (!t) return console.log(msg);
-      const d = document.createElement('div'); d.className='toast'; d.textContent = msg;
-      t.appendChild(d); setTimeout(()=>d.remove(), 1400);
-    } catch(_){ console.log(msg); }
-  }
-  function selectItem(el){
-    const list = listEl(); if (!list) return;
-    [...list.querySelectorAll('.note-item')].forEach(n=>n.classList.remove('selected'));
-    if (el) el.classList.add('selected');
-  }
-  // Click to select
-  document.addEventListener('click', function(e){
-    const list = listEl(); if (!list) return;
-    const item = e.target && e.target.closest ? e.target.closest('.note-item') : null;
-    if (item && list.contains(item)) selectItem(item);
-  }, true);
-
-  // Delete logic
-  document.addEventListener('click', function(e){
+  document.addEventListener('click', (e) => {
     const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
     if (!btn) return;
     e.preventDefault();
-    const j = job(); if (!j) return toast('No job selected');
-    j.notes = Array.isArray(j.notes) ? j.notes : [];
-    const list = listEl();
-
-    // Build an index from DOM order; fallback to last if no selection
-    let idx = -1;
-    if (list) {
-      const items = [...list.querySelectorAll('.note-item')];
-      idx = items.findIndex(n => n.classList.contains('selected'));
-      if (idx < 0) idx = items.length - 1;
-    } else {
-      idx = j.notes.length - 1;
-    }
-
-    if (idx < 0 || idx >= j.notes.length) return toast('No notes to delete');
-
-    // Delete and persist
-    j.notes.splice(idx, 1);
-    if (typeof markUpdated === 'function') markUpdated(j);
-    if (typeof save === 'function') save();
-    if (typeof renderAll === 'function') renderAll();
-    setTimeout(()=>toast('Note deleted'), 60);
+    const lst = $('notes-list'); if (!lst) return;
+    const items = [...lst.querySelectorAll('.note-item')];
+    if (!items.length) return;
+    let idx = items.findIndex(n => n.classList.contains('selected'));
+    if (idx < 0) idx = items.length - 1;
+    // Remove DOM node
+    const target = items[idx];
+    if (target && target.parentNode) target.parentNode.removeChild(target);
+    // Best-effort: update underlying model if present, but don't require it
+    try {
+      if (typeof currentJob === 'function') {
+        const j = currentJob();
+        if (j && Array.isArray(j.notes)) {
+          if (idx >= 0 && idx < j.notes.length) j.notes.splice(idx, 1);
+          else if (j.notes.length) j.notes.pop();
+          if (typeof markUpdated === 'function') markUpdated(j);
+          if (typeof save === 'function') save();
+        }
+      }
+    } catch(_) {}
+    // No extra toasts; UI change is the confirmation
   }, true);
 })();
