@@ -206,7 +206,10 @@ btnPrint.addEventListener('click', function(){
     if(!n) return false;
     if(n.id==='print-job') return true;
     var t=(n.textContent||'').trim().toLowerCase();
-    return t==='print selected' || t==='print';
+    if (t==='email/print' || t==='print selected' || t==='print') return true;
+    // be generous: catch buttons that contain the word "print" anywhere
+    if (t.indexOf('email/print') !== -1 || t.indexOf('print') !== -1) return true;
+    return false;
   }
   function interceptEvents(){
     function handle(e){
