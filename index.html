@@ -134,10 +134,7 @@
 /* Top-right user display */
 header { position: relative; }
 .header-right { position: absolute; right: 12px; top: 8px; display: inline-flex; gap: 8px; align-items: center; }
-    
-            .action-btn{padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;font:inherit;cursor:pointer;min-width:100px;text-align:center;}
-            .action-btn.red{background:#ef4444;border-color:#ef4444;color:#fff;}
-            </style>
+    </style>
 <link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png">
   <link rel="apple-touch-icon" sizes="167x167" href="/jobs-icon-167.png">
   <link rel="apple-touch-icon" sizes="152x152" href="/jobs-icon-152.png">
@@ -150,9 +147,7 @@ header { position: relative; }
   <div class="errbar" id="errbar"></div>
 
   <header>
-    <h1><span style='font-weight:600;color:#b91c1c'>BUILD ID: DELFIX-1758898110</span> — HVAC Digital Binder</h1>
-O58886704-BBRX66</div>
-O58885703-6NAGTH</div>
+    <h1>HVAC Digital Binder</h1>
     <div class="toolbar">
       <button class="primary" id="add-contractor">+ Contractor</button>
       <button class="ghost" id="add-job">+ Job</button>
@@ -206,7 +201,8 @@ O58885703-6NAGTH</div>
         <!-- Job fields -->
         <div id="job-fields" style="display:none; margin-top:12px;">
           <div class="top-row" id="job-actions" style="display:none;">
-            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button class="danger" id="delete-job">Delete</button></div>
+            <div class="row"><button class="ghost" id="edit-job">Edit Job</button><span class="spacer"></span><button class="ghost" id="archive-job">Archive</button><button id="print-job" class="btn">Print</button>
+<button class="danger" id="delete-job">Delete</button></div>
             </div>
           <div id="job-summary" class="summary" style="display:none; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;"></div>
             <div class="fields" id="job-fields-inner">
@@ -218,9 +214,8 @@ O58885703-6NAGTH</div>
           </div>
           <div style="margin-top:14px;">
             <div class="field"><label>Add Note</label><div class="note-toolbar" id="note-toolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px;"><button id="note-bold" type="button"><strong>B</strong></button><button id="note-italic" type="button"><em>I</em></button><button id="note-underline" type="button"><u>U</u></button><button id="note-highlight" type="button">HL</button><button id="note-bullet" type="button">• List</button></div><div id="new-note-editor" class="note-editor" contenteditable="true" data-placeholder="What changed? Materials, inspections, dates..."></div><textarea id="new-note" style="display:none;"></textarea></textarea></div>
-            <div class="row"><div class="btn-row-inline"><button id="add-note" class="primary">Add Note</button>
-<button id="delete-note" class="action-btn red">Delete</button></div><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
-            <div class="note-actions" style="display:flex; gap:8px; align-items:center; margin-top:8px;"></div><h3 style="margin:14px 0 6px;">Log</h3><div class="print-tip">Tip: Tap a log entry to select it, then press Print to print just that entry.</div><div id="notes-list" class="list"></div>
+            <div class="row"><button id="add-note" class="primary">Add Note</button><div class="spacer"></div><div class="muted">Last updated: <span id="job-updated">—</span></div></div>
+            <h3 style="margin:14px 0 6px;">Log</h3><div class="print-tip">Tip: Tap a log entry to select it, then press Print to print just that entry.</div><div id="notes-list" class="list"></div>
           </div>
         </div>
       </div>
@@ -256,7 +251,9 @@ O58885703-6NAGTH</div>
 </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
-  <script defer src="app.1758886704-BBRX66.js"></script>
+  <script defer src="app.js"></script>
+<div id="print-sheet" style="display:none;"></div>
+
 <script>
   document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -337,10 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script src="checks.1758886704-BBRX66.js?v=1758897726&v=1758898110"></script>
-
-<script>(function(){ if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});} })();</script>
-
-<div id="save-status" style="position:fixed;right:10px;bottom:10px;padding:6px 10px;border-radius:6px;background:#111;color:#fff;font-size:12px;opacity:.0;transition:opacity .25s;z-index:9999">save: idle</div>
+  <script src="checks.js"></script>
+  <script src="emailprint.js"></script>
 </body>
 </html>

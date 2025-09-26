@@ -1,53 +1,3 @@
-
-// --- BEGIN PATCH: robust note deletion & persistence ---
-function __getCurrentJobId(){
-  try{
-    const p = new URLSearchParams(location.search);
-    const j = (p.get("job")||"").trim();
-    if(j) return j;
-  }catch(e){}
-  if (typeof getCurrentJobId === 'function') { try { return getCurrentJobId(); } catch(e){} }
-  if (window.currentJobId) return String(window.currentJobId);
-  return "default";
-}
-function __storageKey(jobId){ return "notes:"+jobId; }
-function __readNotes(jobId){
-  try{
-    const raw = localStorage.getItem(__storageKey(jobId));
-    return raw ? JSON.parse(raw) : [];
-  }catch(e){ return []; }
-}
-function __writeNotes(jobId, arr){
-  try{ localStorage.setItem(__storageKey(jobId), JSON.stringify(arr||[])); }catch(e){}
-}
-function __collectCheckedNoteIds(containerSelector){
-  var root = document.querySelector(containerSelector||"#notesUl, .notes, .notes-list, .log-list");
-  if(!root) root = document;
-  var cbs = root.querySelectorAll("input[type='checkbox'].sel, li .sel, .note-select");
-  var ids = [];
-  cbs.forEach(function(cb){
-    if(cb.checked){
-      var li = cb.closest("[data-note-id], li");
-      if(li && li.dataset && li.dataset.noteId){ ids.push(li.dataset.noteId); }
-      else if(li && li.id){ ids.push(li.id); }
-    }
-  });
-  return ids;
-}
-function __renderNotesIfKnown(jobId){
-  // try common renderers
-  if (typeof renderNotes === 'function'){ try{ renderNotes(jobId); return; }catch(e){} }
-  if (typeof redrawNotes === 'function'){ try{ redrawNotes(jobId); return; }catch(e){} }
-  // fallback: remove deleted items from DOM
-  var ids = __readNotes(jobId).map(function(n){return n.id});
-  document.querySelectorAll("[data-note-id]").forEach(function(li){
-    if(li.dataset && li.dataset.noteId && ids.indexOf(li.dataset.noteId) === -1){
-      li.remove();
-    }
-  });
-}
-// --- END PATCH ---
-
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -105,59 +55,7 @@ function __renderNotesIfKnown(jobId){
         return { ok: true, local: true };
       }
     }
-  
-// --- PERSISTENT DELETE HELPERS ---
-function __getSelectedJob(){
-  try{
-    // Prefer app's own getter if present
-    if (typeof currentJob === 'function') { const j = currentJob(); if (j) return j; }
-  }catch(_){}
-  try{
-    // Fallback: use global state + selected IDs
-    const s = (typeof state !== 'undefined') ? state : window.state;
-    if (!s) return null;
-    const jid = s?.ui?.selectedJobId;
-    if (!jid) return null;
-    for (const c of (s.contractors||[])){
-      const j = (c.jobs||[]).find(x=>x && x.id===jid);
-      if (j) return j;
-    }
-    return null;
-  } catch(_){ return null; }
-}
-
-// --- SAVE STATUS + ROBUST SAVE ---
-function __showSaveStatus(text, ok){
-  try{
-    var el = document.getElementById('save-status'); if(!el) return;
-    el.textContent = text;
-    el.style.background = ok ? '#065f46' : '#7f1d1d';
-    el.style.opacity = '0.95';
-    setTimeout(()=>{ el.style.opacity = '0.0'; }, 1400);
-  }catch(_){}
-}
-async function __persistAll(){
-  try{
-    if (typeof API !== 'undefined' && API && typeof API.save==='function'){
-      const res = await API.save(state);
-      __showSaveStatus('save: ok', true);
-      return res;
-    }
-    if (typeof save === 'function'){
-      const r = await save();
-      __showSaveStatus('save: ok', true);
-      return r;
-    }
-    localStorage.setItem('binder-data', JSON.stringify(state));
-    __showSaveStatus('save: local', true);
-    return { ok:true, local:true };
-  }catch(err){
-    console.error('persist error', err);
-    __showSaveStatus('save: fail', false);
-    throw err;
-  }
-}
-};
+  };
 
   let state = {
     companyLogoDataUrl: "",
@@ -411,8 +309,8 @@ async function __persistAll(){
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    // [removed print-job label update]
-const list = $("notes-list"); list.innerHTML = "";
+    const pb = $("print-job"); if (pb) { pb.textContent = "Email/Print"; }
+    const list = $("notes-list"); list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
       const item = document.createElement("div"); item.className = "note-item";
@@ -780,7 +678,13 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    // [removed print-job click listener]
+    $("print-job").addEventListener("click", () => {
+  const j = currentJob(); if (!j) return;
+  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
+  buildPrintSheet(j, idx);
+  window.print();
+});
+
 $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
@@ -1030,116 +934,43 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
     });
  wire(); boot(); });
-})();
 
-// === Delete selected notes by checkbox only (Build 1758885703-6NAGTH) ===
-(function() {
-  if (window.__checkboxDeleteApplied) return; window.__checkboxDeleteApplied = true;
-  function $(id) { return document.getElementById(id); }
-  function getCheckedIndexes(list) {
-    const items = Array.from(list.querySelectorAll('.note-item'));
-    const idxs = [];
-    for (let i = 0; i < items.length; i++) {
-      const cb = items[i].querySelector('input[type="checkbox"]');
-      if (cb && cb.checked) idxs.push(i);
-    }
-    return idxs;
-  }
-  document.addEventListener('click', function(e) {
-    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
-    if (!btn) return;
-    e.preventDefault(); e.stopImmediatePropagation();
-    const list = $('notes-list'); if (!list) return;
-    const idxs = getCheckedIndexes(list);
-    if (!idxs.length) return; // require checked; do nothing if none
-    try {
-      const j = (typeof currentJob==='function') ? currentJob() : null;
-      if (j && Array.isArray(j.notes)) {
-        idxs.sort((a,b)=>b-a).forEach(i => { if (i>=0 && i<j.notes.length) j.notes.splice(i,1); });
-        if (typeof markUpdated==='function') markUpdated(j);
-        if (typeof save==='function') save();
-        if (typeof renderAll==='function') renderAll();
-      } else {
-        const items = Array.from(list.querySelectorAll('.note-item'));
-        idxs.sort((a,b)=>b-a).forEach(i => { const el = items[i]; if (el && el.parentNode) el.parentNode.removeChild(el); });
-      }
-    } catch(err) { console.error(err); }
-  }, true);
-})();
-
-
-// === Checkbox delete by content match (Build 1758886347-Z5ESGF) ===
-(function() {
-  if (window.__checkboxDeleteApplied2) return; window.__checkboxDeleteApplied2 = true;
-  function $(id) { return document.getElementById(id); }
-  function strip(s){ return (s||'').replace(/\s+/g,' ').trim(); }
-  function textFromHTML(html){ try{ var d=document.createElement('div'); d.innerHTML=html||''; return strip(d.textContent||d.innerText||''); }catch(_){ return strip(html||''); }}
-  function gatherSelected(list){ 
-    const items = Array.from(list.querySelectorAll('.note-item'));
-    const selected = [];
-    for (const el of items){
-      const cb = el.querySelector('input[type="checkbox"]');
-      if (cb && cb.checked){
-        const body = strip((el.querySelector('.note-body')||{}).innerText || (el.querySelector('.note-body')||{}).textContent || el.innerText || '');
-        const date = strip((el.querySelector('.note-date')||{}).innerText || '');
-        selected.push({body, date});
-      }
-    }
-    return selected;
-  }
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
-    if (!btn) return;
-    e.preventDefault();
-    const list = $('notes-list'); if (!list) return;
-    const picks = gatherSelected(list);
-    if (!picks.length) return;
-    try {
-      const j = (typeof currentJob==='function') ? currentJob() : null;
-      if (j && Array.isArray(j.notes)) {
-        // For each picked item, find the first matching note by text/date and delete it
-        for (const pick of picks){
-          const nidx = j.notes.findIndex(n => {
-            const t = strip(n && n.text ? n.text : textFromHTML(n && n.html));
-            const dt = strip(n && (n.date || n.created || n.ts || ''));
-            if (pick.body && t && pick.body===t) return true;
-            if (pick.body && t && t.startsWith(pick.body.slice(0,60))) return true;
-            if (pick.date && dt && dt.indexOf(pick.date)>=0) return true;
-            return false;
+  // === Minimal: Delete Selected (uses existing .pe_row_chk from checks.js) ===
+  (function(){
+    function installBtn(){
+      var addBtn = document.getElementById('add-note');
+      if (!addBtn || document.getElementById('delete-notes')) return;
+      var del = document.createElement('button');
+      del.id = 'delete-notes';
+      del.className = 'danger';
+      del.textContent = 'Delete Selected';
+      del.style.marginLeft = '8px';
+      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
+      del.addEventListener('click', function(){
+        try{
+          if (typeof currentJob !== 'function') { alert('No job context'); return; }
+          var j = currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No notes found'); return; }
+          var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
+          var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
+          var toDelete = new Set();
+          rows.forEach(function(row, idx){
+            var cb = row.querySelector('.note-date input.pe_row_chk');
+            if (cb && cb.checked) toDelete.add(idx);
           });
-          if (nidx >= 0) j.notes.splice(nidx, 1);
-        }
-        if (typeof markUpdated==='function') markUpdated(j);
-        if (typeof save==='function') save();
-        if (typeof renderAll==='function') renderAll();
-      } else {
-        // Fallback: remove DOM nodes only
-        const items = Array.from(list.querySelectorAll('.note-item'));
-        for (const el of items){
-          const cb = el.querySelector('input[type="checkbox"]'); if (cb && cb.checked) el.remove();
-        }
-      }
-    } catch(err) { console.error(err); }
-  }, true);
+          if (toDelete.size === 0) { alert('Select at least one log entry.'); return; }
+          j.notes = (j.notes || []).filter(function(_n, i){ return !toDelete.has(i); });
+          if (typeof markUpdated === 'function') markUpdated(j);
+          if (typeof save === 'function') save();
+          if (typeof renderPanel === 'function') renderPanel();
+        }catch(e){ console.warn('Delete Selected failed', e); alert('Delete failed.'); }
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', installBtn);
+    } else {
+      installBtn();
+    }
+    // also retry a few times for late DOM
+    var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
+  })();
 })();
-
-// --- BEGIN PATCH deleteSelected handler ---
-function __deleteSelectedNotes(){
-  var jobId = __getCurrentJobId();
-  var notes = __readNotes(jobId);
-  if(!Array.isArray(notes)) notes = [];
-  var ids = __collectCheckedNoteIds();
-  if(ids.length === 0) return;
-  var kept = notes.filter(function(n){ return ids.indexOf(n.id) === -1; });
-  __writeNotes(jobId, kept);
-  __renderNotesIfKnown(jobId);
-}
-document.addEventListener("click", function(ev){
-  var t = ev.target;
-  if(!t) return;
-  if(t.matches("#deleteSelected, #delete-note, #btnDeleteNote, #deleteNote")){
-    ev.preventDefault();
-    __deleteSelectedNotes();
-  }
-});
-// --- END PATCH deleteSelected handler ---
