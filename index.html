@@ -154,7 +154,7 @@ header { position: relative; }
   <div class="errbar" id="errbar"></div>
 
   <header>
-    <h1>HVAC Digital Binder</h1><div class="build-id">O58854558-CETV9P</div>
+    <h1>HVAC Digital Binder</h1>O58857388-63FLV9</div>
     <div class="toolbar">
       <button class="primary" id="add-contractor">+ Contractor</button>
       <button class="ghost" id="add-job">+ Job</button>
@@ -258,7 +258,7 @@ header { position: relative; }
 </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
-  <script defer src="app.1758857225-FYPW9Y.js"></script>
+  <script defer src="app.1758857388-63FLV9.js"></script>
 
 
 <script>
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script src="checks.1758857225-FYPW9Y.js"></script>
+  <script src="checks.1758857388-63FLV9.js"></script>
 
 <script>
   // Runtime build id for UI sanity + SW hard refresh
@@ -359,6 +359,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         regs.forEach(function(r) { r.unregister(); });
       }).catch(function(){});
     }
+  })();
+</script>
+
+
+<script>
+  (function() {
+    try { var b = document.querySelector('.build-id'); if (b) b.textContent = "1758857388-63FLV9"; } catch(e){}
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(()=>{}); }
   })();
 </script>
 
