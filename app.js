@@ -931,89 +931,66 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 })();
 
 
-// ==== Notes fixes: single-fire Add + job-backed Delete ====
+
+
+// ==== Notes selection + persistent delete (Build 1758856966-W7YXEB) ====
 (function(){
-  if (window.__notesFixesApplied) return; window.__notesFixesApplied = true;
-
+  if (window.__notesSelDelApplied) return; window.__notesSelDelApplied = true;
   function $(id){ return document.getElementById(id); }
-  function toast(msg){
-    try{
-      const t = $('toast-wrap'); if (!t) return console.log(msg);
-      const d = document.createElement('div'); d.className='toast'; d.textContent=msg;
-      t.appendChild(d); setTimeout(()=>d.remove(), 1200);
-    }catch(_){ console.log(msg); }
-  }
 
-  // --- Rebind Add Note to ensure single-fire ---
   document.addEventListener('DOMContentLoaded', () => {
-    const btn = $('add-note');
-    if (btn) {
-      // Replace node to drop any previously bound listeners
-      const clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.addEventListener('click', () => {
-        try{
-          const j = (typeof currentJob==='function') ? currentJob() : null;
-          const ed = $('new-note-editor');
-          const html = ed && ed.innerHTML ? ed.innerHTML.trim() : '';
-          const txt  = ed && ed.innerText ? ed.innerText.trim() : '';
-          if (!html && !txt) return;
-          if (j) {
-            if (!j.initComplete) j.initComplete = true;
-            if (typeof pushNote==='function') pushNote(j, { text: txt, html: (typeof sanitizeHtml==='function') ? sanitizeHtml(html) : html });
-            if (typeof markUpdated==='function') markUpdated(j);
-            if (typeof save==='function') save();
-            if (typeof renderAll==='function') renderAll();
-          } else {
-            // Fallback UI-only append if no job (shouldn't happen in this app flow)
-            const list = $('notes-list'); if (!list) return;
-            const item = document.createElement('div'); item.className='note-item'; 
-            const d = document.createElement('div'); d.className='note-date'; d.textContent = new Date().toISOString().slice(0,10);
-            const body = document.createElement('div'); body.className='note-body'; body.textContent = txt || html;
-            item.appendChild(d); item.appendChild(body); list.appendChild(item);
-          }
-        }catch(e){ console.error(e); }
-      });
-    }
-
-    // Selection: click any .note-item to select it
     const list = $('notes-list');
     if (list) {
+      // Click to select: compute index from current DOM order and store on dataset
       list.addEventListener('click', (e) => {
-        const item = e.target && e.target.closest ? e.target.closest('.note-item') : null;
-        if (!item || !list.contains(item)) return;
-        [...list.querySelectorAll('.note-item')].forEach(n => n.classList.remove('selected'));
-        item.classList.add('selected');
+        const it = e.target && e.target.closest ? e.target.closest('.note-item') : null;
+        if (!it || !list.contains(it)) return;
+        const items = Array.from(list.querySelectorAll('.note-item'));
+        const idx = items.indexOf(it);
+        items.forEach(n => n.classList.remove('selected'));
+        it.classList.add('selected');
+        list.dataset.selIndex = String(idx);
       });
     }
 
-    // Delete: must update the job model so it persists, then re-render
+    // Delete: delete by stored index from the job model, then save+render
     const del = $('delete-note');
     if (del) del.addEventListener('click', (e) => {
       e.preventDefault();
-      try{
+      const list = $('notes-list'); if (!list) return;
+      const items = Array.from(list.querySelectorAll('.note-item'));
+      if (!items.length) return;
+
+      let idx = -1;
+      if (list.dataset && typeof list.dataset.selIndex !== 'undefined') {
+        idx = parseInt(list.dataset.selIndex, 10);
+        if (Number.isNaN(idx)) idx = -1;
+      }
+      if (idx < 0 || idx >= items.length) {
+        // fallback to visual selection if any
+        idx = items.findIndex(n => n.classList.contains('selected'));
+      }
+      if (idx < 0 || idx >= items.length) {
+        // final fallback: last item
+        idx = items.length - 1;
+      }
+
+      try {
         const j = (typeof currentJob==='function') ? currentJob() : null;
-        const list = $('notes-list');
-        if (!list) return;
-        const items = [...list.querySelectorAll('.note-item')];
-        if (!items.length) return;
-
-        // Index from selection; default to last
-        let idx = items.findIndex(n => n.classList.contains('selected'));
-        if (idx < 0) idx = items.length - 1;
-
         if (j && Array.isArray(j.notes)) {
           if (idx >= 0 && idx < j.notes.length) j.notes.splice(idx, 1);
           else if (j.notes.length) j.notes.pop();
           if (typeof markUpdated==='function') markUpdated(j);
           if (typeof save==='function') save();
           if (typeof renderAll==='function') renderAll();
+          // Clear selection
+          delete list.dataset.selIndex;
         } else {
-          // UI-only fallback (shouldn't be needed): remove from DOM
+          // UI fallback (shouldn't be needed)
           const target = items[idx];
           if (target && target.parentNode) target.parentNode.removeChild(target);
         }
-      }catch(err){ console.error(err); }
+      } catch(err) { console.error(err); }
     });
   });
 })();
