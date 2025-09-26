@@ -751,6 +751,28 @@ $("archive-job").addEventListener("click", () => {
       if (ed) ed.innerHTML = "";
       markUpdated(j); save(); renderPanel();
     });
+// Delete selected notes
+(function(){
+  const btn = $("delete-note");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      const j = currentJob(); if (!j) return;
+      const list = document.getElementById("notes-list"); if (!list) return;
+      const items = Array.from(list.querySelectorAll(".note-item"));
+      const toDelete = [];
+      items.forEach((it, idx) => {
+        const cb = it.querySelector(".note-date input.pe_row_chk");
+        if (cb && cb.checked) toDelete.push(idx);
+      });
+      if (!toDelete.length) { alert("Select a note to delete."); return; }
+      // delete from end of array to keep indices correct
+      toDelete.sort((a,b)=>b-a).forEach(i => { if (j.notes && j.notes[i] != null) j.notes.splice(i,1); });
+      markUpdated(j); save(); renderPanel();
+      toast(toDelete.length === 1 ? "Note deleted" : (toDelete.length + " notes deleted"));
+    });
+  }
+})();
+
 
     $("refresh-btn").addEventListener("click", async () => {
       const data = await API.load();

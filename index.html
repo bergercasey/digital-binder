@@ -365,5 +365,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 })();
 </script>
 
+
+<script>
+/* ep_capture_print */
+document.addEventListener('click', function(e){
+  try{
+    var btn = document.getElementById('print-job');
+    if (btn && (e.target === btn || (btn.contains && btn.contains(e.target)))) {
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      if (window.__epOpenModal) { window.__epOpenModal(); }
+    }
+  }catch(_){}
+}, true);
+</script>
+
 </body>
 </html>
