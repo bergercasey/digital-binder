@@ -1,3 +1,53 @@
+
+// --- BEGIN PATCH: robust note deletion & persistence ---
+function __getCurrentJobId(){
+  try{
+    const p = new URLSearchParams(location.search);
+    const j = (p.get("job")||"").trim();
+    if(j) return j;
+  }catch(e){}
+  if (typeof getCurrentJobId === 'function') { try { return getCurrentJobId(); } catch(e){} }
+  if (window.currentJobId) return String(window.currentJobId);
+  return "default";
+}
+function __storageKey(jobId){ return "notes:"+jobId; }
+function __readNotes(jobId){
+  try{
+    const raw = localStorage.getItem(__storageKey(jobId));
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function __writeNotes(jobId, arr){
+  try{ localStorage.setItem(__storageKey(jobId), JSON.stringify(arr||[])); }catch(e){}
+}
+function __collectCheckedNoteIds(containerSelector){
+  var root = document.querySelector(containerSelector||"#notesUl, .notes, .notes-list, .log-list");
+  if(!root) root = document;
+  var cbs = root.querySelectorAll("input[type='checkbox'].sel, li .sel, .note-select");
+  var ids = [];
+  cbs.forEach(function(cb){
+    if(cb.checked){
+      var li = cb.closest("[data-note-id], li");
+      if(li && li.dataset && li.dataset.noteId){ ids.push(li.dataset.noteId); }
+      else if(li && li.id){ ids.push(li.id); }
+    }
+  });
+  return ids;
+}
+function __renderNotesIfKnown(jobId){
+  // try common renderers
+  if (typeof renderNotes === 'function'){ try{ renderNotes(jobId); return; }catch(e){} }
+  if (typeof redrawNotes === 'function'){ try{ redrawNotes(jobId); return; }catch(e){} }
+  // fallback: remove deleted items from DOM
+  var ids = __readNotes(jobId).map(function(n){return n.id});
+  document.querySelectorAll("[data-note-id]").forEach(function(li){
+    if(li.dataset && li.dataset.noteId && ids.indexOf(li.dataset.noteId) === -1){
+      li.remove();
+    }
+  });
+}
+// --- END PATCH ---
+
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -1020,3 +1070,24 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     } catch(err) { console.error(err); }
   }, true);
 })();
+
+// --- BEGIN PATCH deleteSelected handler ---
+function __deleteSelectedNotes(){
+  var jobId = __getCurrentJobId();
+  var notes = __readNotes(jobId);
+  if(!Array.isArray(notes)) notes = [];
+  var ids = __collectCheckedNoteIds();
+  if(ids.length === 0) return;
+  var kept = notes.filter(function(n){ return ids.indexOf(n.id) === -1; });
+  __writeNotes(jobId, kept);
+  __renderNotesIfKnown(jobId);
+}
+document.addEventListener("click", function(ev){
+  var t = ev.target;
+  if(!t) return;
+  if(t.matches("#deleteSelected, #delete-note, #btnDeleteNote, #deleteNote")){
+    ev.preventDefault();
+    __deleteSelectedNotes();
+  }
+});
+// --- END PATCH deleteSelected handler ---
