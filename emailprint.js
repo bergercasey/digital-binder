@@ -5,43 +5,6 @@
   function $(id){ return document.getElementById(id); }
   function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
-  // ---- Global print override (prevent OS print from main page) ----
-  (function(){
-    try{
-      if (!window.__epPrintPatched) {
-        window.__epPrintPatched = true;
-        var _nativePrint = window.print ? window.print.bind(window) : null;
-        // Only allow native print when explicitly enabled (we set this before opening child window)
-        window.__allowNativePrint = false;
-        window.print = function(){
-          if (window.__allowNativePrint && _nativePrint) return _nativePrint();
-          // Otherwise, route to our Email/Print modal
-          try { openModal(); } catch(_) {}
-          return;
-        };
-      }
-    }catch(_){}
-  })();
-
-
-  function hijackPrintButton(){
-    try{
-      var btn = document.getElementById('print-job');
-      if (!btn || btn.__hijacked) return;
-      var clone = btn.cloneNode(true);
-      clone.id = 'print-job'; clone.setAttribute('type','button'); // keep the same id
-      clone.textContent = 'Email/Print';
-      clone.__hijacked = true;
-      // Remove original then insert clone
-      btn.parentNode.replaceChild(clone, btn);
-      // Our handler: open modal, no OS print
-      clone.addEventListener('click', function(e){
-        try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
-        openModal();
-      }, true);
-    }catch(_){}
-  }
-
 
   // ---- Contacts (normalize to {name,email}) ----
   function parseContact(s){
@@ -95,19 +58,17 @@
   }
 
   
-  // ---- Shared template for Email and Print ----
+  // ---- Shared template + global opener ----
   function escHtml(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
   function buildHeaderHTML(info){
-    var parts = [];
-    if (info.name) parts.push('<div style="font-size:18px;font-weight:700;margin:0 0 4px;">'+escHtml(info.name)+'</div>');
-    if (info.address) parts.push('<div style="margin:0 0 2px;">'+escHtml(info.address)+'</div>');
-    if (info.stage) parts.push('<div style="margin:0 0 12px;">Stage: '+escHtml(info.stage)+'</div>');
-    return parts.join('');
+    var out = '';
+    if (info.name) out += '<div style="font-size:18px;font-weight:700;margin:0 0 4px;">'+escHtml(info.name)+'</div>';
+    if (info.address) out += '<div style="margin:0 0 2px;">'+escHtml(info.address)+'</div>';
+    if (info.stage) out += '<div style="margin:0 0 12px;">Stage: '+escHtml(info.stage)+'</div>';
+    return out;
   }
   function normalizeNoteHTML(n){
-    // prefer existing HTML if present; otherwise convert plain text newlines to <br>
-    var h = (n && n.html) ? String(n.html) : '';
-    if (h) return h;
+    if (n && n.html) return String(n.html);
     var t = (n && n.text) ? String(n.text) : '';
     return escHtml(t).replace(/\n/g,'<br>');
   }
@@ -115,21 +76,16 @@
     var header = buildHeaderHTML(info);
     var items = notes.map(function(n){
       return '<div style="margin:0 0 12px;">'
-           +   '<div style="font-weight:600; margin-bottom:4px;">'+escHtml(n.date || '')+'</div>'
+           +   '<div style="font-weight:600;margin-bottom:4px;">'+escHtml(n.date||'')+'</div>'
            +   '<div>'+ normalizeNoteHTML(n) +'</div>'
            + '</div>';
     }).join('');
-    var body = ''
-      + '<!DOCTYPE html><html><head><meta charset="utf-8"/>'
-      + '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
-      + '<title>Job Notes</title>'
-      + '<style>body{font:14px/1.4 -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; padding:18px;}'
-      + '.meta{color:#444;margin:0 0 10px;} h2{margin:14px 0 8px 0;font-size:16px;}</style>'
-      + '</head><body>' + header
-      + '<h2>Job Notes</h2>' + items
-      + '</body></html>';
-    return body;
+    return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>'
+         + '<title>Job Notes</title><style>body{font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;padding:18px;} h2{margin:14px 0 8px;font-size:16px}</style>'
+         + '</head><body>'+header+'<h2>Job Notes</h2>'+items+'</body></html>';
   }
+  // Expose a safe global so app.js can open our modal without importing our scope
+  window.__epOpenModal = function(){ try{ openModal(); }catch(_){ alert('Email/Print not ready yet.'); } };
 // ---- Modal ----
   function openModal(){
     var ov = document.createElement('div'); ov.id='ep_overlay';
@@ -201,7 +157,14 @@
       var textBody = bodyLines.join('\n');
       var info2 = jobInfo();
       var htmlBody = renderEmailPrintHTML(info2, notes);
-      var textBody = (info2.name?(""+info2.name+"\n"):"") + (info2.address?(""+info2.address+"\n"):"") + (info2.stage?("Stage: "+info2.stage+"\n\n"):"") + notes.map(function(n){ return (n.date? (n.date+"\n"):"") + (n.text||"") + "\n\n"; }).join("");
+      var textBody = (info2.name? (info2.name+'
+'):'') + (info2.address? (info2.address+'
+'):'') + (info2.stage? ('Stage: '+info2.stage+'
+
+'):'') + notes.map(function(n){return (n.date? n.date+'
+':'') + (n.text||'') + '
+
+';}).join('');
       try{
         var resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
@@ -222,13 +185,11 @@
 btnPrint.addEventListener('click', function(){
       var notes = getSelectedNotes(); if(!notes.length){ alert('Select at least one log entry.'); return; }
       var info = jobInfo();
-      // Build unified HTML (same as email)
       var html = renderEmailPrintHTML(info, notes);
-      // Close overlay before opening print window to avoid stuck overlay
-      try { var ovv = document.getElementById('ep_overlay'); if (ovv) ovv.remove(); } catch(_){}
+      try { document.body.removeChild(ov); } catch(_){}
       var w = window.open('', '_blank', 'noopener');
-      var autoScript = "<script>window.onafterprint=function(){setTimeout(function(){window.close();},10);};setTimeout(function(){window.print();},0);<\/script>";
-      var out = html.replace('</body></html>', autoScript + '</body></html>');
+      var auto = "<script>window.onafterprint=function(){setTimeout(function(){window.close();},10);};setTimeout(function(){window.print();},0);<\/script>";
+      var out = html.replace('</body></html>', auto + '</body></html>');
       w.document.open(); w.document.write(out); w.document.close();
     });
       html+='<script>window.print();<\/script></body></html>';
@@ -243,24 +204,19 @@ btnPrint.addEventListener('click', function(){
     if(!n) return false;
     if(n.id==='print-job') return true;
     var t=(n.textContent||'').trim().toLowerCase();
-    if (t==='email/print' || t==='print selected' || t==='print') return true;
-    // be generous: catch buttons that contain the word "print" anywhere
-    if (t.indexOf('email/print') !== -1 || t.indexOf('print') !== -1) return true;
-    return false;
+    return t==='print selected' || t==='print';
   }
   function interceptEvents(){
     function handle(e){
       try{
         var t = e.target && e.target.closest ? e.target.closest('button, a[role=\"button\"], #print-job') : e.target;
-        var pj = document.getElementById('print-job');
-        if (pj && pj.contains(e.target)) t = pj;
         if (matchPrintNode(t)){
           e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
           openModal();
         }
       }catch(_){}
     }
-    ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(type){
+    ['touchstart','pointerdown','mousedown','click'].forEach(function(type){
       document.addEventListener(type, handle, true);
     });
   }
@@ -288,146 +244,3 @@ btnPrint.addEventListener('click', function(){
     if (stage) lines.push('Stage: ' + stage);
     return { name: name, address: address, po: po, stage: stage, lines: lines };
   }
-
-  // Boot / observers
-  onReady(function(){
-    try { hijackPrintButton(); } catch(_){}
-    try {
-      var mo = new MutationObserver(function(){ hijackPrintButton(); });
-      mo.observe(document.body, { childList: true, subtree: true });
-    } catch(_){}
-  });
-
-  // Re-hijack interval (in case app re-renders and rebinds)
-  (function(){
-    try{
-      var tries = 0;
-      var __epHijackTimer = setInterval(function(){
-        tries++;
-        try { hijackPrintButton(); } catch(_){}
-        if (tries > 100) clearInterval(__epHijackTimer); // ~20s on mobile
-      }, 200);
-    }catch(_){}
-  })();
-
-  // ==== DEBUG PANEL & INSTRUMENTATION (visible on page) ====
-  (function(){
-    if (window.__epDebugLoaded) return; window.__epDebugLoaded = true;
-
-    function makePanel(){
-      var p = document.createElement('div');
-      p.id = 'ep_debug_panel';
-      p.style.position = 'fixed';
-      p.style.bottom = '10px';
-      p.style.right = '10px';
-      p.style.width = '320px';
-      p.style.maxHeight = '40vh';
-      p.style.background = 'rgba(0,0,0,0.8)';
-      p.style.color = '#0f0';
-      p.style.font = '12px/1.3 monospace';
-      p.style.border = '1px solid #444';
-      p.style.borderRadius = '8px';
-      p.style.zIndex = 1000000;
-      p.style.display = 'flex';
-      p.style.flexDirection = 'column';
-      var head = document.createElement('div');
-      head.style.display='flex'; head.style.alignItems='center'; head.style.justifyContent='space-between';
-      head.style.padding='6px 8px'; head.style.background='#111'; head.style.borderBottom='1px solid #333';
-      var title = document.createElement('div'); title.textContent = 'EP Debug';
-      var btns = document.createElement('div');
-      var btnClear = document.createElement('button'); btnClear.textContent='Clear'; btnClear.style.marginRight='6px';
-      var btnScan = document.createElement('button'); btnScan.textContent='Scan';
-      [btnClear, btnScan].forEach(function(b){ b.style.font='11px monospace'; b.style.padding='2px 6px'; b.style.cursor='pointer'; });
-      btns.appendChild(btnClear); btns.appendChild(btnScan);
-      head.appendChild(title); head.appendChild(btns);
-      var body = document.createElement('div');
-      body.id='ep_debug_body';
-      body.style.overflow='auto'; body.style.padding='8px';
-      body.style.whiteSpace='pre-wrap';
-      body.style.wordBreak='break-word';
-      body.style.flex='1 1 auto';
-      p.appendChild(head); p.appendChild(body);
-      document.body.appendChild(p);
-
-      btnClear.addEventListener('click', function(){ body.textContent=''; });
-      btnScan.addEventListener('click', scanButtons);
-
-      function log(msg){
-        var t = new Date().toLocaleTimeString();
-        body.textContent += '['+t+'] ' + msg + '\n';
-        body.scrollTop = body.scrollHeight;
-      }
-      window.__epLog = log;
-
-      scanButtons();
-    }
-
-    function scanButtons(){
-      try{
-        var list = Array.prototype.slice.call(document.querySelectorAll('button, a'));
-        var matches = list.filter(function(n){
-          var t = (n.textContent||'').trim().toLowerCase();
-          return t.indexOf('print') !== -1 || n.id === 'print-job';
-        });
-        __epLog('--- Scan: found '+matches.length+' print-like buttons ---');
-        matches.forEach(function(n,i){
-          var info = '#'+(n.id||'') + ' .' + (n.className||'') + ' <'+(n.tagName)+'> text="'+(n.textContent||'').trim()+'"';
-          __epLog('['+i+'] '+info);
-        });
-      }catch(e){ try{ __epLog('scanButtons err: '+e.message); }catch(_){} }
-    }
-
-    // Monkey-patch addEventListener to log anything bound to #print-job
-    try{
-      var _add = EventTarget.prototype.addEventListener;
-      EventTarget.prototype.addEventListener = function(type, listener, options){
-        try{
-          var isPrintEl = false;
-          if (this && this.nodeType === 1){ // element
-            if (this.id === 'print-job') isPrintEl = true;
-            else if (this.matches) isPrintEl = this.matches('#print-job');
-          }
-          if (isPrintEl) {
-            var linfo = (listener && listener.name) ? listener.name : (''+listener).slice(0,80);
-            __epLog('Listener added to #print-job: '+type+' -> '+linfo);
-          }
-        }catch(_){}
-        return _add.call(this, type, listener, options);
-      };
-    }catch(_){}
-
-    // Global capture to log/stop events targeted at #print-job
-    function capture(e){
-      try{
-        var pj = document.getElementById('print-job');
-        var inside = pj && (e.target === pj || (pj.contains && pj.contains(e.target)));
-        if (inside){
-          __epLog('CAPTURE '+e.type+' on #print-job (preventing default & propagation)');
-          e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-          // open our modal to confirm the intercept
-          if (e.type === 'click' || e.type === 'pointerup' || e.type === 'mouseup' || e.type === 'touchend'){
-            try{ openModal(); }catch(_){}
-          }
-        }
-      }catch(err){ try{ __epLog('capture err: '+err.message); }catch(_){} }
-    }
-    ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
-      document.addEventListener(t, capture, true);
-    });
-
-    // Visual confirmation on the button itself
-    function tagButton(){
-      try{
-        var pj = document.getElementById('print-job');
-        if (!pj || pj.__epTagged) return;
-        pj.__epTagged = true;
-        pj.textContent = 'Email/Print (captured)';
-        pj.style.outline = '2px dashed #0f0';
-        pj.style.outlineOffset = '2px';
-      }catch(_){}
-    }
-
-    if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ makePanel(); tagButton(); }); else { makePanel(); tagButton(); }
-    var mo = new MutationObserver(function(){ tagButton(); });
-    mo.observe(document.documentElement || document.body, {childList:true, subtree:true});
-  })();
