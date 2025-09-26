@@ -929,3 +929,43 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
+
+// ==== Checkbox delete only (Build 1758885366-KS6AA7) ====
+(function() {
+  function $(id) { return document.getElementById(id); }
+  document.addEventListener('DOMContentLoaded', function() {
+    var del = $('delete-note');
+    if (!del) return;
+    del.addEventListener('click', function(e) {
+      e.preventDefault();
+      try {
+        var list = $('notes-list'); if (!list) return;
+        var boxes = Array.from(list.querySelectorAll('input[type="checkbox"]:checked'));
+        if (!boxes.length) return;
+        var items = Array.from(list.querySelectorAll('.note-item'));
+        var idxs = boxes.map(function(cb) {
+          var it = cb.closest('.note-item');
+          return items.indexOf(it);
+        }).filter(function(i) { return i >= 0; });
+        if (!idxs.length) return;
+        idxs.sort(function(a,b){ return b-a; });
+        var j = (typeof currentJob === 'function') ? currentJob() : null;
+        if (j && Array.isArray(j.notes)) {
+          idxs.forEach(function(i) {
+            if (i >= 0 && i < j.notes.length) j.notes.splice(i, 1);
+          });
+          if (typeof markUpdated === 'function') markUpdated(j);
+          if (typeof save === 'function') save();
+          if (typeof renderAll === 'function') renderAll();
+        } else {
+          idxs.forEach(function(i) {
+            var target = items[i];
+            if (target && target.parentNode) target.parentNode.removeChild(target);
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  });
+})();
