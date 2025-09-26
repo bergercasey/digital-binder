@@ -960,3 +960,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const ep = document.getElementById('email-print');
   if (ep) ep.addEventListener('click', (e) => { e.preventDefault(); (window.alert||console.log)('Email/Print disabled — rebuilding fresh.'); });
 });
+
+
+// ==== Notes: robust selection + delete ====
+(function(){
+  function findList(){ return document.getElementById('notes-list'); }
+  function selectHandler(e){
+    const list = findList(); if (!list) return;
+    const item = e.target && e.target.closest ? e.target.closest('.note-item') : null;
+    if (!item || !list.contains(item)) return;
+    Array.from(list.querySelectorAll('.note-item')).forEach(n => n.classList.remove('selected'));
+    item.classList.add('selected');
+  }
+  function deleteSelected(){
+    try {
+      const j = (typeof currentJob === 'function') ? currentJob() : null;
+      if (!j) return;
+      const list = findList();
+      const items = list ? Array.from(list.querySelectorAll('.note-item')) : [];
+      let idx = items.findIndex(n => n.classList.contains('selected'));
+      if (idx < 0) idx = (j.notes && j.notes.length) ? j.notes.length - 1 : -1;
+      if (idx < 0) return;
+      j.notes = (j.notes || []);
+      j.notes.splice(idx, 1);
+      if (typeof markUpdated === 'function') markUpdated(j);
+      if (typeof save === 'function') save();
+      if (typeof renderAll === 'function') renderAll();
+    } catch (e) { /* no-op */ }
+  }
+  // Delegate selection on the container
+  document.addEventListener('click', function(e){
+    const list = findList();
+    if (!list) return;
+    if (e.target && (e.target.closest && e.target.closest('#notes-list'))) {
+      selectHandler(e);
+    }
+  }, true);
+
+  // Delete button
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
+    if (!btn) return;
+    e.preventDefault();
+    deleteSelected();
+  }, true);
+})();
