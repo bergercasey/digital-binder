@@ -58,34 +58,21 @@
   }
 
   
-  // ---- Shared template + global opener ----
+  // Shared Email/Print template + global opener
   function escHtml(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
   function buildHeaderHTML(info){
-    var out = '';
-    if (info.name) out += '<div style="font-size:18px;font-weight:700;margin:0 0 4px;">'+escHtml(info.name)+'</div>';
-    if (info.address) out += '<div style="margin:0 0 2px;">'+escHtml(info.address)+'</div>';
-    if (info.stage) out += '<div style="margin:0 0 12px;">Stage: '+escHtml(info.stage)+'</div>';
+    var out=''; if(info.name) out += '<div style="font-size:18px;font-weight:700;margin:0 0 4px;">'+escHtml(info.name)+'</div>';
+    if(info.address) out += '<div style="margin:0 0 2px;">'+escHtml(info.address)+'</div>';
+    if(info.stage) out += '<div style="margin:0 0 12px;">Stage: '+escHtml(info.stage)+'</div>';
     return out;
   }
-  function normalizeNoteHTML(n){
-    if (n && n.html) return String(n.html);
-    var t = (n && n.text) ? String(n.text) : '';
-    return escHtml(t).replace(/\n/g,'<br>');
-  }
+  function normalizeNoteHTML(n){ if(n && n.html) return String(n.html); var t=(n&&n.text)?String(n.text):''; return escHtml(t).replace(/\n/g,'<br>'); }
   function renderEmailPrintHTML(info, notes){
     var header = buildHeaderHTML(info);
-    var items = notes.map(function(n){
-      return '<div style="margin:0 0 12px;">'
-           +   '<div style="font-weight:600;margin-bottom:4px;">'+escHtml(n.date||'')+'</div>'
-           +   '<div>'+ normalizeNoteHTML(n) +'</div>'
-           + '</div>';
-    }).join('');
-    return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>'
-         + '<title>Job Notes</title><style>body{font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;padding:18px;} h2{margin:14px 0 8px;font-size:16px}</style>'
-         + '</head><body>'+header+'<h2>Job Notes</h2>'+items+'</body></html>';
+    var items = notes.map(function(n){ return '<div style="margin:0 0 12px;"><div style="font-weight:600;margin-bottom:4px;">'+escHtml(n.date||'')+'</div><div>'+normalizeNoteHTML(n)+'</div></div>'; }).join('');
+    return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Job Notes</title><style>body{font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;padding:18px;}h2{margin:14px 0 8px;font-size:16px}</style></head><body>'+header+'<h2>Job Notes</h2>'+items+'</body></html>';
   }
-  // Expose a safe global so app.js can open our modal without importing our scope
-  window.__epOpenModal = function(){ try{ openModal(); }catch(_){ alert('Email/Print not ready yet.'); } };
+  window.__epOpenModal = function(){ try{ openModal(); }catch(_){ alert('Email/Print not ready.'); } };
 // ---- Modal ----
   function openModal(){
     var ov = document.createElement('div'); ov.id='ep_overlay';

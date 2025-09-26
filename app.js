@@ -678,13 +678,7 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    $("print-job").addEventListener("click", () => {
-  const j = currentJob(); if (!j) return;
-  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
-  buildPrintSheet(j, idx);
-  window.print();
-});
-
+    $("print-job").addEventListener("click", () => { try { if (window.__epOpenModal) { window.__epOpenModal(); return; } } catch(_) {} });
 $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
