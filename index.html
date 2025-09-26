@@ -258,7 +258,7 @@ header { position: relative; }
 </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
-  <script defer src="app.js?v=1758856966-W7YXEB"></script>
+  <script defer src="app.1758857225-FYPW9Y.js"></script>
 
 
 <script>
@@ -341,6 +341,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script src="checks.js?v=1758856966-W7YXEB"></script>
+  <script src="checks.1758857225-FYPW9Y.js"></script>
+
+<script>
+  // Runtime build id for UI sanity + SW hard refresh
+  window.BUILD_ID = "1758857225-FYPW9Y";
+  (function() {
+    try {
+      // Attempt to reflect BUILD_ID in any element that contains 'BUILD ID:'
+      var el = Array.from(document.querySelectorAll('body *'))
+        .find(function(n) { return n.textContent && n.textContent.trim().startsWith('BUILD ID:'); });
+      if (el) el.textContent = "BUILD ID: " + window.BUILD_ID;
+    } catch(e) { /* no-op */ }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(r) { r.unregister(); });
+      }).catch(function(){});
+    }
+  })();
+</script>
+
 </body>
 </html>
