@@ -678,10 +678,7 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    $("print-job").addEventListener("click", () => {
-  /* disabled for Step 1 */ return;
-});
-
+    if ($("print-job")) { $("print-job").addEventListener("click", () => { /* disabled for Step 1 */ return; }); }
 $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
