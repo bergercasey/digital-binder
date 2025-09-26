@@ -5,6 +5,24 @@
   function $(id){ return document.getElementById(id); }
   function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
+  // ---- Global print override (prevent OS print from main page) ----
+  (function(){
+    try{
+      if (!window.__epPrintPatched) {
+        window.__epPrintPatched = true;
+        var _nativePrint = window.print ? window.print.bind(window) : null;
+        // Only allow native print when explicitly enabled (we set this before opening child window)
+        window.__allowNativePrint = false;
+        window.print = function(){
+          if (window.__allowNativePrint && _nativePrint) return _nativePrint();
+          // Otherwise, route to our Email/Print modal
+          try { openModal(); } catch(_) {}
+          return;
+        };
+      }
+    }catch(_){}
+  })();
+
 
   function hijackPrintButton(){
     try{
