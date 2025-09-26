@@ -427,21 +427,7 @@
   }
 
   // --- Printing helpers ---
-  function buildPrintSheet(job, idx) {
-    const el = $("print-sheet"); if (!el) return;
-    const title = escapeHtml(job.name || "Job");
-    const crew = (job.crew || []).join(", ");
-    const meta = [
-      job.stage ? "Stage: " + escapeHtml(job.stage) : null,
-      job.po ? "PO: " + escapeHtml(job.po) : null,
-      crew ? "Crew: " + escapeHtml(crew) : null,
-      job.address ? "Address: " + escapeHtml(job.address) : null
-    ].filter(Boolean).join(" \u2022 ");
-    let notes = job.notes || [];
-    if (typeof idx === "number" && idx >= 0 && idx < notes.length) notes = [notes[idx]];
-    const body = notes.map(n => {
-      const inner = n.html ? sanitizeHtml(n.html) : formatMarkdownLite(n.text || "").replace(/\n/g,"<br>");
-      return `<div class="print-note"><div class="print-date">${escapeHtml(n.d||"")}</div><div class="print-body">${inner}</div></div>`;
+  </div><div class="print-body">${inner}</div></div>`;
     }).join("");
     el.innerHTML = `<div class="print-head"><div class="print-title">${title}</div><div class="print-meta">${meta}</div></div>` + body;
   }
@@ -678,7 +664,12 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    $("print-job").addEventListener("click", () => { try { if (window.__epOpenModal) { window.__epOpenModal(); return; } } catch(_) {} });
+    if (!j) return;
+  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
+  buildPrintSheet(j, idx);
+  window.print();
+});
+
 $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
@@ -929,3 +920,44 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
  wire(); boot(); });
 })();
+
+// ==== Step 1 cleanup listeners (build 1758853518-D00M0N) ====
+document.addEventListener('DOMContentLoaded', () => {
+  const toast = (msg) => { try { const t = document.getElementById('toast-wrap'); if (!t) return alert(msg); 
+    const div = document.createElement('div'); div.className='toast'; div.textContent=msg; 
+    t.appendChild(div); setTimeout(()=>div.remove(), 2000); } catch (e) { console.log(msg); } };
+
+  // Placeholder for Email/Print (disabled for Step 1)
+  const ep = document.getElementById('email-print');
+  if (ep) ep.addEventListener('click', (e) => { e.preventDefault(); toast('Email/Print disabled — rebuilding fresh.'); });
+
+  // Note selection + delete
+  const list = document.getElementById('notes-list');
+  if (list) {
+    list.addEventListener('click', (e) => {
+      const item = e.target.closest('.note-item');
+      if (!item) return;
+      // Clear others, mark selected
+      [...list.querySelectorAll('.note-item')].forEach(n => n.classList.remove('selected'));
+      item.classList.add('selected');
+    });
+  }
+  const delBtn = document.getElementById('delete-note');
+  if (delBtn) delBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    try {
+      const j = (typeof currentJob === 'function') ? currentJob() : null;
+      if (!j) return;
+      const items = list ? [...list.querySelectorAll('.note-item')] : [];
+      let idx = items.findIndex(n => n.classList.contains('selected'));
+      if (idx < 0) idx = items.length - 1; // default to last
+      if (idx < 0) return;
+      j.notes = (j.notes || []);
+      j.notes.splice(idx, 1);
+      if (typeof markUpdated === 'function') markUpdated(j);
+      if (typeof save === 'function') save();
+      if (typeof renderAll === 'function') renderAll();
+      toast('Note deleted');
+    } catch (err) { console.error(err); }
+  });
+});
