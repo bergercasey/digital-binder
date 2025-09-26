@@ -29,7 +29,7 @@
       var btn = document.getElementById('print-job');
       if (!btn || btn.__hijacked) return;
       var clone = btn.cloneNode(true);
-      clone.id = 'print-job'; // keep the same id
+      clone.id = 'print-job'; clone.setAttribute('type','button'); // keep the same id
       clone.textContent = 'Email/Print';
       clone.__hijacked = true;
       // Remove original then insert clone
@@ -252,13 +252,15 @@ btnPrint.addEventListener('click', function(){
     function handle(e){
       try{
         var t = e.target && e.target.closest ? e.target.closest('button, a[role=\"button\"], #print-job') : e.target;
+        var pj = document.getElementById('print-job');
+        if (pj && pj.contains(e.target)) t = pj;
         if (matchPrintNode(t)){
           e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
           openModal();
         }
       }catch(_){}
     }
-    ['touchstart','pointerdown','mousedown','click'].forEach(function(type){
+    ['touchstart','touchend','pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(type){
       document.addEventListener(type, handle, true);
     });
   }
@@ -295,3 +297,15 @@ btnPrint.addEventListener('click', function(){
       mo.observe(document.body, { childList: true, subtree: true });
     } catch(_){}
   });
+
+  // Re-hijack interval (in case app re-renders and rebinds)
+  (function(){
+    try{
+      var tries = 0;
+      var __epHijackTimer = setInterval(function(){
+        tries++;
+        try { hijackPrintButton(); } catch(_){}
+        if (tries > 100) clearInterval(__epHijackTimer); // ~20s on mobile
+      }, 200);
+    }catch(_){}
+  })();
