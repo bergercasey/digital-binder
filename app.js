@@ -931,42 +931,89 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 })();
 
 
-// ==== Notes-only selection & delete (clean) ====
-(function() {
+// ==== Notes fixes: single-fire Add + job-backed Delete ====
+(function(){
+  if (window.__notesFixesApplied) return; window.__notesFixesApplied = true;
+
   function $(id){ return document.getElementById(id); }
-  const list = $('notes-list');
-  if (list) {
-    list.addEventListener('click', (e) => {
-      const item = e.target.closest && e.target.closest('.note-item');
-      if (!item || !list.contains(item)) return;
-      [...list.querySelectorAll('.note-item')].forEach(n => n.classList.remove('selected'));
-      item.classList.add('selected');
-    });
+  function toast(msg){
+    try{
+      const t = $('toast-wrap'); if (!t) return console.log(msg);
+      const d = document.createElement('div'); d.className='toast'; d.textContent=msg;
+      t.appendChild(d); setTimeout(()=>d.remove(), 1200);
+    }catch(_){ console.log(msg); }
   }
-  document.addEventListener('click', (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest('#delete-note') : null;
-    if (!btn) return;
-    e.preventDefault();
-    const lst = $('notes-list'); if (!lst) return;
-    const items = [...lst.querySelectorAll('.note-item')];
-    if (!items.length) return;
-    let idx = items.findIndex(n => n.classList.contains('selected'));
-    if (idx < 0) idx = items.length - 1;
-    // Remove DOM node
-    const target = items[idx];
-    if (target && target.parentNode) target.parentNode.removeChild(target);
-    // Best-effort: update underlying model if present, but don't require it
-    try {
-      if (typeof currentJob === 'function') {
-        const j = currentJob();
+
+  // --- Rebind Add Note to ensure single-fire ---
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = $('add-note');
+    if (btn) {
+      // Replace node to drop any previously bound listeners
+      const clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.addEventListener('click', () => {
+        try{
+          const j = (typeof currentJob==='function') ? currentJob() : null;
+          const ed = $('new-note-editor');
+          const html = ed && ed.innerHTML ? ed.innerHTML.trim() : '';
+          const txt  = ed && ed.innerText ? ed.innerText.trim() : '';
+          if (!html && !txt) return;
+          if (j) {
+            if (!j.initComplete) j.initComplete = true;
+            if (typeof pushNote==='function') pushNote(j, { text: txt, html: (typeof sanitizeHtml==='function') ? sanitizeHtml(html) : html });
+            if (typeof markUpdated==='function') markUpdated(j);
+            if (typeof save==='function') save();
+            if (typeof renderAll==='function') renderAll();
+          } else {
+            // Fallback UI-only append if no job (shouldn't happen in this app flow)
+            const list = $('notes-list'); if (!list) return;
+            const item = document.createElement('div'); item.className='note-item'; 
+            const d = document.createElement('div'); d.className='note-date'; d.textContent = new Date().toISOString().slice(0,10);
+            const body = document.createElement('div'); body.className='note-body'; body.textContent = txt || html;
+            item.appendChild(d); item.appendChild(body); list.appendChild(item);
+          }
+        }catch(e){ console.error(e); }
+      });
+    }
+
+    // Selection: click any .note-item to select it
+    const list = $('notes-list');
+    if (list) {
+      list.addEventListener('click', (e) => {
+        const item = e.target && e.target.closest ? e.target.closest('.note-item') : null;
+        if (!item || !list.contains(item)) return;
+        [...list.querySelectorAll('.note-item')].forEach(n => n.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+    }
+
+    // Delete: must update the job model so it persists, then re-render
+    const del = $('delete-note');
+    if (del) del.addEventListener('click', (e) => {
+      e.preventDefault();
+      try{
+        const j = (typeof currentJob==='function') ? currentJob() : null;
+        const list = $('notes-list');
+        if (!list) return;
+        const items = [...list.querySelectorAll('.note-item')];
+        if (!items.length) return;
+
+        // Index from selection; default to last
+        let idx = items.findIndex(n => n.classList.contains('selected'));
+        if (idx < 0) idx = items.length - 1;
+
         if (j && Array.isArray(j.notes)) {
           if (idx >= 0 && idx < j.notes.length) j.notes.splice(idx, 1);
           else if (j.notes.length) j.notes.pop();
-          if (typeof markUpdated === 'function') markUpdated(j);
-          if (typeof save === 'function') save();
+          if (typeof markUpdated==='function') markUpdated(j);
+          if (typeof save==='function') save();
+          if (typeof renderAll==='function') renderAll();
+        } else {
+          // UI-only fallback (shouldn't be needed): remove from DOM
+          const target = items[idx];
+          if (target && target.parentNode) target.parentNode.removeChild(target);
         }
-      }
-    } catch(_) {}
-    // No extra toasts; UI change is the confirmation
-  }, true);
+      }catch(err){ console.error(err); }
+    });
+  });
 })();
