@@ -1,25 +1,3 @@
-
-// === DEBUG OVERLAY (build15) ===
-(function(){
-  if (document.getElementById('__dbg')) return;
-  const box = document.createElement('div');
-  box.id = '__dbg';
-  box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:999999;background:rgba(0,0,0,.8);color:#0ff;padding:8px 10px;font:12px/1.3 ui-monospace,monospace;max-width:90vw;max-height:60vh;overflow:auto;border-radius:6px;';
-  box.textContent = 'DBG: overlay ready';
-  document.addEventListener('DOMContentLoaded', ()=>{ if(!document.body) return; document.body.appendChild(box); });
-  function log(msg){
-    try{
-      const el = document.getElementById('__dbg'); if(!el) return;
-      const p = document.createElement('div'); p.textContent = '['+(new Date()).toLocaleTimeString()+'] '+msg;
-      el.appendChild(p);
-    }catch(_){}
-  }
-  window.__debug = log;
-  window.addEventListener('error', (e)=>{ log('ERROR: '+(e.message||e.error)); });
-  window.addEventListener('unhandledrejection', (e)=>{ log('REJECTION: '+(e.reason && e.reason.message ? e.reason.message : e.reason)); });
-  log('boot: overlay installed');
-})();
-
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -79,10 +57,7 @@
     }
   };
 
-  
-// --- Safe getter for removed Email/Print elements ---
-function __getEP(id){ try{ return document.getElementById(id); }catch(_){ return null; } }
-let state = {
+  let state = {
     companyLogoDataUrl: "",
     roster: ["Alice","Bob","Chris","Dee"],
     stages: ["Bid","Rough-in","Trim","Complete"],
@@ -334,7 +309,7 @@ let state = {
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    const pb = __getEP('print-job'); if (pb) { pb.textContent = "Email/Print"; }
+    const pb = $("print-job"); if (pb) { pb.textContent = "Email/Print"; }
     const list = $("notes-list"); list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
@@ -453,7 +428,7 @@ let state = {
 
   // --- Printing helpers ---
   function buildPrintSheet(job, idx) {
-    const el = __getEP('print-sheet'); if (!el) return;
+    const el = $("print-sheet"); if (!el) return;
     const title = escapeHtml(job.name || "Job");
     const crew = (job.crew || []).join(", ");
     const meta = [
@@ -703,12 +678,7 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-// [neutralized]     // [neutralized EP bind] (document.getElementById("__getEP('print-job')")||null).addEventListener("click", () => {
-  const j = currentJob(); if (!j) return;
-  const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
-  buildPrintSheet(j, idx);
-  window.print();
-});
+    // [removed email/print listener]\n
 
 $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
@@ -784,7 +754,7 @@ $("archive-job").addEventListener("click", () => {
     });
 
     $("refresh-btn").addEventListener("click", async () => {
-      const data = await (__debug && __debug('API.load: start'), API.load());
+      const data = await API.load();
       if (data) { state = { ...state, ...data, ui: { ...state.ui, ...(state.ui || {}) } }; }
       // Always force MAIN view and clear selections after reload; also finish init for current job
       finishInit();
@@ -804,7 +774,7 @@ $("archive-job").addEventListener("click", () => {
 
   async function boot() {
     status("Loading…");
-    const data = await (__debug && __debug('API.load: start'), API.load());
+    const data = await API.load();
     if (data) state = { ...state, ...data };
     // Always land on MAIN and clear selected contractor & job
     state.ui.view = "main";
@@ -823,7 +793,7 @@ $("archive-job").addEventListener("click", () => {
     state.ui.editing = !state.ui.editing;
     renderPanel();
   }, { passive: true });
-window.addEventListener("DOMContentLoaded", () => { try{__debug && __debug('DOMContentLoaded');}catch(_){}; statusEl = $("status");
+window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
     // WYSIWYG toolbar with selection restore and highlight toggle
     (function(){
