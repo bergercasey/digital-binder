@@ -682,7 +682,7 @@ function renderAll() {
   const j = currentJob(); if (!j) return;
   const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
   buildPrintSheet(j, idx);
-  window.print();
+  
 });
 
 $("archive-job").addEventListener("click", () => {
