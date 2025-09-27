@@ -135,19 +135,49 @@
 header { position: relative; }
 .header-right { position: absolute; right: 12px; top: 8px; display: inline-flex; gap: 8px; align-items: center; }
     </style>
-<link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png?v=1758975222">
-  <link rel="apple-touch-icon" sizes="167x167" href="/jobs-icon-167.png?v=1758975222">
-  <link rel="apple-touch-icon" sizes="152x152" href="/jobs-icon-152.png?v=1758975222">
-  <link rel="icon" type="image/png" sizes="32x32" href="/jobs-icon-32.png?v=1758975222">
-  <link rel="icon" type="image/png" sizes="16x16" href="/jobs-icon-16.png?v=1758975222">
-  <link rel="manifest" href="/site.webmanifest?v=1758975222">
+<link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png?v=1758975222&v=1758977545">
+  <link rel="apple-touch-icon" sizes="167x167" href="/jobs-icon-167.png?v=1758975222&v=1758977545">
+  <link rel="apple-touch-icon" sizes="152x152" href="/jobs-icon-152.png?v=1758975222&v=1758977545">
+  <link rel="icon" type="image/png" sizes="32x32" href="/jobs-icon-32.png?v=1758975222&v=1758977545">
+  <link rel="icon" type="image/png" sizes="16x16" href="/jobs-icon-16.png?v=1758975222&v=1758977545">
+  <link rel="manifest" href="/site.webmanifest?v=1758975222&v=1758977545">
   <meta name="theme-color" content="#0b7ef2">
 </head>
 <body>
+
+<script>
+(function(){
+  // Create overlay immediately
+  var box = document.createElement('div');
+  box.id = '__dbg';
+  box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:999999;background:rgba(0,0,0,.85);color:#0ff;padding:8px 10px;font:12px/1.3 ui-monospace,monospace;max-width:90vw;max-height:60vh;overflow:auto;border-radius:6px;';
+  box.textContent = 'DBG inline up';
+  (document.body ? document.body : document.documentElement).appendChild(box);
+  function log(m){ try{ var el=document.getElementById('__dbg'); if(!el) return; var d=document.createElement('div'); d.textContent='['+(new Date()).toLocaleTimeString()+'] '+m; el.appendChild(d);}catch(_){}};
+  window.__debug = log;
+  window.addEventListener('error', function(e){ log('ERROR: '+(e.message||e.error)); });
+  window.addEventListener('unhandledrejection', function(e){ var r=e.reason; log('REJECTION: '+(r&&r.message?r.message:r)); });
+  log('inline overlay installed');
+  log('pathname: '+location.pathname);
+  // Instrument existing <script src> tags for load/error
+  var tags = document.querySelectorAll('script[src]');
+  tags.forEach(function(s){
+    var url = s.getAttribute('src');
+    s.addEventListener('load', function(){ log('loaded: '+url); });
+    s.addEventListener('error', function(){ log('FAILED: '+url); });
+  });
+  // Heartbeats (helps confirm overlay is alive)
+  var n=0; var t=setInterval(function(){ n++; log('tick '+n); if(n>=5) clearInterval(t); }, 1000);
+  // DOM ready & window load markers
+  document.addEventListener('DOMContentLoaded', function(){ log('DOMContentLoaded'); });
+  window.addEventListener('load', function(){ log('window load'); });
+})();
+</script>
+
   <div class="errbar" id="errbar"></div>
 
   <header>
-    <h1><span style='font-weight:700;color:#b91c1c;background:#fee2e2;padding:2px 6px;border-radius:6px'>BUILD ID: DBG-OVERLAY-1758977313</span> — HVAC Digital Binder</h1>
+    <h1><span style='font-weight:700;color:#b91c1c;background:#fee2e2;padding:2px 6px;border-radius:6px'>BUILD ID: INLINE-DBG-1758977545</span> — HVAC Digital Binder</h1>
     <div class="toolbar">
       <button class="primary" id="add-contractor">+ Contractor</button>
       <button class="ghost" id="add-job">+ Job</button>
@@ -334,7 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script src="checks.js?v=1758975222&v=1758975593&v=1758976139&v=1758976785&v=1758977313"></script>
+  <script src="checks.js?v=1758975222&v=1758975593&v=1758976139&v=1758976785&v=1758977313&v=1758977545"></script>
   
 </body>
 </html>
