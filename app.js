@@ -57,7 +57,10 @@
     }
   };
 
-  let state = {
+  
+// --- Safe getter for removed Email/Print elements ---
+function __getEP(id){ try{ return document.getElementById(id); }catch(_){ return null; } }
+let state = {
     companyLogoDataUrl: "",
     roster: ["Alice","Bob","Chris","Dee"],
     stages: ["Bid","Rough-in","Trim","Complete"],
@@ -309,7 +312,7 @@
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    const pb = $("print-job"); if (pb) { pb.textContent = "Email/Print"; }
+    const pb = __getEP('print-job'); if (pb) { pb.textContent = "Email/Print"; }
     const list = $("notes-list"); list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
@@ -428,7 +431,7 @@
 
   // --- Printing helpers ---
   function buildPrintSheet(job, idx) {
-    const el = $("print-sheet"); if (!el) return;
+    const el = __getEP('print-sheet'); if (!el) return;
     const title = escapeHtml(job.name || "Job");
     const crew = (job.crew || []).join(", ");
     const meta = [
@@ -678,7 +681,7 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-// [neutralized]     $("print-job").addEventListener("click", () => {
+// [neutralized]     // [neutralized EP bind] (document.getElementById("__getEP('print-job')")||null).addEventListener("click", () => {
   const j = currentJob(); if (!j) return;
   const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
   buildPrintSheet(j, idx);
