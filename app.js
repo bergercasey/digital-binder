@@ -309,7 +309,7 @@
       wrap.appendChild(cb); wrap.appendChild(txt); crewBox.appendChild(wrap);
     });
 
-    const pb = $("print-job"); if (pb) { pb.textContent = "Email/Print"; }
+    const pb = (document.getElementById("print-job")||null); if (pb) { pb.textContent = "Email/Print"; }
     const list = $("notes-list"); list.innerHTML = "";
     (j.notes || []).forEach((n, i) => {
       const obj = typeof n === "string" ? { d: ymd(), text: n } : n;
@@ -678,8 +678,7 @@ function renderAll() {
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    $("print-job").addEventListener("click", () => {
-  const j = currentJob(); if (!j) return;
+     if (!j) return;
   const idx = (state.ui && typeof null /* disabled */ === "number") ? null /* disabled */ : null;
   buildPrintSheet(j, idx);
   
