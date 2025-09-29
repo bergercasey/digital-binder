@@ -940,23 +940,8 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       del.className = 'danger';
       del.textContent = 'Delete Selected';
       del.style.marginLeft = '8px';
-      \1
-      // UI-only Email/Print button (right of Delete)
-      try{
-        var emailBtn = document.getElementById('email-print');
-        if (!emailBtn){
-          emailBtn = document.createElement('button');
-          emailBtn.id = 'email-print';
-          emailBtn.className = addBtn.className || '';
-          emailBtn.textContent = 'Email/Print';
-          emailBtn.style.marginLeft = '8px';
-          emailBtn.style.background = '#e0f2fe';
-          emailBtn.style.border = '1px solid #93c5fd';
-          emailBtn.style.color = '#1d4ed8';
-          del.parentNode.insertBefore(emailBtn, del.nextSibling);
-        }
-      }catch(_){ /* UI insert only */ }
-del.addEventListener('click', function(){
+      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
+      del.addEventListener('click', function(){
         try{
           if (typeof currentJob !== 'function') { alert('No job context'); return; }
           var j = currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No notes found'); return; }
