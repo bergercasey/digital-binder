@@ -127,6 +127,13 @@
   }
 
   function wire(){
+
+  // Robust: delegate click so late-inserted button still works
+  document.addEventListener('click', function(e){
+    var t = e.target && (e.target.closest ? e.target.closest('#email-print') : null);
+    if (t) { e.preventDefault(); try{ openPreview(); }catch(_){ } }
+  });
+
     var ep = document.getElementById('email-print');
     if (!ep) return;
     if (!ep.__wired){
