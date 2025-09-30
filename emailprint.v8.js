@@ -1,10 +1,57 @@
-
 (function(){
   function $(sel, root){ return (root||document).querySelector(sel); }
   function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
+  // --- Robust job metadata extraction ---
   function currentJobSafe(){
     try { return (typeof currentJob === 'function') ? currentJob() : null; } catch(_){ return null; }
+  }
+  function getText(el){
+    if (!el) return '';
+    if (el.tagName && el.tagName.toLowerCase()==='select'){
+      var opt = el.options && el.selectedIndex>=0 ? el.options[el.selectedIndex] : null;
+      return (opt && (opt.text || opt.value)) || (el.value || el.textContent || '');
+    }
+    return (el.value || el.textContent || '').trim();
+  }
+  function joinParts(parts, sep){
+    return parts.filter(function(x){ return x && String(x).trim().length>0; }).join(sep || ', ');
+  }
+  function getJobMeta(){
+    var j = currentJobSafe() || {};
+
+    // Name
+    var name = j && (j.name || j.jobName || j.title) || '';
+    if (!name){
+      var t = $('#job-name') || $('.job-name') || $('[data-role="job-name"]');
+      name = getText(t) || 'Job';
+    }
+
+    // Address (several shapes supported)
+    var address = '';
+    var a = j && (j.address || j.addr || j.location || j.siteAddress || j.jobAddress);
+    if (typeof a === 'string'){ address = a; }
+    else if (a && typeof a === 'object'){
+      address = joinParts([
+        a.line1||a.street||a.street1,
+        a.line2||a.street2,
+        joinParts([a.city, a.state, a.zip], ' ')
+      ], ', ');
+    }
+    if (!address){
+      var el = $('#job-address') || $('.job-address') || $('[data-role="job-address"]') || $('#address') || $('.address');
+      address = getText(el);
+    }
+
+    // Stage / Status
+    var stage = j && (j.stage || j.status || j.pipelineStage || j.phase || (j.pipeline && j.pipeline.stage));
+    if (!stage){
+      var sEl = $('#job-stage') || $('.job-stage') || $('[data-role="job-stage"]') || $('#stage') || $('.stage') || $('.status') || $('[data-stage]');
+      stage = getText(sEl);
+    }
+    if (typeof stage === 'object' && stage && (stage.name || stage.title)) stage = stage.name || stage.title;
+
+    return { name: String(name||'Job'), address: String(address||''), stage: String(stage||'') };
   }
 
   function gatherSelectedNotes(){
@@ -20,16 +67,20 @@
     return out;
   }
 
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]); }); }
+
   function buildPreviewHTML(){
-    var j = currentJobSafe() || {};
-    var jobName = j && j.name ? j.name : (document.getElementById('job-name') && document.getElementById('job-name').value) || 'Job';
+    var meta = getJobMeta();
+    var jobName = meta.name;
+    var jobAddress = meta.address;
+    var jobStage = meta.stage;
+
     var sel = gatherSelectedNotes();
     var items = sel.map(function(row){
-      // Clone and simplify each note row for email-friendly markup
       var copy = row.cloneNode(true);
-      // remove checkbox and action widgets
+      // strip checkboxes/actions
       $all('input.pe_row_chk, .note-actions', copy).forEach(function(n){ n.remove(); });
-      // inline minimal styles
+      // inline light card styles to match app look
       copy.style.padding = '10px 12px';
       copy.style.border = '1px solid #e5e7eb';
       copy.style.borderRadius = '10px';
@@ -39,24 +90,30 @@
 
     var css = [
       'body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45;color:#111827;background:#fff;padding:16px;}',
-      'h1{font-size:18px;margin:0 0 12px 0;color:#111827;}',
-      '.muted{color:#6b7280;font-size:12px;margin-bottom:8px;}',
+      'h1{font-size:18px;margin:0 0 4px 0;color:#111827;}',
+      '.line{margin:0 0 8px 0;color:#374151;}',
+      '.muted{color:#6b7280;font-size:12px;margin:12px 0 8px 0;}',
       '.note-item{background:#fff;}',
       '.note-body{white-space:pre-wrap;}'
     ].join('');
 
-    var header = '<h1>'+escapeHtml(jobName)+' — Log Preview</h1>';
-    var when = new Date().toLocaleString();
-    var meta = '<div class="muted">Generated '+escapeHtml(when)+'</div>';
-    return '<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(jobName)+' — Log</title><style>'+css+'</style></head><body>'+header+meta+items+'</body></html>';
-  }
+    var header =
+      '<h1>'+escapeHtml(jobName)+'</h1>'
+      + (jobAddress ? '<div class="line">'+escapeHtml(jobAddress)+'</div>' : '')
+      + (jobStage ? '<div class="line">Stage: '+escapeHtml(jobStage)+'</div>' : '');
 
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]); }); }
+    var when = new Date().toLocaleString();
+    var metaLine = '<div class="muted">Generated '+escapeHtml(when)+'</div>';
+
+    return '<!doctype html><html><head><meta charset="utf-8"><title>'
+           + escapeHtml(jobName)
+           + ' — Log</title><style>'+css+'</style></head><body>'
+           + header + metaLine + items + '</body></html>';
+  }
 
   function openPreview(){
     try{
       var html = buildPreviewHTML();
-      // Build modal overlay
       var overlay = document.createElement('div');
       overlay.id = 'ep-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -64,29 +121,23 @@
       panel.style.cssText = 'background:#fff;max-width:900px;width:100%;max-height:85vh;overflow:auto;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.15);';
       var bar = document.createElement('div');
       bar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1;';
-      var title = document.createElement('div');
-      title.textContent = 'Email/Print Preview';
-      title.style.cssText = 'font-weight:700;color:#111827;';
+      var title = document.createElement('div'); title.textContent = 'Email/Print Preview'; title.style.cssText = 'font-weight:700;color:#111827;';
       var actions = document.createElement('div');
       var btnClose = document.createElement('button'); btnClose.textContent='Close'; styleBtn(btnClose);
       var btnPrint = document.createElement('button'); btnPrint.textContent='Print'; styleBtn(btnPrint);
       var btnSend  = document.createElement('button'); btnSend.textContent='Send Email'; styleBtn(btnSend, true);
       actions.appendChild(btnSend); actions.appendChild(btnPrint); actions.appendChild(btnClose);
       bar.appendChild(title); bar.appendChild(actions);
-      var frame = document.createElement('iframe');
-      frame.style.cssText = 'border:0;width:100%;height:70vh;display:block;';
+      var frame = document.createElement('iframe'); frame.style.cssText = 'border:0;width:100%;height:70vh;display:block;';
       panel.appendChild(bar); panel.appendChild(frame);
       overlay.appendChild(panel);
       document.body.appendChild(overlay);
 
-      // write preview doc
       var doc = frame.contentDocument || frame.contentWindow.document;
       doc.open(); doc.write(html); doc.close();
 
       btnClose.onclick = function(){ overlay.remove(); };
-      btnPrint.onclick = function(){
-        try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(e){ alert('Print failed'); }
-      };
+      btnPrint.onclick = function(){ try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(e){ alert('Print failed'); } };
       btnSend.onclick = function(){ sendEmail(doc.documentElement.outerHTML, overlay); };
     }catch(e){ alert('Could not open preview'); console.error(e); }
   }
@@ -96,10 +147,8 @@
   }
 
   function sendEmail(html, overlay){
-    var j = currentJobSafe() || {};
-    var jobName = j && j.name ? j.name : 'Job';
-    var subject = jobName + ' — Log';
-    // POST to Netlify function; function will use ENV for recipients
+    var meta = getJobMeta();
+    var subject = meta.name + ' — Log';
     fetch('/.netlify/functions/send-email', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -107,7 +156,7 @@
     }).then(function(r){
       if (!r.ok) throw new Error('HTTP '+r.status);
       return r.json().catch(function(){ return {}; });
-    }).then(function(_){
+    }).then(function(){
       toast('Email sent.');
       if (overlay) overlay.remove();
     }).catch(function(err){
@@ -126,25 +175,17 @@
     }catch(_){}
   }
 
-  function wire(){
-
-  // Robust: delegate click so late-inserted button still works
+  // Keep both delegated + direct wiring so it works regardless of insert timing
   document.addEventListener('click', function(e){
     var t = e.target && (e.target.closest ? e.target.closest('#email-print') : null);
     if (t) { e.preventDefault(); try{ openPreview(); }catch(_){ } }
   });
-
+  function wire(){
     var ep = document.getElementById('email-print');
-    if (!ep) return;
-    if (!ep.__wired){
+    if (ep && !ep.__wired){
       ep.addEventListener('click', openPreview);
       ep.__wired = true;
     }
   }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', wire);
-  } else {
-    wire();
-  }
+  if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', wire); } else { wire(); }
 })();
