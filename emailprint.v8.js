@@ -2,6 +2,23 @@
   function $(sel, root){ return (root||document).querySelector(sel); }
   function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
+  // --- Reliable printing: open a new window and print after load ---
+  function printHTML(html){
+    var w = window.open('', '_blank', 'noopener,noreferrer');
+    if (!w) { alert('Please allow popups to print.'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    var doPrint = function(){ try { w.focus(); w.print(); } catch(_){} };
+    if (w.document.readyState === 'complete') {
+      setTimeout(doPrint, 50);
+    } else {
+      w.addEventListener('load', doPrint, { once: true });
+    }
+    // Safari fallback
+    setTimeout(doPrint, 500);
+  }
+
   // --- Robust job metadata extraction ---
   function currentJobSafe(){
     try { return (typeof currentJob === 'function') ? currentJob() : null; } catch(_){ return null; }
@@ -27,7 +44,7 @@
       name = getText(t) || 'Job';
     }
 
-    // Address (several shapes supported)
+    // Address (support multiple shapes)
     var address = '';
     var a = j && (j.address || j.addr || j.location || j.siteAddress || j.jobAddress);
     if (typeof a === 'string'){ address = a; }
@@ -86,7 +103,7 @@
       copy.style.borderRadius = '10px';
       copy.style.margin = '0 0 10px 0';
       return copy.outerHTML;
-    }).join('\n');
+    }).join('\\n');
 
     var css = [
       'body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45;color:#111827;background:#fff;padding:16px;}',
@@ -137,7 +154,14 @@
       doc.open(); doc.write(html); doc.close();
 
       btnClose.onclick = function(){ overlay.remove(); };
-      btnPrint.onclick = function(){ try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(e){ alert('Print failed'); } };
+      btnPrint.onclick = function(){
+        try {
+          var htmlToPrint = (frame.contentDocument || frame.contentWindow.document).documentElement.outerHTML;
+          printHTML(htmlToPrint);
+        } catch (e) {
+          try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(_) {}
+        }
+      };
       btnSend.onclick = function(){ sendEmail(doc.documentElement.outerHTML, overlay); };
     }catch(e){ alert('Could not open preview'); console.error(e); }
   }
@@ -175,7 +199,7 @@
     }catch(_){}
   }
 
-  // Keep both delegated + direct wiring so it works regardless of insert timing
+  // Delegated + direct wiring so it works regardless of insert timing
   document.addEventListener('click', function(e){
     var t = e.target && (e.target.closest ? e.target.closest('#email-print') : null);
     if (t) { e.preventDefault(); try{ openPreview(); }catch(_){ } }
