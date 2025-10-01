@@ -1,14 +1,12 @@
-/* app.js v3.12 */
-(function(){
 
-// === Inline Email/Print Preview (IFRAMEPRINT) ===
-function __ep_escape(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-function __ep_asHtml(n){
+// === GLOBAL Email/Print Preview API (always available) ===
+window.__ep_escape = function(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); };
+window.__ep_asHtml = function(n){
   if (n && n.html) return String(n.html);
-  if (n && n.text) return __ep_escape(n.text).replace(/\n/g,'<br>');
+  if (n && n.text) return window.__ep_escape(n.text).replace(/\n/g,'<br>');
   return '';
-}
-function buildPreviewHTML(info, notes){
+};
+window.buildPreviewHTML = function(info, notes){
   var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
           + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
           + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
@@ -16,33 +14,30 @@ function buildPreviewHTML(info, notes){
           + 'hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
   var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
   html += '<div class="header">'
-       + '<div class="jobname">'+__ep_escape((info&&info.name)||'')+'</div>'
-       + ((info&&info.address)? '<div class="jobfield">'+__ep_escape(info.address)+'</div>' : '')
-       + ((info&&info.stage)? '<div class="jobfield">Current Stage: '+__ep_escape(info.stage)+'</div>' : '')
+       + '<div class="jobname">'+window.__ep_escape((info&&info.name)||'')+'</div>'
+       + ((info&&info.address)? '<div class="jobfield">'+window.__ep_escape(info.address)+'</div>' : '')
+       + ((info&&info.stage)? '<div class="jobfield">Current Stage: '+window.__ep_escape(info.stage)+'</div>' : '')
        + '</div><hr>';
   var arr = notes||[];
   for (var i=0;i<arr.length;i++){
     var n = arr[i]||{};
     var d = n.date||n.d||'';
     html += '<div class="entry">'
-      + (d ? '<div class="date">'+__ep_escape(d)+'</div>' : '')
-      + '<div class="body">'+__ep_asHtml(n)+'</div>'
+      + (d ? '<div class="date">'+window.__ep_escape(d)+'</div>' : '')
+      + '<div class="body">'+window.__ep_asHtml(n)+'</div>'
       + '</div><hr>';
   }
   html += '</body></html>';
   return html;
-}
-function openPreview(info, notes){
-  var html = buildPreviewHTML(info||{}, notes||[]);
-  // Overlay
+};
+window.openPreview = function(info, notes){
+  var html = window.buildPreviewHTML(info||{}, notes||[]);
   var ov = document.createElement('div');
   ov.id = 'ep-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  // Modal box
   var box = document.createElement('div');
   box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
   ov.appendChild(box);
-  // Header
   var head = document.createElement('div');
   head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
   var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
@@ -55,15 +50,12 @@ function openPreview(info, notes){
   btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
   head.appendChild(btns);
   box.appendChild(head);
-  // Iframe preview
   var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
   var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
   wrap.appendChild(iframe); box.appendChild(wrap);
   try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
-  // Buttons
   closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
   printBtn.addEventListener('click', function(){
-    // Print via hidden fullscreen iframe injected into this document to avoid blank OS preview
     try{
       var pf = document.createElement('iframe');
       pf.style.position='fixed'; pf.style.left='0'; pf.style.top='0'; pf.style.width='0'; pf.style.height='0'; pf.style.opacity='0'; pf.style.pointerEvents='none'; pf.style.border='0';
@@ -77,15 +69,14 @@ function openPreview(info, notes){
     }catch(e){ alert('Print failed'); }
   });
   emailBtn.addEventListener('click', function(){
-    // Placeholder: open preview in a separate tab for share/save as PDF
-    try {
-      var w = window.open('', '_blank');
-      if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); }
-    } catch(e){ alert('Email action failed'); }
+    try { var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
+    catch(e){ alert('Email action failed'); }
   });
   document.body.appendChild(ov);
-}
+};
 
+/* app.js v3.12 */
+(function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
 
@@ -1056,7 +1047,7 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   })();
 })();
 
-// === Email/Print button (IFRAMEPRINT) ===
+// === Email/Print button (GLOBAL) ===
 (function(){
   function txt(el){ return el && el.textContent ? el.textContent.trim() : ''; }
   function resolveInfo(){
@@ -1088,7 +1079,6 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
             if (dateBox.firstChild && dateBox.firstChild.nodeType===3) dateTxt = dateBox.firstChild.nodeValue;
             else dateTxt = dateBox.textContent || '';
           }
-          // body text: first non-date div
           var bodyText = '';
           var divs = row.getElementsByTagName('div');
           for (var d=0; d<divs.length; d++){
@@ -1120,14 +1110,13 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
         ep.addEventListener('click', function(){
           var info = resolveInfo();
           var notes = getSelectedNotes();
-          openPreview(info, notes);
+          if (window && typeof window.openPreview === 'function') window.openPreview(info, notes);
+          else alert('Preview not available');
         });
       }
     }catch(_){}
   }
-  function tick(){ try{ ensureBtn(); }catch(_){ } }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
-  var tries=0, t=setInterval(function(){ tries++; tick(); if (tries>24) clearInterval(t); }, 400);
-  try{ var mo=new MutationObserver(tick); mo.observe(document.body, {childList:true, subtree:true}); }catch(_){}
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensureBtn); else ensureBtn();
+  try{ var mo=new MutationObserver(ensureBtn); mo.observe(document.body, {childList:true, subtree:true}); }catch(_){}
 })();
 
