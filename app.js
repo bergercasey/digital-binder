@@ -1,70 +1,5 @@
 /* app.js v3.12 */
 (function(){
-
-// === Inline Email/Print Preview (modal) ===
-function __ep_escape(s){ return String(s||'').replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
-function __ep_asHtml(n){
-  if (n && n.html) return String(n.html);
-  if (n && n.text) return __ep_escape(n.text).replace(/\n/g,'<br>');
-  return '';
-}
-function buildPreviewHTML(info, notes){
-  var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
-          + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
-          + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
-          + '.entry{margin:0 0 16px 0} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
-          + 'hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
-  var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
-  html += '<div class="header">'
-       + '<div class="jobname">'+__ep_escape(info.name||'')+'</div>'
-       + (info.address? '<div class="jobfield">'+__ep_escape(info.address)+'</div>':'')
-       + (info.stage? '<div class="jobfield">Current Stage: '+__ep_escape(info.stage)+'</div>':'')
-       + '</div><hr>';
-  html += (notes||[]).map(function(n){
-    return '<div class="entry">'
-      + (n.date? '<div class="date">'+__ep_escape(n.date)+'</div>':'')
-      + '<div class="body">'+__ep_asHtml(n)+'</div>'
-      + '</div><hr>';
-  }).join('');
-  html += '</body></html>';
-  return html;
-}
-function openPreview(info, notes){
-  var html = buildPreviewHTML(info, notes);
-  var ov = document.createElement('div');
-  ov.id = 'ep-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
-  ov.appendChild(box);
-  var head = document.createElement('div');
-  head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
-  var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
-  head.appendChild(title);
-  var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
-  function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
-  var emailBtn = mkBtn('Email','primary');
-  var printBtn = mkBtn('Print','primary');
-  var closeBtn = mkBtn('Close','ghost');
-  btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
-  head.appendChild(btns);
-  box.appendChild(head);
-  var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
-  var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
-  wrap.appendChild(iframe); box.appendChild(wrap);
-  try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
-  closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
-  printBtn.addEventListener('click', function(){
-    try { var w = window.open('', '_blank'); if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); w.focus(); w.print(); } else { alert('Unable to open print preview window.'); } }
-    catch(e){ alert('Print failed'); }
-  });
-  emailBtn.addEventListener('click', function(){
-    try { var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
-    catch(e){ alert('Email action failed'); }
-  });
-  document.body.appendChild(ov);
-}
-
   const $ = (id) => document.getElementById(id);
   let statusEl;
 
@@ -1035,50 +970,21 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   })();
 })();
 
-// === Email/Print button with DOM-based job resolution ===
+// === Email/Print button with simple DOM-based job resolution ===
 (function(){
-  function text(el){ return (el && el.textContent ? el.textContent : '').trim(); }
   function resolveCurrentJob(){
-    // 1) App helpers
-    try { if (typeof currentJob === 'function'){ var j=currentJob(); if (j && j.name) return j; } } catch(_){}
-    try {
-      if (window.state && state.ui && state.ui.selectedJobId){
-        var cid = state.ui.selectedContractorId;
-        var c = (state.contractors||[]).find(function(x){ return x && x.id === cid; });
-        if (c){
-          var j2 = (c.jobs||[]).find(function(x){ return x && x.id === state.ui.selectedJobId; });
-          if (j2) return j2;
-        }
-      }
-    } catch(_){}
-    // 2) Direct field reads
-    try {
-      var nameI = document.getElementById('job-name');
-      var addrI = document.getElementById('job-address');
-      var stageI= document.getElementById('job-stage');
-      var stageVal = '';
-      if (stageI){
-        var opt = stageI.options && stageI.selectedIndex >= 0 ? stageI.options[stageI.selectedIndex] : null;
-        stageVal = opt ? opt.text || opt.value : (stageI.value||'');
-      }
-      var candidate = { name: (nameI && nameI.value)||'', address: (addrI && addrI.value)||'', stage: stageVal||'' };
-      if (candidate.name || candidate.address || candidate.stage) return candidate;
-    } catch(_){}
-    // 3) Scrape from summary block
     try {
       var sum = document.getElementById('job-summary');
       if (sum){
-        var nm = sum.querySelector('div div'); // first name div
-        var addr = sum.querySelector('div + .muted'); // the muted address line in your HTML
-        var stageChip = (sum.textContent||'').match(/Stage:\s*([^\n]+)/);
-        return {
-          name: nm ? text(nm) : '',
-          address: addr ? text(addr) : '',
-          stage: stageChip ? stageChip[1].trim() : ''
-        };
+        var txt = sum.textContent || '';
+        var name = (sum.querySelector('div') ? sum.querySelector('div').textContent : '').trim();
+        var addr = (sum.querySelector('.muted') ? sum.querySelector('.muted').textContent : '').trim();
+        var stageMatch = txt.match(/Stage:\s*([^\n]+)/);
+        var stage = stageMatch ? stageMatch[1].trim() : '';
+        return { name:name, address:addr, stage:stage };
       }
-    } catch(_){}
-    return null;
+    } catch(e){}
+    return { name:'', address:'', stage:'' };
   }
   function ensureEP(){
     var addBtn = document.getElementById('add-note');
@@ -1098,23 +1004,19 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       ep.addEventListener('click', function(){
         try{
           var j = resolveCurrentJob();
-          if (!j) { alert('No job selected'); return; }
           var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
           var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
           var selected = [];
           rows.forEach(function(row, idx){
             var cb = row.querySelector('.note-date input.pe_row_chk');
             if (cb && cb.checked) {
-              // Try to pull date from DOM if job.notes index doesn't match (DOM-first fallback)
               var dateEl = row.querySelector('.note-date');
               var dateTxt = dateEl ? (dateEl.firstChild && dateEl.firstChild.nodeType===3 ? dateEl.firstChild.nodeValue : dateEl.textContent).trim() : '';
-              var n = (window.state && typeof currentJob==='function' && currentJob() && currentJob().notes && currentJob().notes[idx]) || {};
-              selected.push({ date: (n.d || n.date || dateTxt), html: n.html || '', text: n.text || row.querySelector('.note-item div:nth-child(2)')?.textContent || '' });
+              selected.push({ date: dateTxt, html: '', text: row.querySelector('.note-item div:nth-child(2)')?.textContent || '' });
             }
           });
           if (selected.length === 0) { alert('Select at least one log entry to preview.'); return; }
-          var info = { name: j.name || '', address: j.address || '', stage: j.stage || '' };
-          openPreview(info, selected);
+          openPreview(j, selected);
         }catch(e){ alert('Preview failed'); }
       });
     }
