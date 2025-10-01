@@ -31,20 +31,16 @@ function buildPreviewHTML(info, notes){
 }
 function openPreview(info, notes){
   var html = buildPreviewHTML(info, notes);
-  // Overlay
   var ov = document.createElement('div');
   ov.id = 'ep-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  // Modal box
   var box = document.createElement('div');
   box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
   ov.appendChild(box);
-  // Header
   var head = document.createElement('div');
   head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
   var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
   head.appendChild(title);
-  // Buttons
   var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
   function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
   var emailBtn = mkBtn('Email','primary');
@@ -53,21 +49,16 @@ function openPreview(info, notes){
   btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
   head.appendChild(btns);
   box.appendChild(head);
-  // Iframe preview
   var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
   var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
   wrap.appendChild(iframe); box.appendChild(wrap);
-  // Write into iframe
   try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
-  // Wire buttons
   closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
   printBtn.addEventListener('click', function(){
     try {
       var w = window.open('', '_blank');
-      if (w && w.document) {
-        w.document.open(); w.document.write(html); w.document.close();
-        w.focus(); w.print();
-      } else { alert('Unable to open print preview window.'); }
+      if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); w.focus(); w.print(); }
+      else { alert('Unable to open print preview window.'); }
     } catch(e){ alert('Print failed'); }
   });
   emailBtn.addEventListener('click', function(){
@@ -1047,8 +1038,22 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   })();
 })();
 
-// === Robust Email/Print button installer ===
+// === Robust Email/Print button installer (job context fallback) ===
 (function(){
+  function resolveCurrentJob(){
+    try { if (typeof currentJob === 'function'){ var j=currentJob(); if (j && j.id) return j; } } catch(_){}
+    try {
+      if (window.state && state.ui && state.ui.selectedJobId){
+        var cid = state.ui.selectedContractorId;
+        var c = (state.contractors||[]).find(function(x){ return x && x.id === cid; });
+        if (c){
+          var j2 = (c.jobs||[]).find(function(x){ return x && x.id === state.ui.selectedJobId; });
+          if (j2) return j2;
+        }
+      }
+    } catch(_){}
+    return null;
+  }
   function ensureEP(){
     var addBtn = document.getElementById('add-note');
     if (!addBtn || !addBtn.parentNode) return;
@@ -1064,11 +1069,10 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       ep.style.border = '1px solid #60a5fa';
       ep.style.color = '#1e3a8a';
       after.parentNode.insertBefore(ep, after.nextSibling);
-      // Attach click handler
       ep.addEventListener('click', function(){
         try{
-          if (typeof currentJob !== 'function') { alert('No job context'); return; }
-          var j = currentJob(); if (!j) { alert('No job selected'); return; }
+          var j = resolveCurrentJob();
+          if (!j) { alert('No job selected'); return; }
           var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
           var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
           var selected = [];
@@ -1082,17 +1086,14 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
           });
           if (selected.length === 0) { alert('Select at least one log entry to preview.'); return; }
           var info = { name: j.name || '', address: j.address || '', stage: j.stage || '' };
-          if (typeof openPreview === 'function') openPreview(info, selected);
+          openPreview(info, selected);
         }catch(e){ alert('Preview failed'); }
       });
     }
   }
   function tick(){ try{ ensureEP(); }catch(_){ } }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
-  var tries = 0, t = setInterval(function(){ tries++; tick(); if (tries > 15) clearInterval(t); }, 500);
-  try{
-    var mo = new MutationObserver(tick);
-    mo.observe(document.body, {childList:true, subtree:true});
-  }catch(_){}
+  var tries = 0, t = setInterval(function(){ tries++; tick(); if (tries > 20) clearInterval(t); }, 400);
+  try { var mo = new MutationObserver(tick); mo.observe(document.body, {childList:true, subtree:true}); } catch(_){}
 })();
 
