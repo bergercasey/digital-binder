@@ -59,29 +59,33 @@
   }
 
   function buildPreviewHTML(info, notes){
-    function esc(s){return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);});}
-    var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
-            + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
-            + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
-            + '.entry{margin:0 0 16px 0} .entry .label{font-weight:700;font-size:18px;margin:0 0 4px 0}'
-            + '.entry .date{color:#000;margin:0 0 6px 0;font-size:16px} hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
-    var html = '<!doctype html><html><head><meta charset="utf-8"><title>Log Preview</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>'+css+'</style></head><body>';
-    html += '<div class="header">'
-         + '<div class="jobname">'+esc(info.name||'')+'</div>'
-         + (info.address? '<div class="jobfield">Address: '+esc(info.address)+'</div>':'')
-         + (info.po? '<div class="jobfield">PO: '+esc(info.po)+'</div>':'')
-         + (info.stage? '<div class="jobfield">Status: '+esc(info.stage)+'</div>':'')
-         + '</div><hr>';
-    html += notes.map(function(n){
-      return '<div class="entry">'
-        + '<div class="label">Job Notes</div>'
-        + '<div class="date">'+esc(n.date||'')+'</div>'
-        + '<div>'+esc(n.text||'')+'</div>'
-        + '</div><hr>';
-    }).join('');
-    html += '</body></html>';
-    return html;
+  function esc(s){return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);});}
+  function asHtml(n){
+    if (n && n.html) return String(n.html);
+    if (n && n.text) return esc(n.text).replace(/
+/g,'<br>');
+    return '';
   }
+  var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
+          + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
+          + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
+          + '.entry{margin:0 0 16px 0} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
+          + 'hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
+  var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
+  html += '<div class="header">'
+       + '<div class="jobname">'+esc(info.name||'')+'</div>'
+       + (info.address? '<div class="jobfield">'+esc(info.address)+'</div>':'')
+       + (info.stage? '<div class="jobfield">Current Stage: '+esc(info.stage)+'</div>':'')
+       + '</div><hr>';
+  html += (notes||[]).map(function(n){
+    return '<div class="entry">'
+      + (n.date? '<div class="date">'+esc(n.date)+'</div>':'')
+      + '<div class="body">'+asHtml(n)+'</div>'
+      + '</div><hr>';
+  }).join('');
+  html += '</body></html>';
+  return html;
+}
 
   function openPreview(info, notes){
     var w = window.open('', '_blank'); if(!w){ alert('Popup blocked. Allow popups and try again.'); return; }

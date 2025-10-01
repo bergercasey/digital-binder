@@ -941,6 +941,39 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
       del.textContent = 'Delete Selected';
       del.style.marginLeft = '8px';
       addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
+      var ep = document.createElement('button');
+      ep.id = 'email-print';
+      ep.textContent = 'Email/Print';
+      ep.className = 'primary';
+      ep.style.marginLeft = '8px';
+      ep.style.backgroundColor = '#e0f2fe';
+      ep.style.border = '1px solid #60a5fa';
+      ep.style.color = '#1e3a8a';
+      addBtn.parentNode.insertBefore(ep, del.nextSibling);
+      ep.addEventListener('click', function(){
+        try{
+          if (typeof currentJob !== 'function') { alert('No job context'); return; }
+          var j = currentJob(); if (!j) { alert('No job selected'); return; }
+          var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
+          var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
+          var selected = [];
+          rows.forEach(function(row, idx){
+            var cb = row.querySelector('.note-date input.pe_row_chk');
+            if (cb && cb.checked) {
+              var d = (j.notes && j.notes[idx] && (j.notes[idx].d || j.notes[idx].date)) || '';
+              var n = j.notes[idx] || {};
+              selected.push({ date: d, html: n.html || '', text: n.text || '' });
+            }
+          });
+          if (selected.length === 0) { alert('Select at least one log entry to preview.'); return; }
+          var info = { name: j.name || '', address: j.address || '', stage: j.stage || '' };
+          if (typeof openPreview === 'function') { openPreview(info, selected); }
+          else if (window && window.buildPreviewHTML) {
+            var w = window.open('', '_blank'); if(!w){ alert('Popup blocked. Allow popups and try again.'); return; }
+            w.document.open(); w.document.write(window.buildPreviewHTML(info, selected)); w.document.close();
+          } else { alert('Preview module not loaded.'); }
+        }catch(e){ console.warn('Email/Print preview failed', e); alert('Preview failed.'); }
+      });
       del.addEventListener('click', function(){
         try{
           if (typeof currentJob !== 'function') { alert('No job context'); return; }
