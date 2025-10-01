@@ -1,5 +1,5 @@
 
-// === GLOBAL Email/Print Preview API (pretty layout + body-swap print) ===
+// === GLOBAL Email/Print Preview API (final fix) ===
 window.__ep_escape = function(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); };
 window.__ep_asHtml = function(n){
   if (n && n.html) return String(n.html);
@@ -11,6 +11,7 @@ window.__ep_styles = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto
   +'.jobname{font-size:22px;font-weight:700;margin-bottom:3px} .jobfield{font-size:16px;color:#222}'
   +'.entry{margin:0 12px 16px 12px} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
   +'hr{border:none;border-top:1px solid #e5e7eb;margin:12px 0}';
+
 window.buildPreviewHTML = function(info, notes){
   var css = window.__ep_styles;
   var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
@@ -33,15 +34,9 @@ window.buildPreviewHTML = function(info, notes){
   html += '</body></html>';
   return html;
 };
-window.__ep_extractBody = function(fullHtml){
-  try{
-    var m = fullHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    return m ? m[1] : fullHtml;
-  }catch(_){ return fullHtml; }
-};
+
 window.openPreview = function(info, notes){
   var html = window.buildPreviewHTML(info||{}, notes||[]);
-  // Overlay modal
   var ov = document.createElement('div');
   ov.id = 'ep-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
@@ -67,19 +62,26 @@ window.openPreview = function(info, notes){
   // Buttons
   closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
   printBtn.addEventListener('click', function(){
-    // Body-swap print: replace body with preview content (iOS reliable), then restore via reload
     try{
-      var bodyInner = window.__ep_extractBody(html);
+      var w = window.open('', '_blank');
+      if (w && w.document){
+        w.document.open(); w.document.write(html); w.document.close();
+        w.focus();
+        setTimeout(function(){ try{ w.print(); }catch(e){} }, 150);
+        return;
+      }
+    }catch(_){}
+    try{
+      var original = document.body.innerHTML;
+      var bodyInner = (function(){ var m = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i); return m?m[1]:html; })();
       document.body.innerHTML = '<style>'+window.__ep_styles+'</style>' + bodyInner;
       window.scrollTo(0,0);
-      window.print();
-      setTimeout(function(){ location.reload(); }, 500);
+      setTimeout(function(){ try{ window.print(); }finally{ setTimeout(function(){ location.reload(); }, 300); } }, 200);
     }catch(e){ alert('Print failed'); }
   });
   emailBtn.addEventListener('click', function(){
-    try{
-      var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); }
-    }catch(e){ alert('Email action failed'); }
+    try{ var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
+    catch(e){ alert('Email action failed'); }
   });
   document.body.appendChild(ov);
 };
@@ -1056,7 +1058,7 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   })();
 })();
 
-// === Email/Print button (pretty info parse + body-swap print) ===
+// === Email/Print button (final fix parse) ===
 (function(){
   function txt(el){ return el && el.textContent ? el.textContent.trim() : ''; }
   function resolveInfo(){
@@ -1064,14 +1066,12 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     try{
       var sum = document.getElementById('job-summary');
       if (sum){
-        // First strong/header div as Name
-        var firstDiv = sum.querySelector('div');
-        info.name = txt(firstDiv);
-        // Address line under name
-        var muted = sum.querySelector('.muted'); info.address = txt(muted);
-        // Pull Stage/PO/Crew via regex from the full summary text
         var all = sum.textContent || '';
-        var m1 = all.match(/Stage:\s*([^\n]+)/); if (m1) info.stage = (m1[1]||'').trim();
+        var idx = all.indexOf('Stage:');
+        var headerStr = idx > -1 ? all.substring(0, idx) : all;
+        info.name = headerStr.replace(/PO:.*$/,'').replace(/Crew:.*$/,'').trim();
+        var muted = sum.querySelector('.muted'); info.address = txt(muted);
+        var m1 = all.match(/Stage:\s*([^\n]+)/); if (m1) info.stage = (m1[1]||'').replace(/PO:.*$/,'').replace(/Crew:.*$/,'').trim();
         var m2 = all.match(/PO:\s*([^\s]+)/); if (m2) info.po = (m2[1]||'').trim();
         var m3 = all.match(/Crew:\s*([^\n]+)/); if (m3) info.crew = (m3[1]||'').trim();
       }
