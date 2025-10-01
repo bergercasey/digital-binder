@@ -1,66 +1,69 @@
 (function(){
+  'use strict';
   function $(sel, root){ return (root||document).querySelector(sel); }
   function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
+  // Print via hidden iframe (avoids popup blockers/blank about:blank)
   function printHTML(html){
-  // Print via hidden iframe to avoid popup blockers / blank tabs (iOS/Safari safe)
-  var iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0'; iframe.style.bottom = '0';
-  iframe.style.width = '0'; iframe.style.height = '0';
-  iframe.style.border = '0';
-  document.body.appendChild(iframe);
-  var doc = iframe.contentDocument || iframe.contentWindow.document;
-  try { doc.open(); doc.write(html); doc.close(); } catch(_){}
-  var doPrint = function(){
-    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(_){}
-    setTimeout(function(){ try{ iframe.parentNode && iframe.parentNode.removeChild(iframe); }catch(_){ } }, 1200);
-  };
-  // Give Safari/iPad a moment to paint
-  setTimeout(doPrint, 300);
-}
-);
-      url = URL.createObjectURL(blob);
-      w = window.open(url, '_blank', 'noopener,noreferrer');
-    } catch(e){
-      try {
-        url = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-        w = window.open(url, '_blank', 'noopener,noreferrer');
-      } catch(e2){}
+    var iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    try { doc.open(); doc.write(html); doc.close(); } catch(_){}
+    function doPrint(){
+      try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(_){}
+      setTimeout(function(){ try{ iframe.parentNode && iframe.parentNode.removeChild(iframe); }catch(_){ } }, 1200);
     }
-    if (!w) { alert('Please allow popups to print.'); return; }
-
-    var onLoad = function(){
-      try { w.focus(); w.print(); } catch(_) {}
-      try { if (url && url.indexOf('blob:') === 0) setTimeout(function(){ URL.revokeObjectURL(url); }, 1500); } catch(_){}
-    };
-    try { w.addEventListener('load', onLoad, { once:true }); } catch(_){}
-    setTimeout(onLoad, 800);
+    setTimeout(doPrint, 300);
   }
 
-  function currentJobSafe(){ try { return (typeof currentJob === 'function') ? currentJob() : null; } catch(_){ return null; } }
+  // --- Job meta helpers ---
+  function currentJobSafe(){
+    try { return (typeof currentJob === 'function') ? currentJob() : null; } catch(_){ return null; }
+  }
   function getText(el){
     if (!el) return '';
-    if (el.tagName && el.tagName.toLowerCase()==='select'){
-      var opt = el.options && el.selectedIndex>=0 ? el.options[el.selectedIndex] : null;
-      return (opt && (opt.text || opt.value)) || (el.value || el.textContent || '');
-    }
-    return (el.value || el.textContent || '').trim();
+    try{
+      var tag = (el.tagName||'').toLowerCase();
+      if (tag === 'select'){
+        var opt = el.options && el.selectedIndex>=0 ? el.options[el.selectedIndex] : null;
+        return (opt && (opt.text || opt.value)) || (el.value || el.textContent || '');
+      }
+      return (el.value || el.textContent || '').trim();
+    }catch(_){ return ''; }
   }
-  function joinParts(parts, sep){ return parts.filter(function(x){ return x && String(x).trim().length>0; }).join(sep || ', '); }
+  function joinParts(parts, sep){
+    var out = []; var i;
+    for (i=0;i<parts.length;i++){ if (parts[i] && String(parts[i]).trim().length>0) out.push(parts[i]); }
+    return out.join(sep || ', ');
+  }
   function getJobMeta(){
     var j = currentJobSafe() || {};
-    var name = j && (j.name || j.jobName || j.title) || '';
-    if (!name){ var t = document.getElementById('job-name') || document.querySelector('.job-name,[data-role=\"job-name\"]'); name = getText(t) || 'Job'; }
+    var name = (j && (j.name || j.jobName || j.title)) || '';
+    if (!name){
+      var t = $('#job-name') || $('.job-name') || $('[data-role="job-name"]');
+      name = getText(t) || 'Job';
+    }
     var address = '';
     var a = j && (j.address || j.addr || j.location || j.siteAddress || j.jobAddress);
     if (typeof a === 'string'){ address = a; }
     else if (a && typeof a === 'object'){
-      address = joinParts([a.line1||a.street||a.street1, a.line2||a.street2, joinParts([a.city, a.state, a.zip], ' ')], ', ');
+      address = joinParts([ a.line1||a.street||a.street1, a.line2||a.street2, joinParts([a.city, a.state, a.zip], ' ') ], ', ');
     }
-    if (!address){ var el = document.getElementById('job-address') || document.querySelector('.job-address,[data-role=\"job-address\"],#address,.address'); address = getText(el); }
+    if (!address){
+      var el = $('#job-address') || $('.job-address') || $('[data-role="job-address"]') || $('#address') || $('.address');
+      address = getText(el);
+    }
     var stage = j && (j.stage || j.status || j.pipelineStage || j.phase || (j.pipeline && j.pipeline.stage));
-    if (!stage){ var sEl = document.getElementById('job-stage') || document.querySelector('.job-stage,[data-role=\"job-stage\"],#stage,.stage,.status,[data-stage]'); stage = getText(sEl); }
+    if (!stage){
+      var sEl = $('#job-stage') || $('.job-stage') || $('[data-role="job-stage"]') || $('#stage') || $('.stage') || $('.status') || $('[data-stage]');
+      stage = getText(sEl);
+    }
     if (typeof stage === 'object' && stage && (stage.name || stage.title)) stage = stage.name || stage.title;
     return { name: String(name||'Job'), address: String(address||''), stage: String(stage||'') };
   }
@@ -68,57 +71,73 @@
   function gatherSelectedNotes(){
     var list = document.getElementById('notes-list');
     if (!list) return [];
-    var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
-    var out = [];
-    rows.forEach(function(row){
+    var rows = $all('.note-item', list);
+    var i, out = [];
+    for (i=0;i<rows.length;i++){
+      var row = rows[i];
       var cb = row.querySelector('.note-date input.pe_row_chk');
       if (cb && cb.checked) out.push(row);
-    });
+    }
     if (out.length === 0) out = rows;
     return out;
   }
 
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]); }); }
+  function escapeHtml(s){
+    return String(s||'').replace(/[&<>"]/g, function(c){
+      return c==='&'?'&amp;':(c==='<'?'&lt;':(c==='>'?'&gt;':'&quot;'));
+    });
+  }
 
   function buildPreviewHTML(){
     var meta = getJobMeta();
-    var jobName = meta.name, jobAddress = meta.address, jobStage = meta.stage;
+    var jobName = meta.name;
+    var jobAddress = meta.address;
+    var jobStage = meta.stage;
 
     var sel = gatherSelectedNotes();
-    var items = sel.map(function(row){
+    var itemsArr = [];
+    for (var i=0;i<sel.length;i++){
+      var row = sel[i];
       var copy = row.cloneNode(true);
       // strip interactive widgets
-      Array.prototype.slice.call(copy.querySelectorAll('input.pe_row_chk, .note-actions, button, input[type=\"checkbox\"], input[type=\"radio\"]')).forEach(function(n){ n.remove(); });
-      // normalize literal "\\n" to <br>
-      Array.prototype.slice.call(copy.querySelectorAll('.note-body, [data-role=\"note-body\"]')).forEach(function(el){
-        try { el.innerHTML = el.innerHTML.replace(/\\n/g, '<br>'); } catch(_){}
-      });
+      var toRemove = copy.querySelectorAll('input.pe_row_chk, .note-actions, button, input[type="checkbox"], input[type="radio"]');
+      for (var k=0;k<toRemove.length;k++){ toRemove[k].parentNode && toRemove[k].parentNode.removeChild(toRemove[k]); }
+      // normalize literal "\n" sequences to <br>
+      var bodies = copy.querySelectorAll('.note-body, [data-role="note-body"]');
+      for (var b=0;b<bodies.length;b++){
+        try {
+          bodies[b].innerHTML = String(bodies[b].innerHTML).replace(/\\n/g, '<br>');
+        } catch(_){}
+      }
+      // card styles
       copy.style.padding = '10px 12px';
       copy.style.border = '1px solid #e5e7eb';
       copy.style.borderRadius = '10px';
       copy.style.margin = '0 0 10px 0';
-      return copy.outerHTML;
-    }).join('\n');
+      itemsArr.push(copy.outerHTML);
+    }
+    var items = itemsArr.join('\n');
 
-    var css = [
-      'body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45;color:#111827;background:#fff;padding:16px;}',
-      'h1{font-size:18px;margin:0 0 4px 0;color:#111827;}',
-      '.line{margin:0 0 8px 0;color:#374151;}',
-      '.muted{color:#6b7280;font-size:12px;margin:12px 0 8px 0;}',
-      '.note-item{background:#fff;}',
-      '.note-body{white-space:pre-wrap;}'
-    ].join('');
+    var css = ''
+      + 'body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45;color:#111827;background:#fff;padding:16px;}'
+      + 'h1{font-size:18px;margin:0 0 4px 0;color:#111827;}'
+      + '.line{margin:0 0 8px 0;color:#374151;}'
+      + '.muted{color:#6b7280;font-size:12px;margin:12px 0 8px 0;}'
+      + '.note-item{background:#fff;}'
+      + '.note-body{white-space:pre-wrap;}';
 
     var header = '<h1>'+escapeHtml(jobName)+'</h1>'
-      + (jobAddress ? '<div class=\"line\">'+escapeHtml(jobAddress)+'</div>' : '')
-      + (jobStage ? '<div class=\"line\">Stage: '+escapeHtml(jobStage)+'</div>' : '');
+      + (jobAddress ? '<div class="line">'+escapeHtml(jobAddress)+'</div>' : '')
+      + (jobStage ? '<div class="line">Stage: '+escapeHtml(jobStage)+'</div>' : '');
 
     var when = new Date().toLocaleString();
-    var metaLine = '<div class=\"muted\">Generated '+escapeHtml(when)+'</div>';
+    var metaLine = '<div class="muted">Generated '+escapeHtml(when)+'</div>';
 
-    return '<!doctype html><html><head><meta charset=\"utf-8\"><title>'
-           + escapeHtml(jobName) + ' — Log</title><style>'+css+'</style></head><body>'
-           + header + metaLine + items + '</body></html>';
+    var html = '<!doctype html><html><head><meta charset="utf-8"><title>'
+      + escapeHtml(jobName) + ' — Log</title><style>' + css + '</style></head><body>'
+      + header + metaLine + items + '</body></html>';
+
+    return html;
   }
 
   function openPreview(){
@@ -144,7 +163,7 @@
       document.body.appendChild(overlay);
 
       var doc = frame.contentDocument || frame.contentWindow.document;
-      doc.open(); doc.write(html); doc.close();
+      try { doc.open(); doc.write(html); doc.close(); } catch(_){}
 
       btnClose.onclick = function(){ overlay.remove(); };
       btnPrint.onclick = function(){
@@ -152,11 +171,11 @@
           var htmlToPrint = (frame.contentDocument || frame.contentWindow.document).documentElement.outerHTML;
           printHTML(htmlToPrint);
         } catch (e) {
-          try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(_) {}
+          try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(_){}
         }
       };
       btnSend.onclick = function(){ sendEmail(doc.documentElement.outerHTML, overlay); };
-    }catch(e){ alert('Could not open preview'); console.error(e); }
+    }catch(e){ alert('Could not open preview'); }
   }
 
   function styleBtn(b, primary){
@@ -168,7 +187,7 @@
     var subject = meta.name + ' — Log';
     fetch('/.netlify/functions/send-email', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ subject: subject, html: html })
     }).then(function(r){
       if (!r.ok) throw new Error('HTTP '+r.status);
@@ -177,8 +196,7 @@
       toast('Email sent.');
       if (overlay) overlay.remove();
     }).catch(function(err){
-      console.warn('Email failed', err);
-      alert('Email failed: '+(err && err.message ? err.message : err));
+      alert('Email failed');
     });
   }
 
@@ -192,19 +210,20 @@
     }catch(_){}
   }
 
+  // Delegated click so it works even if button is injected late
   document.addEventListener('click', function(e){
-    var t = e.target && (e.target.closest ? e.target.closest('#email-print') : null);
-    if (t) { e.preventDefault(); try{ openPreview(); }catch(_){ } }
-  });
-  function wire(){
-    var ep = document.getElementById('email-print');
-    if (ep && !ep.__wired){
-      ep.addEventListener('click', openPreview);
-      ep.__wired = true;
+    var t = e && e.target ? e.target : null;
+    if (!t) return;
+    var btn = null;
+    // emulate closest('#email-print') without optional chaining
+    while (t && t !== document){
+      if (t.id === 'email-print'){ btn = t; break; }
+      t = t.parentNode;
     }
-  }
-  if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', wire); } else { wire(); }
-})();
+    if (btn){
+      if (e && e.preventDefault) e.preventDefault();
+      try { openPreview(); } catch(_) {}
+    }
+  });
 
-// expose for bootstrap
-try{ window.__ep_openPreview = openPreview; window.__ep_loaded = true; }catch(_){}
+})();
