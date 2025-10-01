@@ -1,7 +1,7 @@
 /* app.js v3.12 */
 (function(){
 
-// === Inline Email/Print Preview (FAILSAFE) ===
+// === Inline Email/Print Preview (IFRAMEPRINT) ===
 function __ep_escape(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
 function __ep_asHtml(n){
   if (n && n.html) return String(n.html);
@@ -12,70 +12,78 @@ function buildPreviewHTML(info, notes){
   var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
           + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
           + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
-          + '.note-empty{color:#666;font-style:italic}'
           + '.entry{margin:0 0 16px 0} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
           + 'hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
   var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
   html += '<div class="header">'
        + '<div class="jobname">'+__ep_escape((info&&info.name)||'')+'</div>'
-       + (__ep_escape((info&&info.address)||'') ? '<div class="jobfield">'+__ep_escape(info.address)+'</div>' : '')
-       + (__ep_escape((info&&info.stage)||'') ? '<div class="jobfield">Current Stage: '+__ep_escape(info.stage)+'</div>' : '')
+       + ((info&&info.address)? '<div class="jobfield">'+__ep_escape(info.address)+'</div>' : '')
+       + ((info&&info.stage)? '<div class="jobfield">Current Stage: '+__ep_escape(info.stage)+'</div>' : '')
        + '</div><hr>';
-  if (!notes || notes.length===0){
-    html += '<div class="note-empty">No notes selected.</div>';
-  } else {
-    html += (notes||[]).map(function(n){
-      var d = (n && (n.date||n.d)) || '';
-      return '<div class="entry">'
-        + (d ? '<div class="date">'+__ep_escape(d)+'</div>' : '')
-        + '<div class="body">'+__ep_asHtml(n)+'</div>'
-        + '</div><hr>';
-    }).join('');
+  var arr = notes||[];
+  for (var i=0;i<arr.length;i++){
+    var n = arr[i]||{};
+    var d = n.date||n.d||'';
+    html += '<div class="entry">'
+      + (d ? '<div class="date">'+__ep_escape(d)+'</div>' : '')
+      + '<div class="body">'+__ep_asHtml(n)+'</div>'
+      + '</div><hr>';
   }
   html += '</body></html>';
   return html;
 }
 function openPreview(info, notes){
-  try{
-    var html = buildPreviewHTML(info||{}, notes||[]);
-    var ov = document.createElement('div');
-    ov.id = 'ep-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
-    var box = document.createElement('div');
-    box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
-    ov.appendChild(box);
-    var head = document.createElement('div');
-    head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
-    var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
-    head.appendChild(title);
-    var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
-    function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
-    var emailBtn = mkBtn('Email','primary');
-    var printBtn = mkBtn('Print','primary');
-    var closeBtn = mkBtn('Close','ghost');
-    btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
-    head.appendChild(btns);
-    box.appendChild(head);
-    var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
-    var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
-    wrap.appendChild(iframe); box.appendChild(wrap);
-    // Write into iframe
-    try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
-    // Wire buttons
-    closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
-    printBtn.addEventListener('click', function(){
-      try {
-        var w = window.open('', '_blank');
-        if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); w.focus(); w.print(); }
-        else { alert('Unable to open print preview window.'); }
-      } catch(e){ alert('Print failed'); }
-    });
-    emailBtn.addEventListener('click', function(){
-      try { var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
-      catch(e){ alert('Email action failed'); }
-    });
-    document.body.appendChild(ov);
-  }catch(e){ alert('Preview failed (modal)'); }
+  var html = buildPreviewHTML(info||{}, notes||[]);
+  // Overlay
+  var ov = document.createElement('div');
+  ov.id = 'ep-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  // Modal box
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
+  ov.appendChild(box);
+  // Header
+  var head = document.createElement('div');
+  head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
+  var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
+  head.appendChild(title);
+  var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
+  function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
+  var emailBtn = mkBtn('Email','primary');
+  var printBtn = mkBtn('Print','primary');
+  var closeBtn = mkBtn('Close','ghost');
+  btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
+  head.appendChild(btns);
+  box.appendChild(head);
+  // Iframe preview
+  var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
+  var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
+  wrap.appendChild(iframe); box.appendChild(wrap);
+  try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
+  // Buttons
+  closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
+  printBtn.addEventListener('click', function(){
+    // Print via hidden fullscreen iframe injected into this document to avoid blank OS preview
+    try{
+      var pf = document.createElement('iframe');
+      pf.style.position='fixed'; pf.style.left='0'; pf.style.top='0'; pf.style.width='0'; pf.style.height='0'; pf.style.opacity='0'; pf.style.pointerEvents='none'; pf.style.border='0';
+      document.body.appendChild(pf);
+      var pd = (pf.contentWindow||pf).document;
+      pd.open(); pd.write(html); pd.close();
+      setTimeout(function(){
+        try{ (pf.contentWindow||pf).focus(); (pf.contentWindow||pf).print(); }catch(e){ alert('Print failed'); }
+        setTimeout(function(){ try{ document.body.removeChild(pf); }catch(_){ } }, 1200);
+      }, 150);
+    }catch(e){ alert('Print failed'); }
+  });
+  emailBtn.addEventListener('click', function(){
+    // Placeholder: open preview in a separate tab for share/save as PDF
+    try {
+      var w = window.open('', '_blank');
+      if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); }
+    } catch(e){ alert('Email action failed'); }
+  });
+  document.body.appendChild(ov);
 }
 
   const $ = (id) => document.getElementById(id);
@@ -1048,9 +1056,9 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   })();
 })();
 
-// === Email/Print button (FAILSAFE) ===
+// === Email/Print button (IFRAMEPRINT) ===
 (function(){
-  function txt(el){ try{ return (el && el.textContent ? el.textContent : '').trim(); }catch(_){ return ''; } }
+  function txt(el){ return el && el.textContent ? el.textContent.trim() : ''; }
   function resolveInfo(){
     var info = { name:'', address:'', stage:'' };
     try{
@@ -1062,12 +1070,6 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
         var all = sum.textContent || '';
         var m = all.match(/Stage:\s*([^\n]+)/); info.stage = m ? (m[1]||'').trim() : '';
       }
-    }catch(_){}
-    // If still empty try inputs (if present)
-    try{
-      var ni = document.getElementById('job-name'); if (ni && ni.value) info.name = ni.value;
-      var ai = document.getElementById('job-address'); if (ai && ai.value) info.address = ai.value;
-      var si = document.getElementById('job-stage'); if (si){ var opt=si.options && si.options[si.selectedIndex]; info.stage = (opt && (opt.text||opt.value)) || info.stage; }
     }catch(_){}
     return info;
   }
@@ -1086,7 +1088,7 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
             if (dateBox.firstChild && dateBox.firstChild.nodeType===3) dateTxt = dateBox.firstChild.nodeValue;
             else dateTxt = dateBox.textContent || '';
           }
-          // Body = first non-date div
+          // body text: first non-date div
           var bodyText = '';
           var divs = row.getElementsByTagName('div');
           for (var d=0; d<divs.length; d++){
@@ -1116,12 +1118,9 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
         ep.style.color = '#1e3a8a';
         anchor.parentNode.insertBefore(ep, anchor.nextSibling);
         ep.addEventListener('click', function(){
-          try{
-            var info = resolveInfo();
-            var notes = getSelectedNotes();
-            // Open even if no notes selected
-            openPreview(info, notes);
-          }catch(e){ alert('Preview failed'); }
+          var info = resolveInfo();
+          var notes = getSelectedNotes();
+          openPreview(info, notes);
         });
       }
     }catch(_){}
