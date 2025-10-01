@@ -1,7 +1,7 @@
 /* app.js v3.12 */
 (function(){
 
-// === Inline Email/Print Preview (modal) : DOMFIX2 ===
+// === Inline Email/Print Preview (FAILSAFE) ===
 function __ep_escape(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); }
 function __ep_asHtml(n){
   if (n && n.html) return String(n.html);
@@ -12,61 +12,70 @@ function buildPreviewHTML(info, notes){
   var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
           + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
           + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
+          + '.note-empty{color:#666;font-style:italic}'
           + '.entry{margin:0 0 16px 0} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
           + 'hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
   var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
   html += '<div class="header">'
-       + '<div class="jobname">'+__ep_escape(info && info.name)+'</div>'
-       + ((info && info.address) ? '<div class="jobfield">'+__ep_escape(info.address)+'</div>' : '')
-       + ((info && info.stage) ? '<div class="jobfield">Current Stage: '+__ep_escape(info.stage)+'</div>' : '')
+       + '<div class="jobname">'+__ep_escape((info&&info.name)||'')+'</div>'
+       + (__ep_escape((info&&info.address)||'') ? '<div class="jobfield">'+__ep_escape(info.address)+'</div>' : '')
+       + (__ep_escape((info&&info.stage)||'') ? '<div class="jobfield">Current Stage: '+__ep_escape(info.stage)+'</div>' : '')
        + '</div><hr>';
-  html += (notes||[]).map(function(n){
-    var d = (n && (n.date||n.d)) || '';
-    return '<div class="entry">'
-      + (d ? '<div class="date">'+__ep_escape(d)+'</div>' : '')
-      + '<div class="body">'+__ep_asHtml(n)+'</div>'
-      + '</div><hr>';
-  }).join('');
+  if (!notes || notes.length===0){
+    html += '<div class="note-empty">No notes selected.</div>';
+  } else {
+    html += (notes||[]).map(function(n){
+      var d = (n && (n.date||n.d)) || '';
+      return '<div class="entry">'
+        + (d ? '<div class="date">'+__ep_escape(d)+'</div>' : '')
+        + '<div class="body">'+__ep_asHtml(n)+'</div>'
+        + '</div><hr>';
+    }).join('');
+  }
   html += '</body></html>';
   return html;
 }
 function openPreview(info, notes){
-  var html = buildPreviewHTML(info||{}, notes||[]);
-  var ov = document.createElement('div');
-  ov.id = 'ep-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
-  ov.appendChild(box);
-  var head = document.createElement('div');
-  head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
-  var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
-  head.appendChild(title);
-  var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
-  function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
-  var emailBtn = mkBtn('Email','primary');
-  var printBtn = mkBtn('Print','primary');
-  var closeBtn = mkBtn('Close','ghost');
-  btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
-  head.appendChild(btns);
-  box.appendChild(head);
-  var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
-  var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
-  wrap.appendChild(iframe); box.appendChild(wrap);
-  try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
-  closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
-  printBtn.addEventListener('click', function(){
-    try {
-      var w = window.open('', '_blank');
-      if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); w.focus(); w.print(); }
-      else { alert('Unable to open print preview window.'); }
-    } catch(e){ alert('Print failed'); }
-  });
-  emailBtn.addEventListener('click', function(){
-    try { var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
-    catch(e){ alert('Email action failed'); }
-  });
-  document.body.appendChild(ov);
+  try{
+    var html = buildPreviewHTML(info||{}, notes||[]);
+    var ov = document.createElement('div');
+    ov.id = 'ep-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
+    ov.appendChild(box);
+    var head = document.createElement('div');
+    head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
+    var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
+    head.appendChild(title);
+    var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
+    function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
+    var emailBtn = mkBtn('Email','primary');
+    var printBtn = mkBtn('Print','primary');
+    var closeBtn = mkBtn('Close','ghost');
+    btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
+    head.appendChild(btns);
+    box.appendChild(head);
+    var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
+    var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
+    wrap.appendChild(iframe); box.appendChild(wrap);
+    // Write into iframe
+    try { var idoc = (iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); } catch(_){ try { iframe.srcdoc = html; } catch(__){} }
+    // Wire buttons
+    closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
+    printBtn.addEventListener('click', function(){
+      try {
+        var w = window.open('', '_blank');
+        if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); w.focus(); w.print(); }
+        else { alert('Unable to open print preview window.'); }
+      } catch(e){ alert('Print failed'); }
+    });
+    emailBtn.addEventListener('click', function(){
+      try { var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
+      catch(e){ alert('Email action failed'); }
+    });
+    document.body.appendChild(ov);
+  }catch(e){ alert('Preview failed (modal)'); }
 }
 
   const $ = (id) => document.getElementById(id);
@@ -1039,76 +1048,87 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   })();
 })();
 
-// === Email/Print button with DOM-based job resolution (DOMFIX2) ===
+// === Email/Print button (FAILSAFE) ===
 (function(){
-  function txt(el){ return el && el.textContent ? el.textContent.trim() : ''; }
-  function resolveCurrentJob(){
-    try {
+  function txt(el){ try{ return (el && el.textContent ? el.textContent : '').trim(); }catch(_){ return ''; } }
+  function resolveInfo(){
+    var info = { name:'', address:'', stage:'' };
+    try{
       var sum = document.getElementById('job-summary');
       if (sum){
         var firstDiv = sum.querySelector('div');
-        var name = txt(firstDiv);
-        var addrEl = sum.querySelector('.muted');
-        var addr = txt(addrEl);
+        info.name = txt(firstDiv);
+        var muted = sum.querySelector('.muted'); info.address = txt(muted);
         var all = sum.textContent || '';
-        var m = all.match(/Stage:\s*([^\n]+)/);
-        var stage = m ? (m[1]||'').trim() : '';
-        return { name:name, address:addr, stage:stage };
+        var m = all.match(/Stage:\s*([^\n]+)/); info.stage = m ? (m[1]||'').trim() : '';
       }
-    } catch(e){}
-    // fallbacks return empty fields but still allow preview
-    return { name:'', address:'', stage:'' };
+    }catch(_){}
+    // If still empty try inputs (if present)
+    try{
+      var ni = document.getElementById('job-name'); if (ni && ni.value) info.name = ni.value;
+      var ai = document.getElementById('job-address'); if (ai && ai.value) info.address = ai.value;
+      var si = document.getElementById('job-stage'); if (si){ var opt=si.options && si.options[si.selectedIndex]; info.stage = (opt && (opt.text||opt.value)) || info.stage; }
+    }catch(_){}
+    return info;
   }
-  function safeNoteBody(row){
-    // get the first DIV inside .note-item that is NOT .note-date
-    var divs = row ? row.getElementsByTagName('div') : [];
-    for (var i=0;i<divs.length;i++){
-      var d = divs[i];
-      if ((' ' + d.className + ' ').indexOf(' note-date ') === -1 && d.className.indexOf('note-date') === -1){
-        return txt(d);
-      }
-    }
-    return '';
-  }
-  function ensureEP(){
-    var addBtn = document.getElementById('add-note');
-    if (!addBtn || !addBtn.parentNode) return;
-    var after = document.getElementById('delete-notes') || addBtn;
-    var ep = document.getElementById('email-print');
-    if (!ep){
-      ep = document.createElement('button');
-      ep.id = 'email-print';
-      ep.textContent = 'Email/Print';
-      ep.className = 'primary';
-      ep.style.marginLeft = '8px';
-      ep.style.backgroundColor = '#e0f2fe';
-      ep.style.border = '1px solid #60a5fa';
-      ep.style.color = '#1e3a8a';
-      after.parentNode.insertBefore(ep, after.nextSibling);
-      ep.addEventListener('click', function(){
-        try{
-          var j = resolveCurrentJob();
-          var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
-          var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
-          var selected = [];
-          for (var r=0; r<rows.length; r++){
-            var row = rows[r];
-            var dateBox = row.querySelector('.note-date');
-            var cb = dateBox ? dateBox.querySelector('input.pe_row_chk') : null;
-            if (cb && cb.checked){
-              var dateTxt = dateBox ? (dateBox.firstChild && dateBox.firstChild.nodeType===3 ? dateBox.firstChild.nodeValue : dateBox.textContent) : '';
-              selected.push({ date: (dateTxt||'').trim(), html: '', text: safeNoteBody(row) });
-            }
+  function getSelectedNotes(){
+    var out = [];
+    try{
+      var list = document.getElementById('notes-list'); if (!list) return out;
+      var items = list.querySelectorAll('.note-item');
+      for (var i=0;i<items.length;i++){
+        var row = items[i];
+        var dateBox = row.querySelector('.note-date');
+        var cb = dateBox ? dateBox.querySelector('input.pe_row_chk') : null;
+        if (cb && cb.checked){
+          var dateTxt = '';
+          if (dateBox){
+            if (dateBox.firstChild && dateBox.firstChild.nodeType===3) dateTxt = dateBox.firstChild.nodeValue;
+            else dateTxt = dateBox.textContent || '';
           }
-          if (selected.length === 0) { alert('Select at least one log entry to preview.'); return; }
-          openPreview(j, selected);
-        }catch(e){ alert('Preview failed'); }
-      });
-    }
+          // Body = first non-date div
+          var bodyText = '';
+          var divs = row.getElementsByTagName('div');
+          for (var d=0; d<divs.length; d++){
+            var dv = divs[d];
+            var cls = ' ' + (dv.className||'') + ' ';
+            if (cls.indexOf(' note-date ') === -1 && (dv.className||'').indexOf('note-date') === -1){ bodyText = txt(dv); break; }
+          }
+          out.push({ date: (dateTxt||'').trim(), html: '', text: bodyText });
+        }
+      }
+    }catch(_){}
+    return out;
   }
-  function tick(){ try{ ensureEP(); }catch(_){ } }
+  function ensureBtn(){
+    try{
+      var anchor = document.getElementById('delete-notes') || document.getElementById('add-note');
+      if (!anchor || !anchor.parentNode) return;
+      var ep = document.getElementById('email-print');
+      if (!ep){
+        ep = document.createElement('button');
+        ep.id = 'email-print';
+        ep.textContent = 'Email/Print';
+        ep.className = 'primary';
+        ep.style.marginLeft = '8px';
+        ep.style.backgroundColor = '#e0f2fe';
+        ep.style.border = '1px solid #60a5fa';
+        ep.style.color = '#1e3a8a';
+        anchor.parentNode.insertBefore(ep, anchor.nextSibling);
+        ep.addEventListener('click', function(){
+          try{
+            var info = resolveInfo();
+            var notes = getSelectedNotes();
+            // Open even if no notes selected
+            openPreview(info, notes);
+          }catch(e){ alert('Preview failed'); }
+        });
+      }
+    }catch(_){}
+  }
+  function tick(){ try{ ensureBtn(); }catch(_){ } }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
-  var tries = 0, t = setInterval(function(){ tries++; tick(); if (tries > 24) clearInterval(t); }, 400);
-  try { var mo = new MutationObserver(tick); mo.observe(document.body, {childList:true, subtree:true}); } catch(_){}
+  var tries=0, t=setInterval(function(){ tries++; tick(); if (tries>24) clearInterval(t); }, 400);
+  try{ var mo=new MutationObserver(tick); mo.observe(document.body, {childList:true, subtree:true}); }catch(_){}
 })();
 
