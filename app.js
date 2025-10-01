@@ -1,90 +1,13 @@
 
-// === GLOBAL Email/Print Preview API (final fix) ===
-window.__ep_escape = function(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);}); };
-window.__ep_asHtml = function(n){
-  if (n && n.html) return String(n.html);
-  if (n && n.text) return window.__ep_escape(n.text).replace(/\n/g,'<br>');
-  return '';
-};
+// Ensure preview CSS defined (lists support)
 window.__ep_styles = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
   +'.header{margin:0 12px 16px 12px} .header div{line-height:1.5;margin:3px 0}'
   +'.jobname{font-size:22px;font-weight:700;margin-bottom:3px} .jobfield{font-size:16px;color:#222}'
   +'.entry{margin:0 12px 16px 12px} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
-  +'hr{border:none;border-top:1px solid #e5e7eb;margin:12px 0}';
-
-window.buildPreviewHTML = function(info, notes){
-  var css = window.__ep_styles;
-  var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
-  html += '<div class="header">'
-       + '<div class="jobname">'+window.__ep_escape((info&&info.name)||'')+'</div>'
-       + ((info&&info.address)? '<div class="jobfield">'+window.__ep_escape(info.address)+'</div>' : '')
-       + ((info&&info.stage)? '<div class="jobfield">Stage: '+window.__ep_escape(info.stage)+'</div>' : '')
-       + ((info&&info.po)?    '<div class="jobfield">PO: '+window.__ep_escape(info.po)+'</div>' : '')
-       + ((info&&info.crew)?  '<div class="jobfield">Crew: '+window.__ep_escape(info.crew)+'</div>' : '')
-       + '</div><hr>';
-  var arr = notes||[];
-  for (var i=0;i<arr.length;i++){
-    var n = arr[i]||{};
-    var d = n.date||n.d||'';
-    html += '<div class="entry">'
-      + (d ? '<div class="date">'+window.__ep_escape(d)+'</div>' : '')
-      + '<div class="body">'+window.__ep_asHtml(n)+'</div>'
-      + '</div><hr>';
-  }
-  html += '</body></html>';
-  return html;
-};
-
-window.openPreview = function(info, notes){
-  var html = window.buildPreviewHTML(info||{}, notes||[]);
-  var ov = document.createElement('div');
-  ov.id = 'ep-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
-  ov.appendChild(box);
-  var head = document.createElement('div');
-  head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
-  var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
-  head.appendChild(title);
-  function mkBtn(txt, cls){ var b=document.createElement('button'); b.textContent=txt; b.className=cls||'primary'; b.style.padding='6px 10px'; b.style.borderRadius='6px'; return b; }
-  var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
-  var emailBtn = mkBtn('Email','primary');
-  var printBtn = mkBtn('Print','primary');
-  var closeBtn = mkBtn('Close','ghost');
-  btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
-  head.appendChild(btns);
-  box.appendChild(head);
-  var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
-  var iframe = document.createElement('iframe'); iframe.style.cssText = 'width:100%;height:70vh;border:0;';
-  wrap.appendChild(iframe); box.appendChild(wrap);
-  try{ var idoc=(iframe.contentWindow||iframe).document; idoc.open(); idoc.write(html); idoc.close(); }catch(_){ try{ iframe.srcdoc=html; }catch(__){} }
-  // Buttons
-  closeBtn.addEventListener('click', function(){ try{ document.body.removeChild(ov); }catch(_){ } });
-  printBtn.addEventListener('click', function(){
-    try{
-      var w = window.open('', '_blank');
-      if (w && w.document){
-        w.document.open(); w.document.write(html); w.document.close();
-        w.focus();
-        setTimeout(function(){ try{ w.print(); }catch(e){} }, 150);
-        return;
-      }
-    }catch(_){}
-    try{
-      var original = document.body.innerHTML;
-      var bodyInner = (function(){ var m = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i); return m?m[1]:html; })();
-      document.body.innerHTML = '<style>'+window.__ep_styles+'</style>' + bodyInner;
-      window.scrollTo(0,0);
-      setTimeout(function(){ try{ window.print(); }finally{ setTimeout(function(){ location.reload(); }, 300); } }, 200);
-    }catch(e){ alert('Print failed'); }
-  });
-  emailBtn.addEventListener('click', function(){
-    try{ var w = window.open('', '_blank'); if (w && w.document){ w.document.open(); w.document.write(html); w.document.close(); } }
-    catch(e){ alert('Email action failed'); }
-  });
-  document.body.appendChild(ov);
-};
+  +'hr{border:none;border-top:1px solid #e5e7eb;margin:12px 0}'
+  +'.entry .body ul{margin:6px 0 6px 22px; padding-left:22px; list-style:disc}'
+  +'.entry .body ol{margin:6px 0 6px 22px; padding-left:22px;}'
+  +'.entry .body li{margin:2px 0;}';
 
 /* app.js v3.12 */
 (function(){
@@ -1057,80 +980,3 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
   })();
 })();
-
-// === Email/Print button (final fix parse) ===
-(function(){
-  function txt(el){ return el && el.textContent ? el.textContent.trim() : ''; }
-  function resolveInfo(){
-    var info = { name:'', address:'', stage:'', po:'', crew:'' };
-    try{
-      var sum = document.getElementById('job-summary');
-      if (sum){
-        var all = sum.textContent || '';
-        var idx = all.indexOf('Stage:');
-        var headerStr = idx > -1 ? all.substring(0, idx) : all;
-        info.name = headerStr.replace(/PO:.*$/,'').replace(/Crew:.*$/,'').trim();
-        var muted = sum.querySelector('.muted'); info.address = txt(muted);
-        var m1 = all.match(/Stage:\s*([^\n]+)/); if (m1) info.stage = (m1[1]||'').replace(/PO:.*$/,'').replace(/Crew:.*$/,'').trim();
-        var m2 = all.match(/PO:\s*([^\s]+)/); if (m2) info.po = (m2[1]||'').trim();
-        var m3 = all.match(/Crew:\s*([^\n]+)/); if (m3) info.crew = (m3[1]||'').trim();
-      }
-    }catch(_){}
-    return info;
-  }
-  function getSelectedNotes(){
-    var out = [];
-    try{
-      var list = document.getElementById('notes-list'); if (!list) return out;
-      var items = list.querySelectorAll('.note-item');
-      for (var i=0;i<items.length;i++){
-        var row = items[i];
-        var dateBox = row.querySelector('.note-date');
-        var cb = dateBox ? dateBox.querySelector('input.pe_row_chk') : null;
-        if (cb && cb.checked){
-          var dateTxt = '';
-          if (dateBox){
-            if (dateBox.firstChild && dateBox.firstChild.nodeType===3) dateTxt = dateBox.firstChild.nodeValue;
-            else dateTxt = dateBox.textContent || '';
-          }
-          var bodyText = '';
-          var divs = row.getElementsByTagName('div');
-          for (var d=0; d<divs.length; d++){
-            var dv = divs[d];
-            var cls = ' ' + (dv.className||'') + ' ';
-            if (cls.indexOf(' note-date ') === -1 && (dv.className||'').indexOf('note-date') === -1){ bodyText = txt(dv); break; }
-          }
-          out.push({ date: (dateTxt||'').trim(), html: '', text: bodyText });
-        }
-      }
-    }catch(_){}
-    return out;
-  }
-  function ensureBtn(){
-    try{
-      var anchor = document.getElementById('delete-notes') || document.getElementById('add-note');
-      if (!anchor || !anchor.parentNode) return;
-      var ep = document.getElementById('email-print');
-      if (!ep){
-        ep = document.createElement('button');
-        ep.id = 'email-print';
-        ep.textContent = 'Email/Print';
-        ep.className = 'primary';
-        ep.style.marginLeft = '8px';
-        ep.style.backgroundColor = '#e0f2fe';
-        ep.style.border = '1px solid #60a5fa';
-        ep.style.color = '#1e3a8a';
-        anchor.parentNode.insertBefore(ep, anchor.nextSibling);
-        ep.addEventListener('click', function(){
-          var info = resolveInfo();
-          var notes = getSelectedNotes();
-          if (window && typeof window.openPreview === 'function') window.openPreview(info, notes);
-          else alert('Preview not available');
-        });
-      }
-    }catch(_){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensureBtn); else ensureBtn();
-  try{ var mo=new MutationObserver(ensureBtn); mo.observe(document.body, {childList:true, subtree:true}); }catch(_){}
-})();
-
