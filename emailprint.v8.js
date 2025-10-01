@@ -191,3 +191,6 @@
   }
   if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', wire); } else { wire(); }
 })();
+
+// expose for bootstrap
+try{ window.__ep_openPreview = openPreview; window.__ep_loaded = true; }catch(_){}
