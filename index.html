@@ -147,7 +147,7 @@ header { position: relative; }
   <div class="errbar" id="errbar"></div>
 
   <header>
-    <h1><span style='font-weight:700;color:#1d4ed8;background:#e0e7ff;padding:2px 6px;border-radius:6px'>BUILD ID: EP-DELEGATE-CLICK-1759172596</span> — HVAC Digital Binder</h1>
+    <h1><span style='font-weight:700;color:#1d4ed8;background:#e0e7ff;padding:2px 6px;border-radius:6px'>BUILD ID: PRINT-FIX-BLOB-1759277693</span> — HVAC Digital Binder</h1>
     <div class="toolbar">
       <button class="primary" id="add-contractor">+ Contractor</button>
       <button class="ghost" id="add-job">+ Job</button>
@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
-  <script defer src="emailprint.v8.js?v=1759172269"></script>
+  <script defer src="emailprint.v8.js\1v=1759277693"></script>
 <script src="checks.js?v=1758978146&v=1758978973"></script>
   
 
@@ -343,28 +343,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   function insertEP() {
     try {
       var del = document.getElementById('delete-notes');
-      if (!del) return false;                // Delete not created yet
-      if (document.getElementById('email-print')) return true; // already inserted
-
+      if (!del) return false;
+      if (document.getElementById('email-print')) return true;
       var addBtn = document.getElementById('add-note');
       var cls = addBtn && addBtn.className ? addBtn.className : (del.className || '');
-
       var btn = document.createElement('button');
       btn.id = 'email-print';
       btn.textContent = 'Email/Print';
-      btn.className = cls;                   // same size as Add/Delete
-      btn.style.marginLeft = '8px';          // to the right of Delete
-      btn.style.background = '#e0f2fe';      // blue
+      btn.className = cls;
+      btn.style.marginLeft = '8px';
+      btn.style.background = '#e0f2fe';
       btn.style.border = '1px solid #93c5fd';
       btn.style.color = '#1d4ed8';
-
-      del.parentNode.insertBefore(btn, del.nextSibling); // insert right of Delete
+      del.parentNode.insertBefore(btn, del.nextSibling);
       return true;
     } catch (e) { return false; }
   }
   var tries = 0;
-  function tick(){
-    if (insertEP() || tries > 30) return;    // ~3 seconds
+  function tick() {
+    if (insertEP() || tries > 30) return;
     tries++;
     setTimeout(tick, 100);
   }

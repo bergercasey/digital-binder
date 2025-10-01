@@ -2,27 +2,29 @@
   function $(sel, root){ return (root||document).querySelector(sel); }
   function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
-  // --- Reliable printing: open a new window and print after load ---
   function printHTML(html){
-    var w = window.open('', '_blank', 'noopener,noreferrer');
-    if (!w) { alert('Please allow popups to print.'); return; }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    var doPrint = function(){ try { w.focus(); w.print(); } catch(_){} };
-    if (w.document.readyState === 'complete') {
-      setTimeout(doPrint, 50);
-    } else {
-      w.addEventListener('load', doPrint, { once: true });
+    var w = null, url = null;
+    try {
+      var blob = new Blob([html], {type:'text/html'});
+      url = URL.createObjectURL(blob);
+      w = window.open(url, '_blank', 'noopener,noreferrer');
+    } catch(e){
+      try {
+        url = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+        w = window.open(url, '_blank', 'noopener,noreferrer');
+      } catch(e2){}
     }
-    // Safari fallback
-    setTimeout(doPrint, 500);
+    if (!w) { alert('Please allow popups to print.'); return; }
+
+    var onLoad = function(){
+      try { w.focus(); w.print(); } catch(_) {}
+      try { if (url && url.indexOf('blob:') === 0) setTimeout(function(){ URL.revokeObjectURL(url); }, 1500); } catch(_){}
+    };
+    try { w.addEventListener('load', onLoad, { once:true }); } catch(_){}
+    setTimeout(onLoad, 800);
   }
 
-  // --- Robust job metadata extraction ---
-  function currentJobSafe(){
-    try { return (typeof currentJob === 'function') ? currentJob() : null; } catch(_){ return null; }
-  }
+  function currentJobSafe(){ try { return (typeof currentJob === 'function') ? currentJob() : null; } catch(_){ return null; } }
   function getText(el){
     if (!el) return '';
     if (el.tagName && el.tagName.toLowerCase()==='select'){
@@ -31,73 +33,52 @@
     }
     return (el.value || el.textContent || '').trim();
   }
-  function joinParts(parts, sep){
-    return parts.filter(function(x){ return x && String(x).trim().length>0; }).join(sep || ', ');
-  }
+  function joinParts(parts, sep){ return parts.filter(function(x){ return x && String(x).trim().length>0; }).join(sep || ', '); }
   function getJobMeta(){
     var j = currentJobSafe() || {};
-
-    // Name
     var name = j && (j.name || j.jobName || j.title) || '';
-    if (!name){
-      var t = $('#job-name') || $('.job-name') || $('[data-role="job-name"]');
-      name = getText(t) || 'Job';
-    }
-
-    // Address (support multiple shapes)
+    if (!name){ var t = document.getElementById('job-name') || document.querySelector('.job-name,[data-role=\"job-name\"]'); name = getText(t) || 'Job'; }
     var address = '';
     var a = j && (j.address || j.addr || j.location || j.siteAddress || j.jobAddress);
     if (typeof a === 'string'){ address = a; }
     else if (a && typeof a === 'object'){
-      address = joinParts([
-        a.line1||a.street||a.street1,
-        a.line2||a.street2,
-        joinParts([a.city, a.state, a.zip], ' ')
-      ], ', ');
+      address = joinParts([a.line1||a.street||a.street1, a.line2||a.street2, joinParts([a.city, a.state, a.zip], ' ')], ', ');
     }
-    if (!address){
-      var el = $('#job-address') || $('.job-address') || $('[data-role="job-address"]') || $('#address') || $('.address');
-      address = getText(el);
-    }
-
-    // Stage / Status
+    if (!address){ var el = document.getElementById('job-address') || document.querySelector('.job-address,[data-role=\"job-address\"],#address,.address'); address = getText(el); }
     var stage = j && (j.stage || j.status || j.pipelineStage || j.phase || (j.pipeline && j.pipeline.stage));
-    if (!stage){
-      var sEl = $('#job-stage') || $('.job-stage') || $('[data-role="job-stage"]') || $('#stage') || $('.stage') || $('.status') || $('[data-stage]');
-      stage = getText(sEl);
-    }
+    if (!stage){ var sEl = document.getElementById('job-stage') || document.querySelector('.job-stage,[data-role=\"job-stage\"],#stage,.stage,.status,[data-stage]'); stage = getText(sEl); }
     if (typeof stage === 'object' && stage && (stage.name || stage.title)) stage = stage.name || stage.title;
-
     return { name: String(name||'Job'), address: String(address||''), stage: String(stage||'') };
   }
 
   function gatherSelectedNotes(){
     var list = document.getElementById('notes-list');
     if (!list) return [];
-    var rows = $all('.note-item', list);
+    var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
     var out = [];
     rows.forEach(function(row){
       var cb = row.querySelector('.note-date input.pe_row_chk');
       if (cb && cb.checked) out.push(row);
     });
-    if (out.length === 0) out = rows; // fallback: include all if none selected
+    if (out.length === 0) out = rows;
     return out;
   }
 
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]); }); }
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]); }); }
 
   function buildPreviewHTML(){
     var meta = getJobMeta();
-    var jobName = meta.name;
-    var jobAddress = meta.address;
-    var jobStage = meta.stage;
+    var jobName = meta.name, jobAddress = meta.address, jobStage = meta.stage;
 
     var sel = gatherSelectedNotes();
     var items = sel.map(function(row){
       var copy = row.cloneNode(true);
-      // strip checkboxes/actions
-      $all('input.pe_row_chk, .note-actions', copy).forEach(function(n){ n.remove(); });
-      // inline light card styles to match app look
+      // strip interactive widgets
+      Array.prototype.slice.call(copy.querySelectorAll('input.pe_row_chk, .note-actions, button, input[type=\"checkbox\"], input[type=\"radio\"]')).forEach(function(n){ n.remove(); });
+      // normalize literal "\\n" to <br>
+      Array.prototype.slice.call(copy.querySelectorAll('.note-body, [data-role=\"note-body\"]')).forEach(function(el){
+        try { el.innerHTML = el.innerHTML.replace(/\\n/g, '<br>'); } catch(_){}
+      });
       copy.style.padding = '10px 12px';
       copy.style.border = '1px solid #e5e7eb';
       copy.style.borderRadius = '10px';
@@ -114,17 +95,15 @@
       '.note-body{white-space:pre-wrap;}'
     ].join('');
 
-    var header =
-      '<h1>'+escapeHtml(jobName)+'</h1>'
-      + (jobAddress ? '<div class="line">'+escapeHtml(jobAddress)+'</div>' : '')
-      + (jobStage ? '<div class="line">Stage: '+escapeHtml(jobStage)+'</div>' : '');
+    var header = '<h1>'+escapeHtml(jobName)+'</h1>'
+      + (jobAddress ? '<div class=\"line\">'+escapeHtml(jobAddress)+'</div>' : '')
+      + (jobStage ? '<div class=\"line\">Stage: '+escapeHtml(jobStage)+'</div>' : '');
 
     var when = new Date().toLocaleString();
-    var metaLine = '<div class="muted">Generated '+escapeHtml(when)+'</div>';
+    var metaLine = '<div class=\"muted\">Generated '+escapeHtml(when)+'</div>';
 
-    return '<!doctype html><html><head><meta charset="utf-8"><title>'
-           + escapeHtml(jobName)
-           + ' — Log</title><style>'+css+'</style></head><body>'
+    return '<!doctype html><html><head><meta charset=\"utf-8\"><title>'
+           + escapeHtml(jobName) + ' — Log</title><style>'+css+'</style></head><body>'
            + header + metaLine + items + '</body></html>';
   }
 
@@ -199,7 +178,6 @@
     }catch(_){}
   }
 
-  // Delegated + direct wiring so it works regardless of insert timing
   document.addEventListener('click', function(e){
     var t = e.target && (e.target.closest ? e.target.closest('#email-print') : null);
     if (t) { e.preventDefault(); try{ openPreview(); }catch(_){ } }
