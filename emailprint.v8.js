@@ -3,9 +3,23 @@
   function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
   function printHTML(html){
-    var w = null, url = null;
-    try {
-      var blob = new Blob([html], {type:'text/html'});
+  // Print via hidden iframe to avoid popup blockers / blank tabs (iOS/Safari safe)
+  var iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0'; iframe.style.bottom = '0';
+  iframe.style.width = '0'; iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  try { doc.open(); doc.write(html); doc.close(); } catch(_){}
+  var doPrint = function(){
+    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(_){}
+    setTimeout(function(){ try{ iframe.parentNode && iframe.parentNode.removeChild(iframe); }catch(_){ } }, 1200);
+  };
+  // Give Safari/iPad a moment to paint
+  setTimeout(doPrint, 300);
+}
+);
       url = URL.createObjectURL(blob);
       w = window.open(url, '_blank', 'noopener,noreferrer');
     } catch(e){
@@ -84,7 +98,7 @@
       copy.style.borderRadius = '10px';
       copy.style.margin = '0 0 10px 0';
       return copy.outerHTML;
-    }).join('\\n');
+    }).join('\n');
 
     var css = [
       'body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45;color:#111827;background:#fff;padding:16px;}',
