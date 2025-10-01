@@ -87,9 +87,7 @@
   return html;
 }
 
-  function openPreview(info, notes){
-    var w = window.open('', '_blank'); if(!w){ alert('Popup blocked. Allow popups and try again.'); return; }
-    w.document.open(); w.document.write(buildPreviewHTML(info, notes)); w.document.close();
+      w.document.open(); w.document.write(buildPreviewHTML(info, notes)); w.document.close();
   }
 
   // --- Modal ---
@@ -311,3 +309,58 @@ function openModal(){
 
   ready(function(){ rename(); intercept(); });
 })();
+
+
+function openPreview(info, notes){
+  var html = buildPreviewHTML(info, notes);
+  // Overlay
+  var ov = document.createElement('div');
+  ov.id = 'ep-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  // Modal box
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:10px;max-width:900px;width:96%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,0.25);';
+  ov.appendChild(box);
+  // Header
+  var head = document.createElement('div');
+  head.style.cssText = 'padding:10px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;justify-content:space-between;';
+  var title = document.createElement('div'); title.textContent = 'Email / Print Preview'; title.style.fontWeight='700';
+  head.appendChild(title);
+  // Buttons
+  var btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px';
+  var emailBtn = document.createElement('button'); emailBtn.textContent='Email'; emailBtn.className='primary';
+  var printBtn = document.createElement('button'); printBtn.textContent='Print'; printBtn.className='primary';
+  var closeBtn = document.createElement('button'); closeBtn.textContent='Close'; closeBtn.className='ghost';
+  [emailBtn, printBtn, closeBtn].forEach(function(b){ b.style.padding='6px 10px'; b.style.borderRadius='6px'; });
+  btns.appendChild(emailBtn); btns.appendChild(printBtn); btns.appendChild(closeBtn);
+  head.appendChild(btns);
+  box.appendChild(head);
+  // Iframe preview
+  var wrap = document.createElement('div'); wrap.style.cssText='padding:0;overflow:auto;';
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;height:70vh;border:0;';
+  // Write into iframe
+  try {
+    if ('srcdoc' in iframe) { iframe.srcdoc = html; }
+    else {
+      box.appendChild(iframe);
+      var idoc = iframe.contentWindow.document;
+      idoc.open(); idoc.write(html); idoc.close();
+    }
+  } catch(_){}
+  wrap.appendChild(iframe);
+  box.appendChild(wrap);
+  // Wire buttons
+  closeBtn.addEventListener('click', function(){ document.body.removeChild(ov); });
+  printBtn.addEventListener('click', function(){
+    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e){ alert('Print failed'); }
+  });
+  emailBtn.addEventListener('click', function(){
+    // Placeholder: we’ll wire real email next; for now, copy preview to a new tab so user can save as PDF or share
+    try {
+      var w = window.open('', '_blank'); if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); }
+      else alert('Email preview opened in a new tab.');
+    } catch(e){ alert('Email action failed'); }
+  });
+  document.body.appendChild(ov);
+}

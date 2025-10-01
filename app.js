@@ -971,54 +971,10 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
           });
           if (selected.length === 0) { alert('Select at least one log entry to preview.'); return; }
           var info = { name: j.name || '', address: j.address || '', stage: j.stage || '' };
-          ensurePreviewModule(function(){
-            if (typeof window.openPreview === 'function') window.openPreview(info, selected);
-            else fallbackPreview(info, selected);
-          });
+          if (typeof openPreview === 'function') openPreview(info, selected);
+          else { alert('Preview not available.'); }
         }catch(e){ console.warn('Email/Print preview failed', e); alert('Preview failed.'); }
       });
-
-      
-      // Preview loader + fallback
-      function ensurePreviewModule(cb){
-        // If already present, fire immediately
-        if (typeof window.openPreview === 'function') return cb();
-        // Try dynamic load
-        var loaded = false;
-        function done(){ if (!loaded){ loaded = true; try{ cb(); }catch(e){ alert('Preview failed.'); } } }
-        var s = document.createElement('script');
-        s.src = 'emailprint.v7.js?v=EP-PREVIEW2-1759280184';
-        s.onload = done; s.onerror = function(){ done(); };
-        document.head.appendChild(s);
-        // Also time out after 1500ms to fallback even if onload not fired (cache edge cases)
-        setTimeout(done, 1500);
-      }
-      // Inline fallback if the module still isn't available
-      function fallbackPreview(info, notes){
-        if (typeof window.buildPreviewHTML !== 'function') {
-          window.buildPreviewHTML = function(info, notes){
-            function esc(s){return String(s||'').replace(/[&<>]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]);});}
-            function asHtml(n){ if(n&&n.html) return String(n.html); if(n&&n.text) return esc(n.text).replace(/\n/g,'<br>'); return ''; }
-            var css = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
-                    + '.header{margin:0 0 16px 0} .header div{line-height:1.5;margin:3px 0}'
-                    + '.jobname{font-size:22px;font-weight:700} .jobfield{font-size:18px;color:#222}'
-                    + '.entry{margin:0 0 16px 0} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
-                    + 'hr{border:none;border-top:1px solid #ccc;margin:12px 0}';
-            var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Preview</title><style>'+css+'</style></head><body>';
-            html += '<div class="header">'
-                 + '<div class="jobname">'+esc(info.name||'')+'</div>'
-                 + (info.address? '<div class="jobfield">'+esc(info.address)+'</div>':'')
-                 + (info.stage? '<div class="jobfield">Current Stage: '+esc(info.stage)+'</div>':'')
-                 + '</div><hr>';
-            html += (notes||[]).map(function(n){
-              return '<div class="entry">' + (n.date? '<div class="date">'+esc(n.date)+'</div>':'') + '<div class="body">'+asHtml(n)+'</div>' + '</div><hr>';
-            }).join('');
-            html += '</body></html>'; return html;
-          };
-        }
-        var w = window.open('', '_blank'); if(!w){ alert('Popup blocked. Allow popups and try again.'); return; }
-        w.document.open(); w.document.write(window.buildPreviewHTML(info, notes)); w.document.close();
-      }
 
       del.addEventListener('click', function(){
         try{
