@@ -1,14 +1,3 @@
-
-// Ensure preview CSS defined (lists support)
-window.__ep_styles = 'body{font:17px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;margin:22px;color:#111}'
-  +'.header{margin:0 12px 16px 12px} .header div{line-height:1.5;margin:3px 0}'
-  +'.jobname{font-size:22px;font-weight:700;margin-bottom:3px} .jobfield{font-size:16px;color:#222}'
-  +'.entry{margin:0 12px 16px 12px} .entry .date{color:#000;margin:0 0 6px 0;font-size:14px}'
-  +'hr{border:none;border-top:1px solid #e5e7eb;margin:12px 0}'
-  +'.entry .body ul{margin:6px 0 6px 22px; padding-left:22px; list-style:disc}'
-  +'.entry .body ol{margin:6px 0 6px 22px; padding-left:22px;}'
-  +'.entry .body li{margin:2px 0;}';
-
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -980,3 +969,84 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
   })();
 })();
+
+// === Email/Print button (robust reinstaller) ===
+(function(){
+  function txt(el){ return el && el.textContent ? el.textContent.trim() : ''; }
+  function resolveInfo(){
+    var info = { name:'', address:'', stage:'', po:'', crew:'' };
+    try{
+      var sum = document.getElementById('job-summary');
+      if (sum){
+        var all = sum.textContent || '';
+        var idx = all.indexOf('Stage:');
+        var headerStr = idx > -1 ? all.substring(0, idx) : all;
+        info.name = headerStr.replace(/PO:.*$/,'').replace(/Crew:.*$/,'').trim();
+        var muted = sum.querySelector('.muted'); info.address = txt(muted);
+        var m1 = all.match(/Stage:\s*([^\n]+)/); if (m1) info.stage = (m1[1]||'').replace(/PO:.*$/,'').replace(/Crew:.*$/,'').trim();
+        var m2 = all.match(/PO:\s*([^\s]+)/); if (m2) info.po = (m2[1]||'').trim();
+        var m3 = all.match(/Crew:\s*([^\n]+)/); if (m3) info.crew = (m3[1]||'').trim();
+      }
+    }catch(_){}
+    return info;
+  }
+  function getSelectedNotes(){
+    try{ if (typeof window.getSelectedNotes === 'function') return window.getSelectedNotes(); }catch(_){}
+    var out = [];
+    try{
+      var list = document.getElementById('notes-list'); if (!list) return out;
+      var items = list.querySelectorAll('.note-item');
+      for (var i=0;i<items.length;i++){
+        var row = items[i];
+        var dateBox = row.querySelector('.note-date');
+        var cb = dateBox ? dateBox.querySelector('input.pe_row_chk') : null;
+        if (cb && cb.checked){
+          var dateTxt = '';
+          if (dateBox){
+            if (dateBox.firstChild && dateBox.firstChild.nodeType===3) dateTxt = dateBox.firstChild.nodeValue;
+            else dateTxt = dateBox.textContent || '';
+          }
+          var bodyEl = row.querySelector('.note-body');
+          if (!bodyEl){
+            var divs = row.getElementsByTagName('div');
+            for (var d=0; d<divs.length; d++){
+              var dv = divs[d];
+              var cls = ' ' + (dv.className||'') + ' ';
+              if (cls.indexOf(' note-date ') === -1 && (dv.className||'').indexOf('note-date') === -1){ bodyEl = dv; break; }
+            }
+          }
+          var html = bodyEl ? bodyEl.innerHTML : '';
+          out.push({ date: (dateTxt||'').trim(), html: html, text: '' });
+        }
+      }
+    }catch(_){}
+    return out;
+  }
+  function install(){
+    var anchor = document.getElementById('delete-notes') || document.getElementById('add-note');
+    if (!anchor || !anchor.parentNode) return;
+    var ep = document.getElementById('email-print');
+    if (!ep){
+      ep = document.createElement('button');
+      ep.id = 'email-print';
+      ep.textContent = 'Email/Print';
+      ep.className = 'primary';
+      ep.style.marginLeft = '8px';
+      ep.style.backgroundColor = '#e0f2fe';
+      ep.style.border = '1px solid #60a5fa';
+      ep.style.color = '#1e3a8a';
+      anchor.parentNode.insertBefore(ep, anchor.nextSibling);
+      ep.addEventListener('click', function(){
+        var info = resolveInfo();
+        var notes = getSelectedNotes();
+        if (window && typeof window.openPreview === 'function') window.openPreview(info, notes);
+        else alert('Preview not available');
+      });
+    }
+  }
+  function tick(){ try{ install(); }catch(_){ } }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
+  var tries = 0, t = setInterval(function(){ tries++; tick(); if (tries>30) clearInterval(t); }, 300);
+  try{ var mo = new MutationObserver(tick); mo.observe(document.body, {childList:true, subtree:true}); }catch(_){}
+})();
+
