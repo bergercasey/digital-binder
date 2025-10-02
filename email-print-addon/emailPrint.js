@@ -1,7 +1,13 @@
 /* Email/Print Addon — injected next to Delete Selection */
 (function(){
   const CFG = Object.assign({
-    deleteButtonSelector: 'button#deleteSelected, button[data-action="delete-selection"], button:contains("Delete Selection")',
+    // Removed :contains() to avoid selector SyntaxError
+    deleteButtonSelectorList: [
+      'button#deleteSelected',
+      'button[data-action="delete-selection"]',
+      'button.delete-selection',
+      'button.btn-delete-selection'
+    ],
     selectedNoteCheckboxSelector: 'input[type="checkbox"][data-role="log-select"]:checked, .log-entry input[type="checkbox"]:checked, .note-entry input[type="checkbox"]:checked, li input[type="checkbox"]:checked',
     noteTextSelectorWithinEntry: '.note-text, .log-text, textarea, .text, .content, .note-body',
     fields: {
@@ -12,9 +18,18 @@
     }
   }, window.EMAIL_PRINT_CONFIG || {});
 
-  function qsContains(root, tag, needle) {
-    const els = Array.from(root.querySelectorAll(tag));
-    return els.find(el => (el.textContent||'').includes(needle));
+  function findDeleteButton() {
+    // Try explicit selectors first
+    for (const sel of CFG.deleteButtonSelectorList) {
+      try {
+        const el = document.querySelector(sel);
+        if (el) return el;
+      } catch (e) { /* ignore invalid selectors */ }
+    }
+    // Fallback: scan buttons and match by text content
+    const btns = Array.from(document.querySelectorAll('button'));
+    const match = btns.find(b => (b.textContent || '').trim().toLowerCase() === 'delete selection');
+    return match || null;
   }
   function findDeleteButton(){
     let el = document.querySelector(CFG.deleteButtonSelector);
