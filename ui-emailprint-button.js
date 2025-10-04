@@ -33,8 +33,8 @@
         padding: 12px 16px;
         border-radius: 999px;
         font-weight: 600;
-        border: 1px solid #93c5fd;
-        background: #60a5fa;
+        border: 1px solid #bfdbfe;
+        background: #bfdbfe;
         color: #0b1220;
         box-shadow: 0 6px 20px rgba(0,0,0,0.15);
         cursor: pointer;
