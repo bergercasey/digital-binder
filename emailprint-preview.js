@@ -108,15 +108,8 @@
   function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
 
   
-  
   function buildPrintHtml(inner){
-    const baseHref = (() => {
-      try {
-        const path = (location.pathname || '/');
-        const dir = path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
-        return location.origin + dir;
-      } catch(_){ return ''; }
-    })();
+    // Inline minimal styles to match modal view
     const css = `
       :root{ --ink:#111; --line:#e5e7eb; }
       body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; color: var(--ink); margin: 24px; }
@@ -129,22 +122,15 @@
       @page { margin: 16mm; }
     `;
     return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"><title>Print</title>
-  <base href="${baseHref}">
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <style>${css}</style>
-</head>
-<body>${inner}</body>
-</html>`;
+<html><head><meta charset="utf-8"><title>Print</title><style>${css}</style></head>
+<body>${inner}</body></html>`;
   }
 
   function printPreviewAndClose(){
     const overlay = document.getElementById("ep-overlay");
     const body = document.getElementById("ep-body");
     if (!body) return;
-
+    // Create hidden iframe
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
     iframe.style.right = "0";
@@ -152,46 +138,18 @@
     iframe.style.width = "0";
     iframe.style.height = "0";
     iframe.style.border = "0";
-    iframe.setAttribute("aria-hidden", "true");
     document.body.appendChild(iframe);
-
+    const doc = iframe.contentWindow || iframe.contentDocument;
+    const w = iframe.contentWindow;
+    const d = iframe.contentDocument || (doc && doc.document);
     const html = buildPrintHtml(body.innerHTML);
+    (d || doc.document).open();
+    (d || doc.document).write(html);
+    (d || doc.document).close();
 
+    // Close overlay after printing
     const cleanup = () => {
       try { document.body.removeChild(iframe); } catch(_){}
-      if (overlay) overlay.style.display = "none";
-    };
-
-    const onFrameReady = () => {
-      try {
-        const w = iframe.contentWindow;
-        if (!w) { cleanup(); return; }
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            try { w.focus(); } catch(_){}
-            const after = () => { try{ w.removeEventListener('afterprint', after);}catch(_){ } cleanup(); };
-            try { w.addEventListener('afterprint', after); } catch(_){}
-            try { w.print(); } catch(_){ cleanup(); }
-            setTimeout(cleanup, 2500);
-          });
-        });
-      } catch(_){ cleanup(); }
-    };
-
-    if ('srcdoc' in iframe){
-      iframe.onload = onFrameReady;
-      iframe.srcdoc = html;
-    } else {
-      const doc = iframe.contentDocument || iframe.contentWindow && iframe.contentWindow.document;
-      if (doc){
-        iframe.onload = onFrameReady;
-        doc.open(); doc.write(html); doc.close();
-      } else {
-        cleanup();
-      }
-    }
-  }
-catch(_){}
       if (overlay) overlay.style.display = "none";
     };
 
@@ -258,5 +216,4 @@ function openPreview(){
     let tries = 0; const t = setInterval(() => { attach(); tries++; if (tries>=10) clearInterval(t); }, 400);
   }
   init();
-  try{ window._epOpenPreview = openPreview; }catch(_){}
 })();
