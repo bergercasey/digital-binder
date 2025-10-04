@@ -431,6 +431,11 @@ function openPreview(){
 
     removeInlineEmailPanel();
     overlay.style.display = "block";
+    try{ window.__epCurrentHtml = body.innerHTML; window.__epOpenEmail = function(){ try{ showEmailOverlay(window.__epCurrentHtml); }catch(e){ alert("Email panel error: "+(e&&e.message||e)); } }; }catch(_){ }
+    (function(){
+      const ebtn = document.getElementById("ep-email");
+      if (ebtn) { try{ ebtn.onclick = window.__epOpenEmail; ebtn.setAttribute("onclick","window.__epOpenEmail && window.__epOpenEmail()"); }catch(_){ } }
+    })();
     (function(){
       const ebtn = document.getElementById("ep-email");
       if (ebtn) { ebtn.onclick = ()=> { try{ showEmailOverlay(body.innerHTML); }catch(_){ } }; }

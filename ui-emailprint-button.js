@@ -186,7 +186,8 @@
     document.getElementById("ep-close-2").onclick = close;
     document.getElementById("ep-backdrop").onclick = close;
     const p = document.getElementById("ep-print"); if (p) p.onclick = ep_printAndClose;
-    const e = document.getElementById("ep-email"); if (e) e.onclick = ()=> ep_showEmailOverlay(body.innerHTML);
+    try{ window.__epCurrentHtml = body.innerHTML; window.__epOpenEmail = function(){ try{ (typeof showEmailOverlay==="function" ? showEmailOverlay : ep_showEmailOverlay)(window.__epCurrentHtml); }catch(_){ } }; }catch(_){}
+    const e = document.getElementById("ep-email"); if (e){ try{ e.onclick = window.__epOpenEmail; e.setAttribute("onclick","window.__epOpenEmail && window.__epOpenEmail()"); }catch(_){} }
   }
   function ep_openPreviewEnsure(){
     // Prefer official hook if present
