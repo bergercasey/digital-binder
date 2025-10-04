@@ -40,12 +40,24 @@
     const list = document.getElementById("notes-list");
     if (!list) return [];
     const out = [];
-    qsa(".note-item", list).forEach(item => {
-      const cb = qs(".note-date input.pe_row_chk", item);
+    Array.from(list.querySelectorAll(".note-item")).forEach(item => {
+      const cb = item.querySelector(".note-date input.pe_row_chk");
       if (cb && cb.checked){
-        const body = qs(".note-text", item);
+        const body = item.querySelector(".note-text");
+        const dEl = item.querySelector(".note-date");
+        let ts = "";
+        if (dEl){
+          ts = Array.from(dEl.childNodes).filter(n => n.nodeType === 3).map(n => n.nodeValue).join(" ").trim();
+          if (!ts) ts = (dEl.textContent || "").trim();
+        }
         if (body){
-          out.push({ html: body.innerHTML });
+          out.push({ html: body.innerHTML, ts });
+        }
+      }
+    });
+    return out;
+  }
+);
         }
       }
     });
