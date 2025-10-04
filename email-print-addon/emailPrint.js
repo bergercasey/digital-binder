@@ -1,25 +1,20 @@
-/* Email/Print Add-on v5 (Build 1759577514)
- * Focused selectors to avoid duplicate/irrelevant content.
- * - DOES NOT modify the Delete button (adds new Email/Print button after it)
- * - Header fields are read ONLY from a nearby header container
- * - Selected notes are read ONLY from the logs container around the Delete button
+/* Email/Print Add-on v5.1 (Build 1759578198)
+ * - Non-destructive: never touches your Delete button; only adds a sibling Email/Print button
+ * - MutationObserver waits for the Delete Selection button to exist (handles late-render UIs)
+ * - Clean header/notes scoping from v5 (no duplicate chips/dates/select-all)
  */
 (function(){"use strict";
   const CFG = Object.assign({
     deleteButtonSelectorList: ['#deleteSelected','[data-action="delete-selection"]','.delete-selection','.btn-delete-selection'],
-    // Header scoping: look upward from name node or use these known containers
     headerScopes: ['.job-header', '.detail-header', '.job-summary', '.job-card', 'main', '#app'],
-    // Within header scope, try these selectors for name & address
     nameSelectors: ['.job-name', '.job-title', 'h1', 'h2'],
     addressSelectors: ['.job-address', 'a[href*="maps"]', '.address', 'p'],
-    // Chips inside header scope
     stageLabel: 'Stage',
     crewLabel: 'Crew'
   }, window.EMAIL_PRINT_CONFIG || {});
 
-  let cached = { delBtn: null, logsScope: null, headerScope: null };
+  let cached = { delBtn: null, logsScope: null, headerScope: null, mounted: false };
 
-  /* ---------- utilities ---------- */
   function elText(el) { return (el && (el.value!=null ? el.value : el.textContent) || '').trim(); }
   function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
   function looksLikeDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(String(s||'').trim()); }
@@ -49,7 +44,6 @@
     if (!cached.headerScope) cached.headerScope = document.body;
   }
 
-  /* ---------- header extraction (scoped) ---------- */
   function getName(){
     const scope = cached.headerScope || document;
     for (const sel of CFG.nameSelectors) { const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
@@ -64,15 +58,13 @@
     const scope = cached.headerScope || document;
     const nodes = Array.from(scope.querySelectorAll('*'));
     for (const el of nodes.slice(0, 300)){ 
-      const t = elText(el);
-      if (!t) continue;
+      const t = elText(el); if (!t) continue;
       const m = t.match(new RegExp('^\s*'+label+'\s*:\s*(.+)$','i'));
       if (m) return m[1].trim();
     }
     return '';
   }
 
-  /* ---------- notes extraction (scoped to logs container) ---------- */
   function gatherSelectedNotes(){
     const scope = cached.logsScope || document;
     const cbs = Array.from(scope.querySelectorAll('input[type="checkbox"]:checked'));
@@ -94,19 +86,16 @@
     return out;
   }
 
-  /* ---------- preview ---------- */
   function buildPreviewHTML(){
     const name = getName();
     const address = getAddress();
     const stage = getChipValue(CFG.stageLabel);
     const crew = getChipValue(CFG.crewLabel);
-
     const lists = gatherSelectedNotes().map(toBulletedHTML).join('\n');
     const meta = [];
     if (address) meta.push(`<div>${escapeHtml(address)}</div>`);
     meta.push(`<div><strong>Current stage:</strong> ${escapeHtml(stage)}</div>`);
     meta.push(`<div><strong>Crew:</strong> ${escapeHtml(crew)}</div>`);
-
     return `<div class="ep-card" style="background:#fff;color:#000;border-radius:10px;padding:16px;">
       <h2 style="margin:0 0 8px 0;font-weight:800;font-size:20px;">${escapeHtml(name)}</h2>
       <div class="ep-meta" style="margin-bottom:12px;line-height:1.35;font-size:14px;">${meta.join('')}</div>
@@ -190,7 +179,8 @@
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${body}`;
   }
 
-  function insertButtonNextToDelete(){
+  function mount(){
+    if (cached.mounted) return;
     initScopes();
     const del = cached.delBtn;
     if (!del || del.dataset.emailPrintInjected) return;
@@ -207,6 +197,8 @@
     btn.style.fontWeight = '600';
     del.insertAdjacentElement('afterend', btn);
     del.dataset.emailPrintInjected = '1';
+    cached.mounted = true;
+
     btn.addEventListener('click', showPreview);
     document.addEventListener('click', function(e){
       if (e.target && e.target.id === 'ep-close') closePreview();
@@ -215,6 +207,16 @@
     });
   }
 
-  function ready(fn){ document.readyState !== 'loading' ? fn() : document.addEventListener('DOMContentLoaded', fn); }
-  ready(insertButtonNextToDelete);
+  // Observe DOM changes until we can mount
+  const observer = new MutationObserver(() => {
+    if (!cached.mounted) {
+      const found = findDeleteButton();
+      if (found) mount();
+    }
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  // Also try on ready (in case button is already there)
+  if (document.readyState !== 'loading') mount();
+  else document.addEventListener('DOMContentLoaded', mount);
 })();
