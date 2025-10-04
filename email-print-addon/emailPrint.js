@@ -1,13 +1,18 @@
-
-/* Email/Print Add-on v6.3a (Build 1759583360)
- * HARD-GATED to job header: .detail-header h1
- * Button appears only when that element exists (and auto-appears when it renders later).
- * Same preview as v6.3 (Name, Address, PO#, Crew, Stage + selected notes with original HTML).
+/* Email/Print Add-on v6.4 (Build 1759583775)
+ * Gating widened for your Binder:
+ *  - Show floating button if any of these are present: .detail-header h1 OR #notes-list OR a "Delete Selected" button in the log area.
+ * Header pull order:
+ *  - Preferred: live header text (name/address + chips)
+ *  - Fallback: Edit form fields (#job-name, #job-address, #job-po, #job-stage, #crew-box)
+ * Selected notes are captured with original HTML (bullets kept).
  */
 (function(){"use strict";
 
   const SEL = {
-    jobGate: '.detail-header h1',
+    jobGateHeader: '.detail-header h1',
+    jobGateNotes: '#notes-list, .notes-list, .log, .logs',
+    jobGateDeleteBtnText: /\bdelete\s*selected\b/i,
+
     header: '.detail-header, .job-header',
     name: '.detail-header h1, .job-header h1, h1',
     address: '.detail-header a[href*="maps"], .job-header a[href*="maps"]',
@@ -15,9 +20,18 @@
     stagePattern: /\bStage\s*:\s*(.+)/i,
     poPattern: /\bPO\s*:\s*(.+)/i,
     crewPattern: /\bCrew\s*:\s*(.+)/i,
-    noteCheckbox: '.log-entry input[type="checkbox"]:checked, .list-group-item input[type="checkbox"]:checked',
+
+    // Fallback: edit fields
+    editName: '#job-name',
+    editAddress: '#job-address',
+    editPO: '#job-po',
+    editStage: '#job-stage',
+    editCrewBox: '#crew-box',
+
+    // Notes
+    noteCheckbox: '.log-entry input[type="checkbox"]:checked, .list-group-item input[type="checkbox"]:checked, #notes-list input[type="checkbox"]:checked',
     noteEntry: '.log-entry, .list-group-item, .note-entry, .card',
-    noteHTML: '.content, .body, .card-body, .note-text, .log-text, .ql-editor, .form-control, pre, p'
+    noteHTML: '.content, .body, .card-body, .note-text, .log-text, .ql-editor, .form-control, pre, p',
   };
 
   const T = el => (el && (el.value!=null ? el.value : el.textContent) || '').trim();
@@ -28,19 +42,39 @@
 
   function readChip(pattern) {
     const scope = $(SEL.header) || document;
-    const nodes = $$(SEL.chipsScope, scope).slice(0, 400);
+    const nodes = $$(SEL.chipsScope, scope).slice(0, 500);
     for (const el of nodes) { const txt=T(el); if(!txt) continue; const m=txt.match(pattern); if(m) return m[1].trim(); }
     const m2=(document.body.innerText||'').match(pattern);
     return m2? m2[1].trim() : '';
   }
 
+  function fromEditFields() {
+    const name = T($(SEL.editName));
+    const address = T($(SEL.editAddress));
+    const po = T($(SEL.editPO));
+    const stage = ($(SEL.editStage)?.options[$(SEL.editStage).selectedIndex||0]?.text || '').trim();
+    const crew = T($(SEL.editCrewBox));
+    return { name, address, po, stage, crew };
+  }
+
   function getHeader() {
-    const name = T($(SEL.name)) || '(No Name)';
-    const address = T($(SEL.address)) || '';
-    const stage = readChip(SEL.stagePattern);
-    const po = readChip(SEL.poPattern);
-    const crew = readChip(SEL.crewPattern);
-    return { name, address, stage, po, crew };
+    // Try live header first
+    let name = T($(SEL.name));
+    let address = T($(SEL.address));
+    let stage = readChip(SEL.stagePattern);
+    let po = readChip(SEL.poPattern);
+    let crew = readChip(SEL.crewPattern);
+
+    // If key pieces missing, use edit fields
+    if (!name || !stage || !crew || !po) {
+      const f = fromEditFields();
+      name = name || f.name;
+      address = address || f.address;
+      po = po || f.po;
+      stage = stage || f.stage;
+      crew = crew || f.crew;
+    }
+    return { name: name || '(No Name)', address, stage, po, crew };
   }
 
   function collectSelectedNotesHTML() {
@@ -53,7 +87,8 @@
       const picks = $$(SEL.noteHTML, row);
       for (const p of picks) { const h=H(p).trim(); if(h){ html=h; break; } }
       if (!html) html = esc(T(row));
-      if (/^\s*\d{4}-\d{2}-\d{2}\s*$/.test(html.replace(/<[^>]+>/g,''))) continue;
+      const textOnly = html.replace(/<[^>]+>/g,'').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(textOnly)) continue; // skip pure date rows
       out.push('<div class="note-block">'+html+'</div>');
     }
     const seen = new Set(); const uniq=[]; for(const h of out) if(!seen.has(h)){ seen.add(h); uniq.push(h); }
@@ -75,7 +110,7 @@
 
   function closePreview(){ const el=document.getElementById('ep-overlay'); if(el) el.remove(); }
   function openPreview(){
-    if (!document.querySelector(SEL.jobGate)) return;
+    if (!isOnJobPage()) return;
     closePreview();
     const overlay=document.createElement('div');
     overlay.id='ep-overlay';
@@ -102,31 +137,41 @@
     const iframe=document.createElement('iframe'); Object.assign(iframe.style,{position:'fixed',right:'-9999px',bottom:'-9999px'});
     document.body.appendChild(iframe);
     const idoc=iframe.contentDocument||iframe.contentWindow.document; idoc.open(); idoc.write(docHtml); idoc.close();
-    iframe.onload=()=>setTimeout(()=>{ iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(()=>iframe.remove(),400); },50);
+    iframe.onload=()=>setTimeout(()=>{ idoc.defaultView.focus(); idoc.defaultView.print(); setTimeout(()=>iframe.remove(),400); },50);
   }
 
   function sendEmail(){
-    const temp=document.createElement('div'); temp.innerHTML=buildPreviewHTML();
-    const body=encodeURIComponent(temp.innerText.replace(/\s+/g,' ').trim());
-    const subject=encodeURIComponent((document.querySelector(SEL.name)?.textContent||'Job Update').trim());
+    const tmp=document.createElement('div'); tmp.innerHTML=buildPreviewHTML();
+    const text=tmp.innerText.replace(/\s+/g,' ').trim();
+    const subject=encodeURIComponent((T($(SEL.name)) || T($(SEL.editName)) || 'Job Update').trim());
+    const body=encodeURIComponent(text);
     location.href='mailto:?subject='+subject+'&body='+body;
+  }
+
+  function isOnJobPage() {
+    if (document.querySelector(SEL.jobGateHeader)) return true;
+    if (document.querySelector(SEL.jobGateNotes)) return true;
+    const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
+    if (btns.some(b => SEL.jobGateDeleteBtnText.test((b.textContent||'').trim()))) return true;
+    return false;
   }
 
   let btn=null, lastHref=location.href;
   function ensureButton(){
-    const gate = document.querySelector(SEL.jobGate);
-    if (gate && !btn) {
-      btn=document.createElement('button'); btn.id='emailPrintFloating'; btn.textContent='Email/Print';
+    const shouldShow = isOnJobPage();
+    if (shouldShow && !btn) {
+      btn=document.createElement('button');
+      btn.id='emailPrintFloating'; btn.textContent='Email/Print';
       Object.assign(btn.style,{ position:'fixed', right:'16px', bottom:'16px', zIndex:'2147483647', background:'#4EA7FF', color:'#fff', border:'1px solid rgba(0,0,0,.2)', borderRadius:'999px', padding:'10px 14px', fontWeight:'700', boxShadow:'0 4px 14px rgba(0,0,0,.2)', cursor:'pointer' });
       btn.addEventListener('click', openPreview);
       document.body.appendChild(btn);
-    } else if (!gate && btn) { btn.remove(); btn=null; }
+    } else if (!shouldShow && btn) { btn.remove(); btn=null; }
   }
 
   document.addEventListener('click', (e)=>{ const id=e?.target?.id; if(id==='ep-close') return closePreview(); if(id==='ep-print') return printPreview(); if(id==='ep-send') return sendEmail(); if (e.target && e.target.parentElement && e.target.parentElement.id==='ep-overlay') closePreview(); });
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closePreview(); });
 
   const mo=new MutationObserver(()=>ensureButton()); mo.observe(document.documentElement,{childList:true,subtree:true});
-  setInterval(()=>{ if(lastHref!==location.href){ lastHref=location.href; ensureButton(); } },400);
-  setTimeout(ensureButton,200);
+  setInterval(()=>{ if(lastHref!==location.href){ lastHref=location.href; ensureButton(); } }, 400);
+  setTimeout(ensureButton, 250);
 })();
