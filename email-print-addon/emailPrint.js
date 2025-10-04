@@ -1,37 +1,16 @@
-/* Email/Print Add-on v6.4 (Build 1759583775)
- * Gating widened for your Binder:
- *  - Show floating button if any of these are present: .detail-header h1 OR #notes-list OR a "Delete Selected" button in the log area.
- * Header pull order:
- *  - Preferred: live header text (name/address + chips)
- *  - Fallback: Edit form fields (#job-name, #job-address, #job-po, #job-stage, #crew-box)
- * Selected notes are captured with original HTML (bullets kept).
+/* Email/Print Add-on v6.5 (Build 1759584183)
+ * Job-only button: requires an address link OR notes list + "Delete Selected" present.
+ * Header is parsed from the job card that contains the address link (avoids global page title).
  */
 (function(){"use strict";
 
   const SEL = {
-    jobGateHeader: '.detail-header h1',
-    jobGateNotes: '#notes-list, .notes-list, .log, .logs',
-    jobGateDeleteBtnText: /\bdelete\s*selected\b/i,
-
-    header: '.detail-header, .job-header',
-    name: '.detail-header h1, .job-header h1, h1',
-    address: '.detail-header a[href*="maps"], .job-header a[href*="maps"]',
-    chipsScope: '.detail-header, .job-header, .detail-header *',
-    stagePattern: /\bStage\s*:\s*(.+)/i,
-    poPattern: /\bPO\s*:\s*(.+)/i,
-    crewPattern: /\bCrew\s*:\s*(.+)/i,
-
-    // Fallback: edit fields
-    editName: '#job-name',
-    editAddress: '#job-address',
-    editPO: '#job-po',
-    editStage: '#job-stage',
-    editCrewBox: '#crew-box',
-
-    // Notes
+    addressLink: 'a[href*="maps"]',
+    notesList: '#notes-list, .logs, .log',
+    deleteText: /\bdelete\s*selected\b/i,
     noteCheckbox: '.log-entry input[type="checkbox"]:checked, .list-group-item input[type="checkbox"]:checked, #notes-list input[type="checkbox"]:checked',
     noteEntry: '.log-entry, .list-group-item, .note-entry, .card',
-    noteHTML: '.content, .body, .card-body, .note-text, .log-text, .ql-editor, .form-control, pre, p',
+    noteHTML: '.content, .body, .card-body, .note-text, .log-text, .ql-editor, .form-control, pre, p'
   };
 
   const T = el => (el && (el.value!=null ? el.value : el.textContent) || '').trim();
@@ -40,41 +19,41 @@
   const $$ = (sel, root=document) => { try { return Array.from(root.querySelectorAll(sel)); } catch { return []; } };
   const esc = s => String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 
-  function readChip(pattern) {
-    const scope = $(SEL.header) || document;
-    const nodes = $$(SEL.chipsScope, scope).slice(0, 500);
-    for (const el of nodes) { const txt=T(el); if(!txt) continue; const m=txt.match(pattern); if(m) return m[1].trim(); }
-    const m2=(document.body.innerText||'').match(pattern);
-    return m2? m2[1].trim() : '';
+  function findJobCard() {
+    const addr = $(SEL.addressLink);
+    if (!addr) return null;
+    // climb until we hit a block with multi-line text (name/chips + address)
+    let box = addr.closest('div, section, article, main') || addr.parentElement;
+    while (box && (box.innerText||'').split('\n').filter(Boolean).length < 2) box = box.parentElement;
+    return box || null;
   }
 
-  function fromEditFields() {
-    const name = T($(SEL.editName));
-    const address = T($(SEL.editAddress));
-    const po = T($(SEL.editPO));
-    const stage = ($(SEL.editStage)?.options[$(SEL.editStage).selectedIndex||0]?.text || '').trim();
-    const crew = T($(SEL.editCrewBox));
-    return { name, address, po, stage, crew };
+  function parseHeaderFromCard(card) {
+    const text = (card?.innerText || '').replace(/\s+\n/g,'\n').trim();
+    // name: text up to 'Stage:' or the first newline
+    let name = '';
+    const stageIdx = text.search(/\bStage\s*:/i);
+    if (stageIdx > 0) name = text.slice(0, stageIdx).split('\n').pop().trim();
+    if (!name) name = text.split('\n')[0].trim();
+
+    const address = T($(SEL.addressLink, card)) || '';
+    const mStage = text.match(/\bStage\s*:\s*([^\n]+)/i);
+    const mPO    = text.match(/\bPO\s*:\s*([^\n]+)/i);
+    const mCrew  = text.match(/\bCrew\s*:\s*([^\n]+)/i);
+    return {
+      name: name || '(No Name)',
+      address,
+      stage: (mStage && mStage[1].trim()) || '',
+      po:    (mPO && mPO[1].trim())    || '',
+      crew:  (mCrew && mCrew[1].trim())|| ''
+    };
   }
 
   function getHeader() {
-    // Try live header first
-    let name = T($(SEL.name));
-    let address = T($(SEL.address));
-    let stage = readChip(SEL.stagePattern);
-    let po = readChip(SEL.poPattern);
-    let crew = readChip(SEL.crewPattern);
-
-    // If key pieces missing, use edit fields
-    if (!name || !stage || !crew || !po) {
-      const f = fromEditFields();
-      name = name || f.name;
-      address = address || f.address;
-      po = po || f.po;
-      stage = stage || f.stage;
-      crew = crew || f.crew;
-    }
-    return { name: name || '(No Name)', address, stage, po, crew };
+    const card = findJobCard();
+    if (card) return parseHeaderFromCard(card);
+    // fallback minimal
+    return { name:'(No Name)', address:'', stage:'', po:'', crew:'' };
   }
 
   function collectSelectedNotesHTML() {
@@ -88,7 +67,7 @@
       for (const p of picks) { const h=H(p).trim(); if(h){ html=h; break; } }
       if (!html) html = esc(T(row));
       const textOnly = html.replace(/<[^>]+>/g,'').trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(textOnly)) continue; // skip pure date rows
+      if (/^\d{4}-\d{2}-\d{2}$/.test(textOnly)) continue;
       out.push('<div class="note-block">'+html+'</div>');
     }
     const seen = new Set(); const uniq=[]; for(const h of out) if(!seen.has(h)){ seen.add(h); uniq.push(h); }
@@ -108,6 +87,17 @@
     '</div>';
   }
 
+  function isOnJobPage() {
+    // Must have address link (job card present) OR notes list + Delete Selected button
+    if (document.querySelector(SEL.addressLink)) return true;
+    if (document.querySelector(SEL.notesList)) {
+      const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
+      if (btns.some(b => SEL.deleteText.test((b.textContent||'').trim()))) return true;
+    }
+    return false;
+  }
+
+  // Modal + actions
   function closePreview(){ const el=document.getElementById('ep-overlay'); if(el) el.remove(); }
   function openPreview(){
     if (!isOnJobPage()) return;
@@ -143,19 +133,12 @@
   function sendEmail(){
     const tmp=document.createElement('div'); tmp.innerHTML=buildPreviewHTML();
     const text=tmp.innerText.replace(/\s+/g,' ').trim();
-    const subject=encodeURIComponent((T($(SEL.name)) || T($(SEL.editName)) || 'Job Update').trim());
+    const subject=encodeURIComponent((findJobCard()?.innerText.split('\n')[0] || 'Job Update').trim());
     const body=encodeURIComponent(text);
     location.href='mailto:?subject='+subject+'&body='+body;
   }
 
-  function isOnJobPage() {
-    if (document.querySelector(SEL.jobGateHeader)) return true;
-    if (document.querySelector(SEL.jobGateNotes)) return true;
-    const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
-    if (btns.some(b => SEL.jobGateDeleteBtnText.test((b.textContent||'').trim()))) return true;
-    return false;
-  }
-
+  // Floating button
   let btn=null, lastHref=location.href;
   function ensureButton(){
     const shouldShow = isOnJobPage();
