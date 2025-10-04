@@ -1,176 +1,115 @@
-/* Email/Print Add-on v4 (Build 1759418102)
- * - DOES NOT modify your Delete button
- * - Inserts a distinct, lighter-blue "Email/Print" button right after Delete Selection
- * - Light preview (white card, dark text), identical for print/email
- * - More robust field/notes detection for Binder-style UI
+/* Email/Print Add-on v5 (Build 1759577514)
+ * Focused selectors to avoid duplicate/irrelevant content.
+ * - DOES NOT modify the Delete button (adds new Email/Print button after it)
+ * - Header fields are read ONLY from a nearby header container
+ * - Selected notes are read ONLY from the logs container around the Delete button
  */
 (function(){"use strict";
   const CFG = Object.assign({
-    deleteButtonSelectorList: [
-      '#deleteSelected',
-      '[data-action="delete-selection"]',
-      '.delete-selection',
-      '.btn-delete-selection'
-    ],
-    // Very broad: include typical places a checked note checkbox might live
-    selectedNoteCheckboxSelector: [
-      // common patterns in Binder logs
-      '.log input[type="checkbox"]:checked',
-      '.logs input[type="checkbox"]:checked',
-      '.log-entry input[type="checkbox"]:checked',
-      '.note-entry input[type="checkbox"]:checked',
-      // fallback: any checked checkbox on the page (we will filter later)
-      'input[type="checkbox"]:checked'
-    ].join(','),
-    // Where note text might be inside a selected entry
-    noteTextSelectorWithinEntry: '.note-text, .log-text, .content, .note-body, .form-control, textarea, p, li',
-    fields: {
-      // Try common Binder targets and generic fallbacks
-      // Name
-      nameList: [
-        '[data-field="name"]',
-        '.job-name',
-        '.job-title',
-        '.job-header h1',
-        '.job-header h2',
-        '.detail-header h1',
-        'main h1',
-        'main h2',
-        'h1.job, h2.job',
-        'h1, h2'
-      ],
-      // Address
-      addressList: [
-        '[data-field="address"]',
-        '.job-address',
-        '.address',
-        '.detail-header .subline',
-        '.job-header + *', // sibling under header
-        'p'
-      ]
-    }
+    deleteButtonSelectorList: ['#deleteSelected','[data-action="delete-selection"]','.delete-selection','.btn-delete-selection'],
+    // Header scoping: look upward from name node or use these known containers
+    headerScopes: ['.job-header', '.detail-header', '.job-summary', '.job-card', 'main', '#app'],
+    // Within header scope, try these selectors for name & address
+    nameSelectors: ['.job-name', '.job-title', 'h1', 'h2'],
+    addressSelectors: ['.job-address', 'a[href*="maps"]', '.address', 'p'],
+    // Chips inside header scope
+    stageLabel: 'Stage',
+    crewLabel: 'Crew'
   }, window.EMAIL_PRINT_CONFIG || {});
 
-  /* ---------- helpers ---------- */
-  function findDeleteButton(){
-    for (const sel of CFG.deleteButtonSelectorList) {
-      try { const el = document.querySelector(sel); if (el) return el; } catch(_e){}
-    }
-    // Text fallbacks (non-destructive)
-    const labels = ['delete selection','delete selected','delete note','delete notes'];
-    const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
-    return btns.find(b => labels.includes((b.textContent||'').trim().toLowerCase())) || null;
-  }
+  let cached = { delBtn: null, logsScope: null, headerScope: null };
 
+  /* ---------- utilities ---------- */
+  function elText(el) { return (el && (el.value!=null ? el.value : el.textContent) || '').trim(); }
   function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+  function looksLikeDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(String(s||'').trim()); }
+  function isTrivial(line){ return !line || /select\s*all/i.test(line) || looksLikeDate(line); }
 
   function toBulletedHTML(text){
     const lines = String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    // Treat lines starting with -, *, or • as bullets; others become individual bullets too (for readability)
-    const items = lines.map(l => l.replace(/^(-|\*|•)\s+/, '').trim()).filter(Boolean);
+    const cleaned = lines.filter(l => !isTrivial(l));
+    const items = cleaned.map(l => l.replace(/^(-|\*|•)\s+/, '').trim()).filter(Boolean);
     if (!items.length) return '<p><em>(empty)</em></p>';
-    return '<ul>' + items.map(t => `<li>${escapeHtml(t)}</li>`).join('') + '</ul>';
+    const seen = new Set(); const uniq = items.filter(t=> (seen.has(t)?false:(seen.add(t),true)));
+    return '<ul>' + uniq.map(t => `<li>${escapeHtml(t)}</li>`).join('') + '</ul>';
   }
 
-  // Try "label:" style chips like "Stage: Rough-In", "Crew: Dylan"
-  function getChipValue(label){
-    const all = Array.from(document.querySelectorAll('*'));
-    for (const el of all){
-      const t = (el.textContent||'').trim();
-      if (!t) continue;
-      const idx = t.toLowerCase().indexOf(label.toLowerCase()+':');
-      if (idx === 0 || idx > -1) {
-        // Prefer exact "Label: Value" forms
-        const parts = t.split(':').map(s=>s.trim());
-        if (parts.length >= 2 && parts[0].toLowerCase() === label.toLowerCase()) {
-          return parts.slice(1).join(':').trim();
-        }
-      }
-    }
-    return '';
+  function findDeleteButton(){
+    for (const sel of CFG.deleteButtonSelectorList) { try { const el = document.querySelector(sel); if (el) return el; } catch(_e){} }
+    const labels = ['delete selection','delete selected','delete note','delete notes'];
+    const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
+    return btns.find(b => labels.includes(elText(b).toLowerCase())) || null;
   }
 
-  function firstTextFrom(selectors){
-    for (const sel of selectors) {
-      try {
-        const el = document.querySelector(sel);
-        if (el) { return (el.value != null ? el.value : el.textContent || '').trim(); }
-      } catch(_e){}
-    }
-    return '';
+  function initScopes(){
+    const del = findDeleteButton();
+    cached.delBtn = del;
+    if (del){ cached.logsScope = del.closest('.log, .logs, .log-list, .log-panel, .notes, .list-group, .card, section, .container') || del.parentElement; }
+    for (const sel of CFG.headerScopes){ const h = document.querySelector(sel); if (h) { cached.headerScope = h; break; } }
+    if (!cached.headerScope) cached.headerScope = document.body;
   }
 
-  function looksLikeAddress(s){
-    // Simple heuristic for addresses
-    return /\d+\s+\S+\s+(St|Street|Ave|Avenue|Blvd|Road|Rd|Dr|Drive|Ct|Court|Ln|Lane|Way)\b/i.test(s);
-  }
-
-  function findAddress(){ // try explicit lists first
-    const explicit = firstTextFrom(CFG.fields.addressList);
-    if (explicit && explicit.length > 0) return explicit;
-    // otherwise, scan elements near the header for an address-looking string
-    const candidates = Array.from(document.querySelectorAll('h1, h2, .job-header, .detail-header, .header'))
-      .slice(0,4) // nearby blocks
-      .flatMap(h => Array.from(h.parentElement ? h.parentElement.querySelectorAll('*') : []));
-    for (const el of candidates){
-      const t = (el.textContent||'').trim();
-      if (t && looksLikeAddress(t)) return t;
-    }
-    // global search fallback
-    const all = Array.from(document.querySelectorAll('p, div, span'));
-    for (const el of all){
-      const t = (el.textContent||'').trim();
-      if (t && looksLikeAddress(t)) return t;
-    }
-    return '';
-  }
-
+  /* ---------- header extraction (scoped) ---------- */
   function getName(){
-    const name = firstTextFrom(CFG.fields.nameList);
-    if (name) return name;
-    // fallback: top-most visible heading
-    const hd = document.querySelector('h1, h2, [role="heading"]');
-    return (hd && (hd.textContent||'').trim()) || '';
+    const scope = cached.headerScope || document;
+    for (const sel of CFG.nameSelectors) { const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
+    return '(No Name)';
+  }
+  function getAddress(){
+    const scope = cached.headerScope || document;
+    for (const sel of CFG.addressSelectors) { const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
+    return '';
+  }
+  function getChipValue(label){
+    const scope = cached.headerScope || document;
+    const nodes = Array.from(scope.querySelectorAll('*'));
+    for (const el of nodes.slice(0, 300)){ 
+      const t = elText(el);
+      if (!t) continue;
+      const m = t.match(new RegExp('^\s*'+label+'\s*:\s*(.+)$','i'));
+      if (m) return m[1].trim();
+    }
+    return '';
   }
 
-  function gatherSelectedNoteTexts(){
-    const cbs = Array.from(document.querySelectorAll(CFG.selectedNoteCheckboxSelector));
+  /* ---------- notes extraction (scoped to logs container) ---------- */
+  function gatherSelectedNotes(){
+    const scope = cached.logsScope || document;
+    const cbs = Array.from(scope.querySelectorAll('input[type="checkbox"]:checked'));
     const texts = [];
     for (const cb of cbs){
-      // skip obvious "select all"
-      if (cb.dataset && /all|selectall/i.test(cb.dataset.role||'')) continue;
-      let container = cb.closest('.log-entry, .note-entry, li, .list-group-item, .row, .item, .card') || cb.parentElement;
-      if (!container) continue;
-      // Prefer explicit note text nodes
-      let textEl = container.querySelector(CFG.noteTextSelectorWithinEntry);
-      let text = textEl ? (textEl.value != null ? textEl.value : textEl.textContent) : '';
-      // If empty, take container text minus any label/checkbox clutter
-      if (!text || !text.trim()) text = container.textContent || '';
-      text = (text||'').replace(/\s+/g,' ').trim();
-      if (text) texts.push(text);
+      const labelText = elText(cb.closest('label')||null);
+      if (/all|select\s*all/i.test(labelText) || /all|select\s*all/i.test(cb.id||'')) continue;
+      const entry = cb.closest('.log-entry, .note-entry, li, .list-group-item, .row, .item, .card, .entry') || cb.parentElement;
+      if (!entry) continue;
+      let text = '';
+      const candidates = entry.querySelectorAll('.note-text, .log-text, .content, .note-body, textarea, p');
+      for (const cel of candidates){ if (elText(cel)) { text = elText(cel); break; } }
+      if (!text) text = elText(entry);
+      text = text.replace(/\s+/g,' ').trim();
+      if (!isTrivial(text)) texts.push(text);
     }
-    // De-dup and filter super-short noise
-    const uniq = Array.from(new Set(texts)).filter(t => t.length > 2);
-    return uniq;
+    const seen = new Set(); const out = [];
+    for (const t of texts){ if (t.length>=3 && !seen.has(t)) { seen.add(t); out.push(t); } }
+    return out;
   }
 
   /* ---------- preview ---------- */
   function buildPreviewHTML(){
-    const name = getName() || '(No Name)';
-    const address = findAddress();
-    const stage = getChipValue('Stage') || getChipValue('Current stage') || '';
-    const crew = getChipValue('Crew') || '';
+    const name = getName();
+    const address = getAddress();
+    const stage = getChipValue(CFG.stageLabel);
+    const crew = getChipValue(CFG.crewLabel);
 
-    const lists = gatherSelectedNoteTexts().map(toBulletedHTML).join('\n');
-    const head = `
-      <h2 style="margin:0 0 8px 0;font-weight:800;font-size:20px;">${escapeHtml(name)}</h2>
-      <div class="ep-meta" style="margin-bottom:12px;line-height:1.35;font-size:14px;">
-        ${address ? `<div>${escapeHtml(address)}</div>` : ''}
-        <div><strong>Current stage:</strong> ${escapeHtml(stage)}</div>
-        <div><strong>Crew:</strong> ${escapeHtml(crew)}</div>
-      </div>`;
+    const lists = gatherSelectedNotes().map(toBulletedHTML).join('\n');
+    const meta = [];
+    if (address) meta.push(`<div>${escapeHtml(address)}</div>`);
+    meta.push(`<div><strong>Current stage:</strong> ${escapeHtml(stage)}</div>`);
+    meta.push(`<div><strong>Crew:</strong> ${escapeHtml(crew)}</div>`);
+
     return `<div class="ep-card" style="background:#fff;color:#000;border-radius:10px;padding:16px;">
-      ${head}
+      <h2 style="margin:0 0 8px 0;font-weight:800;font-size:20px;">${escapeHtml(name)}</h2>
+      <div class="ep-meta" style="margin-bottom:12px;line-height:1.35;font-size:14px;">${meta.join('')}</div>
       <div class="ep-notes">${lists || '<p><em>(no notes selected)</em></p>'}</div>
     </div>`;
   }
@@ -245,19 +184,16 @@
     }
     const temp = document.createElement('div'); temp.innerHTML = html;
     const bullets = Array.from(temp.querySelectorAll('li')).map(li=>'• '+li.textContent.trim());
-    const name = getName() || '(No Name)';
-    const address = findAddress() || '';
-    const stage = getChipValue('Stage') || '';
-    const crew = getChipValue('Crew') || '';
-    const header = `${name}\n${address ? address + '\n' : ''}Current stage: ${stage}\nCrew: ${crew}`;
-    const body = encodeURIComponent(header + '\n\n' + (bullets.length ? bullets.join('\n') : '(no notes selected)'));
+    const address = getAddress(); const stage = getChipValue('Stage'); const crew = getChipValue('Crew');
+    const header = (getName() || '(No Name)') + (address ? '\n'+address : '') + '\nCurrent stage: ' + (stage||'') + '\nCrew: ' + (crew||'');
+    const body = encodeURIComponent(header + '\n\n' + (bullets.length? bullets.join('\n') : '(no notes selected)'));
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${body}`;
   }
 
   function insertButtonNextToDelete(){
-    const del = findDeleteButton();
+    initScopes();
+    const del = cached.delBtn;
     if (!del || del.dataset.emailPrintInjected) return;
-    // New, distinct button (lighter blue)
     const btn = document.createElement('button');
     btn.id = 'emailPrint';
     btn.textContent = 'Email/Print';
