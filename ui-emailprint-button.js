@@ -186,7 +186,7 @@
     document.getElementById("ep-close-2").onclick = close;
     document.getElementById("ep-backdrop").onclick = close;
     const p = document.getElementById("ep-print"); if (p) p.onclick = ep_printAndClose;
-    const e = document.getElementById("ep-email"); if (e) e.onclick = ()=> ep_renderEmailPanel(body.innerHTML);
+    const e = document.getElementById("ep-email"); if (e) e.onclick = ()=> ep_showEmailOverlay(body.innerHTML);
   }
   function ep_openPreviewEnsure(){
     // Prefer official hook if present
@@ -386,5 +386,140 @@
         alert('Email error: ' + (err && err.message || err));
       }
     };
+  }
+
+
+
+  /* Fallback Email overlay (on top of preview) */
+  function ep_buildEmailOverlay(){
+    if (document.getElementById('ep-mail-wrap')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'ep-mail-wrap';
+    wrap.innerHTML = `
+      <div id="ep-mail-backdrop"></div>
+      <div id="ep-mail-modal">
+        <div id="ep-mail-head">
+          <div id="ep-mail-title">Send Email</div>
+          <button id="ep-mail-close" aria-label="Close">×</button>
+        </div>
+        <div id="ep-mail-body">
+          <div id="ep-mail-favs"></div>
+          <div class="row">
+            <input id="ep-add-email" type="email" placeholder="add@email.com"/>
+            <label class="row" style="gap:6px; font-size:12px; color:#374151;">
+              <input id="ep-add-save" type="checkbox" checked/> Save to favorites
+            </label>
+            <button id="ep-add-btn" class="ghost">Add</button>
+          </div>
+          <div class="row">
+            <span class="hint" style="min-width:60px;">Subject</span>
+            <input id="ep-subj" type="text"/>
+          </div>
+        </div>
+        <div id="ep-mail-foot">
+          <button id="ep-mail-send" class="primary">Send</button>
+          <button id="ep-mail-cancel" class="ghost">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    // minimal styles if main ones absent
+    if (!document.getElementById('ep-styles')){
+      const st = document.createElement('style'); st.id='ep-styles';
+      st.textContent = `
+        #ep-overlay{ position:fixed; inset:0; display:none; z-index:10000; }
+        #ep-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,0.45); }
+        #ep-modal{ position:relative; margin:6vh auto; max-width:820px; width:calc(100% - 24px); background:#fff; color:#111; border-radius:12px; box-shadow:0 30px 80px rgba(0,0,0,0.35); }
+        #ep-head{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #e5e7eb; }
+        #ep-title{ font-weight:700; font-size:16px; }
+        #ep-close{ border:none; background:transparent; font-size:22px; cursor:pointer; line-height:1; }
+        #ep-body{ padding:16px; max-height:70vh; overflow:auto; }
+        #ep-foot{ padding:12px 16px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:8px; }
+        .ep-name{ font-weight:800; font-size:18px; margin:0 0 8px 0; }
+        .ep-note{ margin:8px 0; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; }
+        .ep-ts{ font-size:12px; color:#6b7280; }
+        .ep-note :where(p, ul, ol){ margin:6px 0; }
+        .ep-note ul{ padding-left:20px; list-style:disc; }
+        .ep-note ol{ padding-left:20px; list-style:decimal; }
+        /* Email overlay */
+        #ep-mail-wrap{ position:fixed; inset:0; z-index:10010; display:none; }
+        #ep-mail-backdrop{ position:absolute; inset:0; background: rgba(0,0,0,0.45); }
+        #ep-mail-modal{ position:relative; margin: 8vh auto; max-width: 720px; width: calc(100% - 32px); background: #fff; color:#111; border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,0.35); overflow: hidden; }
+        #ep-mail-head{ display:flex; align-items:center; justify-content:space-between; padding: 12px 16px; border-bottom:1px solid #e5e7eb; }
+        #ep-mail-title{ font-weight:700; font-size:16px; }
+        #ep-mail-close{ border:none; background:transparent; font-size:22px; cursor:pointer; line-height:1; }
+        #ep-mail-body{ padding: 14px 16px; max-height: 68vh; overflow:auto; display:grid; gap:10px; }
+        #ep-mail-body .row{ display:flex; gap:8px; align-items:center; }
+        #ep-mail-body input[type="email"], #ep-mail-body input[type="text"]{ flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px; }
+        #ep-mail-body .hint{ font-size:12px; color:#6b7280; }
+        #ep-mail-foot{ padding: 12px 16px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:8px; }
+        #ep-mail-favs label{ display:inline-flex; align-items:center; gap:6px; margin:4px 10px 4px 0; }
+        @media (max-width: 480px){
+          #ep-mail-modal{ margin: 0 auto; width:100%; max-width:100%; height:100%; border-radius:0; display:flex; flex-direction:column; }
+          #ep-mail-body{ max-height:none; flex:1; }
+        }
+      `;
+      document.head.appendChild(st);
+    }
+  }
+  function ep_showEmailOverlay(previewHtml){
+    ep_buildEmailOverlay();
+    const wrap = document.getElementById('ep-mail-wrap');
+    const favWrap = document.getElementById('ep-mail-favs');
+    const favs = ep_getFavs();
+    if (!favs.length){
+      favWrap.innerHTML = `<div class="hint">No favorites yet. Add an email below, check "Save to favorites", then click Add.</div>`;
+    } else {
+      favWrap.innerHTML = `<div class="hint" style="margin-bottom:4px;">Favorites</div>` + favs.map(e => {
+        const esc = e.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        return `<label><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc}</label>`;
+      }).join('');
+    }
+    const subjDefault = (() => {
+      try {
+        const name = ep_getValue('job-name'); const po = ep_getValue('job-po');
+        if (name && po) return `${name} — PO ${po}`;
+        if (name) return name;
+      } catch(_){}
+      return 'Job Update';
+    })();
+    const subjEl = document.getElementById('ep-subj'); if (subjEl) subjEl.value = subjDefault;
+
+    document.getElementById('ep-add-btn').onclick = () => {
+      const addInput = document.getElementById('ep-add-email');
+      const v = (addInput.value||'').trim();
+      if (!v) return;
+      if (document.getElementById('ep-add-save').checked) ep_addFav(v);
+      addInput.value = '';
+      ep_showEmailOverlay(previewHtml);
+    };
+    const hide = ()=>{ document.getElementById('ep-mail-wrap').style.display = 'none'; };
+    document.getElementById('ep-mail-close').onclick = hide;
+    document.getElementById('ep-mail-cancel').onclick = hide;
+    document.getElementById('ep-mail-backdrop').onclick = hide;
+    document.getElementById('ep-mail-send').onclick = async () => {
+      const to = Array.from(document.querySelectorAll('#ep-mail-favs .ep-fav:checked')).map(el => el.value);
+      const extra = (document.getElementById('ep-add-email').value||'').trim();
+      if (extra) to.push(extra);
+      if (!to.length){ alert('Select at least one recipient or add an email.'); return; }
+      const subject = (document.getElementById('ep-subj').value || 'Job Update');
+      try {
+        const resp = await fetch('/.netlify/functions/send-email', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ to, subject, html: previewHtml })
+        });
+        if (resp.ok){
+          alert('Email sent!');
+          hide();
+          const overlay = document.getElementById('ep-overlay'); if (overlay) overlay.style.display = 'none';
+        } else {
+          const t = await resp.text();
+          alert('Email failed: ' + t);
+        }
+      } catch (err) {
+        alert('Email error: ' + (err && err.message || err));
+      }
+    };
+    wrap.style.display = 'block';
   }
 
