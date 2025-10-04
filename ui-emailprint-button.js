@@ -526,3 +526,27 @@
 
 
 document.addEventListener('click', function(ev){ if (ev && ev.target && ev.target.id==='ep-email'){ try{ ep_showEmailOverlay(document.getElementById('ep-body').innerHTML); }catch(_){ } } }, false);
+
+function removeInlineEmailPanel(){
+  try{
+    const p = document.getElementById('ep-mail');
+    if (p && p.parentElement) p.parentElement.removeChild(p);
+  }catch(_){}
+}
+document.addEventListener('click', function(ev){
+  try{
+    const t = ev && ev.target;
+    if (!t) return;
+    const btn = t.id === 'ep-email' ? t : (t.closest ? t.closest('#ep-email') : null);
+    if (btn){
+      // If the main overlay is available, use it; else, fallback
+      ev.preventDefault(); ev.stopPropagation();
+      removeInlineEmailPanel();
+      if (typeof showEmailOverlay === 'function'){
+        try{ showEmailOverlay(document.getElementById('ep-body').innerHTML); }catch(_){}
+      } else if (typeof ep_showEmailOverlay === 'function'){
+        try{ ep_showEmailOverlay(document.getElementById('ep-body').innerHTML); }catch(_){}
+      }
+    }
+  }catch(_){}
+}, true);

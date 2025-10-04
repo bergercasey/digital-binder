@@ -429,6 +429,7 @@ function openPreview(){
       ${notesHtml}
     `;
 
+    removeInlineEmailPanel();
     overlay.style.display = "block";
     (function(){
       const ebtn = document.getElementById("ep-email");
@@ -584,3 +585,27 @@ if (typeof showEmailOverlay !== 'function'){
   }
 }
 
+
+// --- Cleanup helper to remove legacy inline email panel ---
+function removeInlineEmailPanel(){
+  try{
+    const p = document.getElementById('ep-mail');
+    if (p && p.parentElement) p.parentElement.removeChild(p);
+  }catch(_){}
+}
+
+// --- Global capture: force Email overlay and remove inline panel ---
+function epGlobalEmailClick(ev){
+  try{
+    const t = ev && ev.target;
+    if (!t) return;
+    const btn = t.id === 'ep-email' ? t : (t.closest ? t.closest('#ep-email') : null);
+    if (btn){
+      ev.preventDefault();
+      ev.stopPropagation();
+      removeInlineEmailPanel();
+      try { showEmailOverlay(document.getElementById('ep-body').innerHTML); } catch(_){}
+    }
+  }catch(_){}
+}
+document.addEventListener('click', epGlobalEmailClick, true);
