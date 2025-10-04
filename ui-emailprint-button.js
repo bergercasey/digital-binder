@@ -523,3 +523,6 @@
     wrap.style.display = 'block';
   }
 
+
+
+document.addEventListener('click', function(ev){ if (ev && ev.target && ev.target.id==='ep-email'){ try{ ep_showEmailOverlay(document.getElementById('ep-body').innerHTML); }catch(_){ } } }, false);

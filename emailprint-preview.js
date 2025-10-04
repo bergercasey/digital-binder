@@ -430,6 +430,11 @@ function openPreview(){
     `;
 
     overlay.style.display = "block";
+    (function(){
+      const ebtn = document.getElementById("ep-email");
+      if (ebtn) { ebtn.onclick = ()=> { try{ showEmailOverlay(body.innerHTML); }catch(_){ } }; }
+      document.addEventListener("click", function(ev){ if (ev && ev.target && ev.target.id === "ep-email"){ try{ showEmailOverlay(body.innerHTML); }catch(_){ } } }, false);
+    })();
     const pbtn = document.getElementById('ep-print'); if (pbtn) pbtn.onclick = printPreviewAndClose;
     const ebtn = document.getElementById('ep-email'); if (ebtn) ebtn.onclick = () => showEmailOverlay(body.innerHTML);
     const close = () => { overlay.style.display = "none"; };
@@ -457,3 +462,125 @@ function openPreview(){
   init();
   try{ window._epOpenPreview = openPreview; }catch(_){}
 })();
+
+
+// === Email favorites + overlay (robust) ===
+if (typeof favsKey !== 'function'){
+  function favsKey(){ return 'ep_favorites'; }
+}
+if (typeof getFavs !== 'function'){
+  function getFavs(){ try{ const raw = localStorage.getItem(favsKey()); const arr = JSON.parse(raw); return Array.isArray(arr)?arr:[]; }catch(_){ return []; } }
+}
+if (typeof saveFavs !== 'function'){
+  function saveFavs(list){ try{ localStorage.setItem(favsKey(), JSON.stringify(list||[])); }catch(_){ } }
+}
+if (typeof addFav !== 'function'){
+  function addFav(email){ const v=(email||'').trim(); if(!v) return; const list=getFavs(); if(!list.includes(v)){ list.push(v); saveFavs(list);} }
+}
+if (typeof buildEmailOverlay !== 'function'){
+  function buildEmailOverlay(){
+    if (document.getElementById('ep-mail-wrap')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'ep-mail-wrap';
+    wrap.innerHTML = `
+      <div id="ep-mail-backdrop"></div>
+      <div id="ep-mail-modal">
+        <div id="ep-mail-head">
+          <div id="ep-mail-title">Send Email</div>
+          <button id="ep-mail-close" aria-label="Close">×</button>
+        </div>
+        <div id="ep-mail-body">
+          <div id="ep-mail-favs"></div>
+          <div class="row" style="display:flex; gap:8px; align-items:center;">
+            <input id="ep-add-email" type="email" placeholder="add@email.com" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
+            <label class="row" style="gap:6px; font-size:12px; color:#374151;">
+              <input id="ep-add-save" type="checkbox" checked/> Save to favorites
+            </label>
+            <button id="ep-add-btn" class="ghost">Add</button>
+          </div>
+          <div class="row" style="display:flex; gap:8px; align-items:center;">
+            <span class="hint" style="min-width:60px; color:#6b7280; font-size:12px;">Subject</span>
+            <input id="ep-subj" type="text" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
+          </div>
+        </div>
+        <div id="ep-mail-foot">
+          <button id="ep-mail-send" class="primary">Send</button>
+          <button id="ep-mail-cancel" class="ghost">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    // minimal styles if needed
+    if (!document.getElementById('ep-mail-styles')){
+      const st = document.createElement('style'); st.id='ep-mail-styles';
+      st.textContent = `
+        #ep-mail-wrap{ position:fixed; inset:0; z-index:10010; display:none; }
+        #ep-mail-backdrop{ position:absolute; inset:0; background: rgba(0,0,0,0.45); }
+        #ep-mail-modal{ position:relative; margin: 8vh auto; max-width: 720px; width: calc(100% - 32px); background: #fff; color:#111; border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,0.35); overflow: hidden; }
+        #ep-mail-head{ display:flex; align-items:center; justify-content:space-between; padding: 12px 16px; border-bottom:1px solid #e5e7eb; }
+        #ep-mail-title{ font-weight:700; font-size:16px; }
+        #ep-mail-close{ border:none; background:transparent; font-size:22px; cursor:pointer; line-height:1; }
+        #ep-mail-body{ padding: 14px 16px; max-height: 68vh; overflow:auto; display:grid; gap:10px; }
+        #ep-mail-foot{ padding: 12px 16px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:8px; }
+        #ep-mail-favs label{ display:inline-flex; align-items:center; gap:6px; margin:4px 10px 4px 0; }
+        @media (max-width: 480px){
+          #ep-mail-modal{ margin: 0 auto; width:100%; max-width:100%; height:100%; border-radius:0; display:flex; flex-direction:column; }
+          #ep-mail-body{ max-height:none; flex:1; }
+        }`;
+      document.head.appendChild(st);
+    }
+  }
+}
+if (typeof showEmailOverlay !== 'function'){
+  function showEmailOverlay(previewHtml){
+    buildEmailOverlay();
+    const wrap = document.getElementById('ep-mail-wrap');
+    const favWrap = document.getElementById('ep-mail-favs');
+    const favs = getFavs();
+    if (!favs.length){
+      favWrap.innerHTML = `<div class="hint">No favorites yet. Add an email below, check "Save to favorites", then click Add.</div>`;
+    } else {
+      favWrap.innerHTML = `<div class="hint" style="margin-bottom:4px;">Favorites</div>` + favs.map(e => {
+        const esc = e.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        return `<label><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc}</label>`;
+      }).join('');
+    }
+    const subjDefault = (() => {
+      try { 
+        const name = getValue && getValue('job-name') || ''; 
+        const po = getValue && getValue('job-po') || ''; 
+        if (name && po) return `${name} — PO ${po}`; 
+        if (name) return name;
+      } catch(_){}
+      return 'Job Update';
+    })();
+    const subjEl = document.getElementById('ep-subj'); if (subjEl) subjEl.value = subjDefault;
+    const hide = ()=>{ wrap.style.display = 'none'; };
+    document.getElementById('ep-mail-close').onclick = hide;
+    document.getElementById('ep-mail-cancel').onclick = hide;
+    document.getElementById('ep-mail-backdrop').onclick = hide;
+    document.getElementById('ep-add-btn').onclick = ()=>{
+      const addInput = document.getElementById('ep-add-email');
+      const v = (addInput.value||'').trim(); if (!v) return;
+      if (document.getElementById('ep-add-save').checked) addFav(v);
+      addInput.value = '';
+      showEmailOverlay(previewHtml);
+    };
+    document.getElementById('ep-mail-send').onclick = async ()=>{
+      const to = Array.from(document.querySelectorAll('#ep-mail-favs .ep-fav:checked')).map(el => el.value);
+      const extra = (document.getElementById('ep-add-email').value||'').trim(); if (extra) to.push(extra);
+      if (!to.length){ alert('Select at least one recipient or add an email.'); return; }
+      const subject = (document.getElementById('ep-subj').value || 'Job Update');
+      try {
+        const resp = await fetch('/.netlify/functions/send-email', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ to, subject, html: previewHtml })
+        });
+        if (resp.ok){ alert('Email sent!'); hide(); const overlay = document.getElementById('ep-overlay'); if (overlay) overlay.style.display = 'none'; }
+        else { const t = await resp.text(); alert('Email failed: ' + t); }
+      } catch(err){ alert('Email error: ' + (err && err.message || err)); }
+    };
+    wrap.style.display = 'block';
+  }
+}
+
