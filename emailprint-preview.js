@@ -289,4 +289,5 @@ function openPreview(){
   }
   addDelegatedHandler();
   init();
+  try{ window._epOpenPreview = openPreview; }catch(_){}
 })();

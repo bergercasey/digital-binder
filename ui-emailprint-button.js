@@ -14,9 +14,8 @@
     document.body.appendChild(btn);
     // Placeholder click (no-op for Step 1)
     btn.addEventListener('click', function(){
-      // no action yet — Step 2 will open the preview modal
-      // Keep a no-op to confirm placement only.
-      console.debug('[FAB] Email/Print clicked (placeholder)');
+      try { if (window._epOpenPreview) { window._epOpenPreview(); return; } } catch(_){}
+      console.debug('[FAB] Email/Print clicked');
     });
   }
 
