@@ -6,7 +6,7 @@
 
   // ---- Inline fallback preview/print if global hook is unavailable ----
 
-  // --- Safety shims to avoid ReferenceError ---
+  // --- Safety shims (ep_getValue, ep_getCrew) ---
   if (typeof ep_getValue !== 'function'){
     function ep_getValue(id){
       var el = document.getElementById(id);
@@ -130,8 +130,6 @@
         const dir = path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
         return location.origin + dir;
       } catch(_){ return ''; }
-          } catch(_){}
-      return 'Job Update';
     })();
     const css = `
       :root{ --ink:#111; --line:#e5e7eb; }
@@ -293,9 +291,7 @@
   } else {
     init();
   }
-      } catch(_){}
-      return 'Job Update';
-    })();
+})();
 
 
   // --- Fallback Email favorites helpers ---
@@ -347,9 +343,11 @@
     }
     const subjDefault = (() => {
       try {
-      const name = ep_getValue('job-name'); const po = ep_getValue('job-po');
-      return name ? (po ? `${name} — PO ${po}` : name) : 'Job Update';
-          } catch(_){}
+        const name = ep_getValue('job-name'); 
+        const po = ep_getValue('job-po');
+        if (name && po) return `${name} — PO ${po}`;
+        if (name) return name;
+      } catch(_){}
       return 'Job Update';
     })();
     const subjEl = document.getElementById('ep-subj');
