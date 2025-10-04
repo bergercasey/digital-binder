@@ -1,36 +1,45 @@
-/* Email/Print Add-on v5.2 (Build 1759578635)
- * Reliability upgrades:
- *  - Waits for Delete Selection via MutationObserver
- *  - If not found in time, renders a FLOATING Email/Print button (bottom-right)
- *  - Provides window.EmailPrint.openPreview() so you can hook any button you want
- * Visuals:
- *  - Light preview card + lighter-blue button
- * Data:
- *  - Scoped header/notes extraction to avoid duplicates (no 'Select all', no pure date rows)
+/* Email/Print Add-on v5.3 (Build 1759579321)
+ * Reliability + UX fixes:
+ *  - Global handlers for Close/Print/Send (Close now works)
+ *  - Optional FIXED selectors for Name/Address/Stage/Crew
+ *  - Safer notes extraction (no chips/dates/"Select all")
+ *  - Floating fallback button if anchor not found
  */
 (function(){"use strict";
   const CFG = Object.assign({
     deleteButtonSelectorList: ['#deleteSelected','[data-action="delete-selection"]','.delete-selection','.btn-delete-selection'],
+
     headerScopes: ['.job-header', '.detail-header', '.job-summary', '.job-card', 'main', '#app'],
     nameSelectors: ['.job-name', '.job-title', 'h1', 'h2'],
     addressSelectors: ['.job-address', 'a[href*="maps"]', '.address', 'p'],
     stageLabel: 'Stage',
     crewLabel: 'Crew',
-    fallbackDelayMs: 3000 // time before showing floating button
+
+    fixedNameSelector: '',
+    fixedAddressSelector: '',
+    fixedStageSelector: '',
+    fixedCrewSelector: '',
+
+    notesTextSelectors: [
+      '.note-text', '.note-body', '.log-text', '.log-body',
+      'textarea', 'pre', '.content', '.card-text', '.body', 'p'
+    ],
+
+    fallbackDelayMs: 3000
   }, window.EMAIL_PRINT_CONFIG || {});
 
   let cached = { delBtn: null, logsScope: null, headerScope: null, mounted: false, fallbackShown:false };
 
-  function elText(el) { return (el && (el.value!=null ? el.value : el.textContent) || '').trim(); }
-  function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
-  function looksLikeDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(String(s||'').trim()); }
-  function isTrivial(line){ return !line || /select\s*all/i.test(line) || looksLikeDate(line); }
+  const elText = (el) => (el && (el.value!=null ? el.value : el.textContent) || '').trim();
+  const escapeHtml = (s) => String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+  const looksLikeDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s||'').trim());
+  const isTrivial = (s) => !s || /select\s*all/i.test(s) || looksLikeDate(s);
 
   function toBulletedHTML(text){
     const lines = String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    const cleaned = lines.filter(l => !isTrivial(l));
+    const cleaned = lines.filter(l => !isTrivial(l) && !/^crew\s*:/i.test(l) && !/^stage\s*:/i.test(l));
     const items = cleaned.map(l => l.replace(/^(-|\*|•)\s+/, '').trim()).filter(Boolean);
-    if (!items.length) return '<p><em>(empty)</em></p>';
+    if (!items.length) return '';
     const seen = new Set(); const uniq = items.filter(t=> (seen.has(t)?false:(seen.add(t),true)));
     return '<ul>' + uniq.map(t => `<li>${escapeHtml(t)}</li>`).join('') + '</ul>';
   }
@@ -45,21 +54,48 @@
   function initScopes(){
     const del = findDeleteButton();
     cached.delBtn = del;
-    if (del){ cached.logsScope = del.closest('.log, .logs, .log-list, .log-panel, .notes, .list-group, .card, section, .container') || del.parentElement; }
-    for (const sel of CFG.headerScopes){ const h = document.querySelector(sel); if (h) { cached.headerScope = h; break; } }
+    if (del) cached.logsScope = del.closest('.log, .logs, .log-list, .log-panel, .notes, .list-group, .card, section, .container') || del.parentElement;
+
+    if (CFG.fixedNameSelector || CFG.fixedAddressSelector || CFG.fixedStageSelector || CFG.fixedCrewSelector){
+      cached.headerScope = document;
+    } else {
+      for (const sel of CFG.headerScopes){ const h = document.querySelector(sel); if (h) { cached.headerScope = h; break; } }
+    }
     if (!cached.headerScope) cached.headerScope = document.body;
   }
 
+  function getFixedOr(elSel, fallbackFn){
+    if (!elSel) return fallbackFn();
+    const el = document.querySelector(elSel);
+    if (!el) return fallbackFn();
+    const t = elText(el);
+    if (!t) return fallbackFn();
+    return t.replace(/^\s*\w[\w\s]*:\s*/,'').trim();
+  }
+
   function getName(){
-    const scope = cached.headerScope || document;
-    for (const sel of CFG.nameSelectors) { const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
-    return '(No Name)';
+    return getFixedOr(CFG.fixedNameSelector, () => {
+      const scope = cached.headerScope || document;
+      for (const sel of CFG.nameSelectors){ const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
+      return '(No Name)';
+    });
   }
+
   function getAddress(){
-    const scope = cached.headerScope || document;
-    for (const sel of CFG.addressSelectors) { const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
-    return '';
+    return getFixedOr(CFG.fixedAddressSelector, () => {
+      const scope = cached.headerScope || document;
+      for (const sel of CFG.addressSelectors){ const el = scope.querySelector(sel); if (el && elText(el)) return elText(el); }
+      return '';
+    });
   }
+
+  function getStage(){
+    return getFixedOr(CFG.fixedStageSelector, () => getChipValue('Stage'));
+  }
+  function getCrew(){
+    return getFixedOr(CFG.fixedCrewSelector, () => getChipValue('Crew'));
+  }
+
   function getChipValue(label){
     const scope = cached.headerScope || document;
     const nodes = Array.from(scope.querySelectorAll('*')).slice(0, 300);
@@ -80,12 +116,15 @@
       if (/all|select\s*all/i.test(labelText) || /all|select\s*all/i.test(cb.id||'')) continue;
       const entry = cb.closest('.log-entry, .note-entry, li, .list-group-item, .row, .item, .card, .entry') || cb.parentElement;
       if (!entry) continue;
+
       let text = '';
-      const candidates = entry.querySelectorAll('.note-text, .log-text, .content, .note-body, textarea, p');
-      for (const cel of candidates){ if (elText(cel)) { text = elText(cel); break; } }
+      for (const sel of CFG.notesTextSelectors){
+        const el = entry.querySelector(sel);
+        if (el && elText(el)) { text = elText(el); break; }
+      }
       if (!text) text = elText(entry);
       text = text.replace(/\s+/g,' ').trim();
-      if (!isTrivial(text)) texts.push(text);
+      if (!isTrivial(text) && !/^crew\s*:/i.test(text) && !/^stage\s*:/i.test(text)) texts.push(text);
     }
     const seen = new Set(); const out = [];
     for (const t of texts){ if (t.length>=3 && !seen.has(t)) { seen.add(t); out.push(t); } }
@@ -95,13 +134,17 @@
   function buildPreviewHTML(){
     const name = getName();
     const address = getAddress();
-    const stage = getChipValue(CFG.stageLabel);
-    const crew = getChipValue(CFG.crewLabel);
-    const lists = gatherSelectedNotes().map(toBulletedHTML).join('\n');
+    const stage = getStage();
+    const crew = getCrew();
+
+    const lists = gatherSelectedNotes().map(toBulletedHTML).filter(Boolean).join('\n');
     const meta = [];
     if (address) meta.push(`<div>${escapeHtml(address)}</div>`);
     meta.push(`<div><strong>Current stage:</strong> ${escapeHtml(stage)}</div>`);
-    meta.push(`<div><strong>Crew:</strong> ${escapeHtml(crew)}</div>`);
+    meta.push(`<div><strong>Crew:</strong> ${
+      escapeHtml(crew)
+    }</div>`);
+
     return `<div class="ep-card" style="background:#fff;color:#000;border-radius:10px;padding:16px;">
       <h2 style="margin:0 0 8px 0;font-weight:800;font-size:20px;">${escapeHtml(name)}</h2>
       <div class="ep-meta" style="margin-bottom:12px;line-height:1.35;font-size:14px;">${meta.join('')}</div>
@@ -179,8 +222,10 @@
     }
     const temp = document.createElement('div'); temp.innerHTML = html;
     const bullets = Array.from(temp.querySelectorAll('li')).map(li=>'• '+li.textContent.trim());
-    const address = getAddress(); const stage = getChipValue('Stage'); const crew = getChipValue('Crew');
-    const header = (getName() || '(No Name)') + (address ? '\n'+address : '') + '\nCurrent stage: ' + (stage||'') + '\nCrew: ' + (crew||'');
+    const header = (()=>{
+      const name = getName(); const address = getAddress(); const stage = getStage(); const crew = getCrew();
+      return name + (address ? '\n'+address : '') + '\nCurrent stage: ' + (stage||'') + '\nCrew: ' + (crew||'');
+    })();
     const body = encodeURIComponent(header + '\n\n' + (bullets.length? bullets.join('\n') : '(no notes selected)'));
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${body}`;
   }
@@ -228,17 +273,22 @@
     }
   }
 
-  // Expose a manual trigger if you want to wire your own button
+  // Global handlers so modal buttons always work
+  document.addEventListener('click', function(e){
+    const id = e && e.target && e.target.id;
+    if (id === 'ep-close') return closePreview();
+    if (id === 'ep-print') return printPreview();
+    if (id === 'ep-send') return sendEmail();
+  });
+
+  // Manual trigger
   window.EmailPrint = window.EmailPrint || { openPreview: () => showPreview() };
 
-  // Observe DOM for late renders
   const observer = new MutationObserver(() => { if (!cached.mounted) mount(); });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  // Fallback: floating button if we can't find the anchor soon
   setTimeout(() => { if (!cached.mounted) addFloatingFallback(); }, CFG.fallbackDelayMs);
 
-  // Also try on ready
   if (document.readyState !== 'loading') mount();
   else document.addEventListener('DOMContentLoaded', mount);
 
