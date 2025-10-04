@@ -51,7 +51,6 @@
     });
     return out;
   }
-
   function ensureModal(){
     if (document.getElementById("ep-overlay")) return;
     const overlay = document.createElement("div");
@@ -124,17 +123,20 @@
 
     body.innerHTML = `
       <div class="ep-name">${escapeHtml(name)}</div>
-      <div class="ep-field"><span class="ep-label">Address</span><div>${escapeHtml(address)}</div></div>
-      <div class="ep-field"><span class="ep-label">PO#</span><div>${escapeHtml(po)}</div></div>
-      <div class="ep-field"><span class="ep-label">Crew</span><div>${crew.map(c => escapeHtml(c)).join(", ")}</div></div>
-      <div class="ep-field"><span class="ep-label">Current Stage</span><div>${escapeHtml(stage)}</div></div>
-      <div class="ep-notes">
-        <h4>Notes</h4>
-        ${notesHtml}
+      <div>${escapeHtml(address)}</div>
+      <div>${escapeHtml(po)}</div>
+      <div>${crew.map(c => escapeHtml(c)).join(", ")}</div>
+      <div>${escapeHtml(stage)}</div>
+      <div class="ep-notes" style="margin-top:14px;">
+        ${notes.length ? notes.map(n => `
+          <div class="ep-note">
+            <div class="ep-ts" style="font-size:12px;color:#6b7280;">${escapeHtml(n.ts)}</div>
+            ${n.html}
+          </div>
+        `).join("") : `<div class="ep-note"><em>No notes selected.</em></div>`}
       </div>
     `;
-
-    // open
+// open
     overlay.style.display = "block";
     // wire close
     const close = () => { overlay.style.display = "none"; };
