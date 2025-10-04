@@ -187,7 +187,7 @@
     document.getElementById("ep-backdrop").onclick = close;
     const p = document.getElementById("ep-print"); if (p) p.onclick = ep_printAndClose;
     try{ window.__epCurrentHtml = body.innerHTML; window.__epOpenEmail = function(){ try{ (typeof showEmailOverlay==="function" ? showEmailOverlay : ep_showEmailOverlay)(window.__epCurrentHtml); }catch(_){ } }; }catch(_){}
-    const e = document.getElementById("ep-email"); if (e){ try{ e.onclick = window.__epOpenEmail; e.setAttribute("onclick","window.__epOpenEmail && window.__epOpenEmail()"); }catch(_){} }
+    const e = document.getElementById("ep-email"); if (e){ e.removeAttribute("onclick"); e.onclick = null; e.addEventListener("click", function(ev){ ev.preventDefault(); ev.stopPropagation(); try{ ep_showEmailOverlay(body.innerHTML); }catch(_){ } }, true); }
   }
   function ep_openPreviewEnsure(){
     // Prefer official hook if present
@@ -305,33 +305,8 @@
     const v = (email||'').trim(); if (!v) return;
     const list = ep_getFavs(); if (!list.includes(v)) { list.push(v); ep_saveFavs(list); }
   }
-  function ep_renderEmailPanel(previewHtml){
-    const modal = document.getElementById('ep-modal');
-    let panel = document.getElementById('ep-mail');
-    if (!panel){
-      panel = document.createElement('div'); panel.id = 'ep-mail';
-      panel.innerHTML = `
-        <div style="border-top:1px solid #e5e7eb; padding:12px 16px; display:grid; gap:8px;">
-          <div style="font-weight:600;">Send Email</div>
-          <div id="ep-favs"></div>
-          <div style="display:flex; gap:6px;">
-            <input id="ep-add-email" type="email" placeholder="add@email.com" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
-            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#374151;">
-              <input id="ep-add-save" type="checkbox" checked/> Save to favorites
-            </label>
-            <button id="ep-add-btn" class="ghost">Add</button>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <label style="min-width:60px; color:#6b7280; font-size:12px;">Subject</label>
-            <input id="ep-subj" type="text" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
-          </div>
-          <div style="display:flex; gap:8px; justify-content:flex-end;">
-            <button id="ep-send" class="primary">Send</button>
-          </div>
-        </div>`;
-      modal.appendChild(panel);
-    }
-    // Favorites list
+  function ep_renderEmailPanel(previewHtml){ try{ ep_showEmailOverlay(previewHtml); }catch(_){ } }
+// Favorites list
     const wrap = document.getElementById('ep-favs');
     const favs = ep_getFavs();
     if (!favs.length){
@@ -550,4 +525,17 @@ document.addEventListener('click', function(ev){
       }
     }
   }catch(_){}
+}, true);
+
+
+document.addEventListener('click', function epEmailCapFallback(ev){
+  try{
+    const t = ev && ev.target;
+    if (!t) return;
+    if (t.id === 'ep-email' || (t.closest && t.closest('#ep-email'))){
+      ev.preventDefault();
+      ev.stopPropagation();
+      try{ (typeof showEmailOverlay==='function' ? showEmailOverlay : ep_showEmailOverlay)(document.getElementById('ep-body').innerHTML); }catch(_){ }
+    }
+  }catch(_){ }
 }, true);

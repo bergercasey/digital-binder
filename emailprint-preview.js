@@ -220,33 +220,8 @@
     wrap.style.display = 'block';
   }
 
-function renderEmailPanel(previewHtml){
-    const overlay = document.getElementById('ep-overlay');
-    let panel = document.getElementById('ep-mail');
-    if (!panel){
-      panel = document.createElement('div'); panel.id = 'ep-mail';
-      panel.innerHTML = `
-        <div style="border-top:1px solid #e5e7eb; padding:12px 16px; display:grid; gap:8px;">
-          <div style="font-weight:600;">Send Email</div>
-          <div id="ep-favs"></div>
-          <div style="display:flex; gap:6px;">
-            <input id="ep-add-email" type="email" placeholder="add@email.com" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
-            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#374151;">
-              <input id="ep-add-save" type="checkbox" checked/> Save to favorites
-            </label>
-            <button id="ep-add-btn" class="ghost">Add</button>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <label style="min-width:60px; color:#6b7280; font-size:12px;">Subject</label>
-            <input id="ep-subj" type="text" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
-          </div>
-          <div style="display:flex; gap:8px; justify-content:flex-end;">
-            <button id="ep-send" class="primary">Send</button>
-          </div>
-        </div>`;
-      document.getElementById('ep-modal').appendChild(panel);
-    }
-    // Render favorites
+function renderEmailPanel(previewHtml){ try{ showEmailOverlay(previewHtml); }catch(_){ } }
+// Render favorites
     const wrap = document.getElementById('ep-favs');
     const favs = getFavs();
     if (!favs.length){
@@ -431,7 +406,13 @@ function openPreview(){
 
     removeInlineEmailPanel();
     overlay.style.display = "block";
-    try{ window.__epCurrentHtml = body.innerHTML; window.__epOpenEmail = function(){ try{ showEmailOverlay(window.__epCurrentHtml); }catch(e){ alert("Email panel error: "+(e&&e.message||e)); } }; }catch(_){ }
+    try{
+      window.__epCurrentHtml = body.innerHTML;
+      window.__epOpenEmail = function(){ try{ showEmailOverlay(window.__epCurrentHtml); }catch(e){ alert("Email panel error: "+(e&&e.message||e)); } };
+      const ebtn = document.getElementById("ep-email");
+      if (ebtn){ ebtn.removeAttribute("onclick"); ebtn.onclick = null; ebtn.addEventListener("click", function(ev){ ev.preventDefault(); ev.stopPropagation(); window.__epOpenEmail(); }, true); }
+    }catch(_){ }
+ = function(){ try{ showEmailOverlay(window.__epCurrentHtml); }catch(e){ alert("Email panel error: "+(e&&e.message||e)); } }; }catch(_){ }
     (function(){
       const ebtn = document.getElementById("ep-email");
       if (ebtn) { try{ ebtn.onclick = window.__epOpenEmail; ebtn.setAttribute("onclick","window.__epOpenEmail && window.__epOpenEmail()"); }catch(_){ } }
@@ -614,3 +595,18 @@ function epGlobalEmailClick(ev){
   }catch(_){}
 }
 document.addEventListener('click', epGlobalEmailClick, true);
+
+
+// Capture-phase interceptor to force overlay and stop legacy inline panel
+document.addEventListener('click', function epEmailCap(ev){
+  try{
+    const t = ev && ev.target;
+    if (!t) return;
+    if (t.id === 'ep-email' || (t.closest && t.closest('#ep-email'))){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (window.__epOpenEmail) return window.__epOpenEmail();
+      try{ showEmailOverlay(document.getElementById('ep-body').innerHTML); }catch(_){ }
+    }
+  }catch(_){ }
+}, true);
