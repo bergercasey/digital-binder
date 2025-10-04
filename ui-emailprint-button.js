@@ -5,6 +5,39 @@
   function createFAB(){
 
   // ---- Inline fallback preview/print if global hook is unavailable ----
+
+  // --- Safety shims to avoid ReferenceError ---
+  if (typeof ep_getValue !== 'function'){
+    function ep_getValue(id){
+      var el = document.getElementById(id);
+      if (!el) return "";
+      if (el.tagName === "SELECT"){
+        var opt = el.options[el.selectedIndex];
+        return (opt && (opt.text || opt.value)) || el.value || "";
+      }
+      return (el.value || el.textContent || "").trim();
+    }
+  }
+  if (typeof ep_getCrew !== 'function'){
+    function ep_getCrew(){
+      var box = document.getElementById("crew-box"); if (!box) return [];
+      var out = [];
+      Array.prototype.forEach.call(box.querySelectorAll('input[type="checkbox"]'), function(cb){
+        if (cb.checked){
+          var name = "";
+          var wrap = cb.parentElement;
+          if (wrap){
+            var span = wrap.querySelector("span");
+            name = span ? span.textContent.trim() : (wrap.textContent || "").replace(/\s+/g," ").trim();
+          }
+          if (!name) name = cb.getAttribute("data-name") || "";
+          if (name) out.push(name);
+        }
+      });
+      return out;
+    }
+  }
+
   function ep_qs(sel, root){ return (root||document).querySelector(sel); }
   function ep_qsa(sel, root){ return Array.from((root||document).querySelectorAll(sel)); }
   function ep_escape(s){ return (s||"").replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
@@ -97,6 +130,8 @@
         const dir = path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
         return location.origin + dir;
       } catch(_){ return ''; }
+          } catch(_){}
+      return 'Job Update';
     })();
     const css = `
       :root{ --ink:#111; --line:#e5e7eb; }
@@ -258,7 +293,9 @@
   } else {
     init();
   }
-})();
+      } catch(_){}
+      return 'Job Update';
+    })();
 
 
   // --- Fallback Email favorites helpers ---
@@ -309,8 +346,11 @@
       }).join('');
     }
     const subjDefault = (() => {
+      try {
       const name = ep_getValue('job-name'); const po = ep_getValue('job-po');
       return name ? (po ? `${name} — PO ${po}` : name) : 'Job Update';
+          } catch(_){}
+      return 'Job Update';
     })();
     const subjEl = document.getElementById('ep-subj');
     if (subjEl && !subjEl.value) subjEl.value = subjDefault;
