@@ -1,7 +1,12 @@
-/* Email/Print Add-on v5.1 (Build 1759578198)
- * - Non-destructive: never touches your Delete button; only adds a sibling Email/Print button
- * - MutationObserver waits for the Delete Selection button to exist (handles late-render UIs)
- * - Clean header/notes scoping from v5 (no duplicate chips/dates/select-all)
+/* Email/Print Add-on v5.2 (Build 1759578635)
+ * Reliability upgrades:
+ *  - Waits for Delete Selection via MutationObserver
+ *  - If not found in time, renders a FLOATING Email/Print button (bottom-right)
+ *  - Provides window.EmailPrint.openPreview() so you can hook any button you want
+ * Visuals:
+ *  - Light preview card + lighter-blue button
+ * Data:
+ *  - Scoped header/notes extraction to avoid duplicates (no 'Select all', no pure date rows)
  */
 (function(){"use strict";
   const CFG = Object.assign({
@@ -10,10 +15,11 @@
     nameSelectors: ['.job-name', '.job-title', 'h1', 'h2'],
     addressSelectors: ['.job-address', 'a[href*="maps"]', '.address', 'p'],
     stageLabel: 'Stage',
-    crewLabel: 'Crew'
+    crewLabel: 'Crew',
+    fallbackDelayMs: 3000 // time before showing floating button
   }, window.EMAIL_PRINT_CONFIG || {});
 
-  let cached = { delBtn: null, logsScope: null, headerScope: null, mounted: false };
+  let cached = { delBtn: null, logsScope: null, headerScope: null, mounted: false, fallbackShown:false };
 
   function elText(el) { return (el && (el.value!=null ? el.value : el.textContent) || '').trim(); }
   function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
@@ -56,8 +62,8 @@
   }
   function getChipValue(label){
     const scope = cached.headerScope || document;
-    const nodes = Array.from(scope.querySelectorAll('*'));
-    for (const el of nodes.slice(0, 300)){ 
+    const nodes = Array.from(scope.querySelectorAll('*')).slice(0, 300);
+    for (const el of nodes){
       const t = elText(el); if (!t) continue;
       const m = t.match(new RegExp('^\s*'+label+'\s*:\s*(.+)$','i'));
       if (m) return m[1].trim();
@@ -179,11 +185,7 @@
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${body}`;
   }
 
-  function mount(){
-    if (cached.mounted) return;
-    initScopes();
-    const del = cached.delBtn;
-    if (!del || del.dataset.emailPrintInjected) return;
+  function addSiblingButton(del){
     const btn = document.createElement('button');
     btn.id = 'emailPrint';
     btn.textContent = 'Email/Print';
@@ -196,27 +198,48 @@
     btn.style.padding = '8px 12px';
     btn.style.fontWeight = '600';
     del.insertAdjacentElement('afterend', btn);
-    del.dataset.emailPrintInjected = '1';
-    cached.mounted = true;
-
     btn.addEventListener('click', showPreview);
-    document.addEventListener('click', function(e){
-      if (e.target && e.target.id === 'ep-close') closePreview();
-      if (e.target && e.target.id === 'ep-print') printPreview();
-      if (e.target && e.target.id === 'ep-send') sendEmail();
-    });
   }
 
-  // Observe DOM changes until we can mount
-  const observer = new MutationObserver(() => {
-    if (!cached.mounted) {
-      const found = findDeleteButton();
-      if (found) mount();
+  function addFloatingFallback(){
+    if (cached.fallbackShown) return;
+    cached.fallbackShown = true;
+    const btn = document.createElement('button');
+    btn.id = 'emailPrintFloating';
+    btn.textContent = 'Email/Print';
+    Object.assign(btn.style, {
+      position:'fixed', right:'16px', bottom:'16px', zIndex:'2147483647',
+      background:'#4EA7FF', color:'#fff', border:'1px solid rgba(0,0,0,.2)',
+      borderRadius:'999px', padding:'10px 14px', fontWeight:'700',
+      boxShadow:'0 4px 14px rgba(0,0,0,.2)', cursor:'pointer'
+    });
+    document.body.appendChild(btn);
+    btn.addEventListener('click', showPreview);
+  }
+
+  function mount(){
+    if (cached.mounted) return;
+    initScopes();
+    const del = cached.delBtn;
+    if (del && !del.dataset.emailPrintInjected) {
+      addSiblingButton(del);
+      del.dataset.emailPrintInjected = '1';
+      cached.mounted = true;
     }
-  });
+  }
+
+  // Expose a manual trigger if you want to wire your own button
+  window.EmailPrint = window.EmailPrint || { openPreview: () => showPreview() };
+
+  // Observe DOM for late renders
+  const observer = new MutationObserver(() => { if (!cached.mounted) mount(); });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  // Also try on ready (in case button is already there)
+  // Fallback: floating button if we can't find the anchor soon
+  setTimeout(() => { if (!cached.mounted) addFloatingFallback(); }, CFG.fallbackDelayMs);
+
+  // Also try on ready
   if (document.readyState !== 'loading') mount();
   else document.addEventListener('DOMContentLoaded', mount);
+
 })();
