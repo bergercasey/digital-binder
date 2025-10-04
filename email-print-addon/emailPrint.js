@@ -1,24 +1,15 @@
 
-/* Email/Print Add-on v6.1 (Build 1759581567)
- * - Floating button shows ONLY on job views (heuristics + optional config override)
- * - Hook-first (BinderEmailPrint.getContext / isJobPage), fallback DOM minimal
- * - Hidden-iframe print, robust close, light preview
+/* Email/Print Add-on v6.2 (Build 1759581802)
+ * Stronger job-page detection (header + checkboxes OR 'Stage:/Crew:' present)
+ * Hook-first; minimal fallback; floating button on job only
  */
 (function(){"use strict";
   const CFG = Object.assign({
-    jobContextSelectors: ['.detail-header', '.job-header', '[data-job-id]'],
-    fixedNameSelector: '',
-    fixedAddressSelector: '',
-    fixedStageSelector: '',
-    fixedCrewSelector: '',
-    notesTextSelectors: ['.content','textarea','pre','p','.note-text','.log-text'],
-    noteCheckboxSelector: '.log-entry input[type="checkbox"]:checked',
     showDelayMs: 200
   }, window.EMAIL_PRINT_CONFIG || {});
 
   const T = el => (el && (el.value!=null ? el.value : el.textContent) || '').trim();
   const esc = s => String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
-  const q = sel => { try { return sel ? document.querySelector(sel) : null; } catch { return null; } };
 
   function bullets(items){
     const lines=[];
@@ -30,80 +21,62 @@
     return '<ul>'+lines.map(li=>'<li>'+esc(li)+'</li>').join('')+'</ul>';
   }
 
-  function buildHTML(ctx){
+  function html(ctx){
     return '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'+
       '<h2 style="margin:0 0 8px 0;font-weight:800;font-size:20px;">'+esc(ctx.name||'(No Name)')+'</h2>'+
       (ctx.address? '<div>'+esc(ctx.address)+'</div>':'')+
       '<div><strong>Current stage:</strong> '+esc(ctx.stage||'')+'</div>'+
       '<div><strong>Crew:</strong> '+esc(ctx.crew||'')+'</div>'+
-      '<div style="margin-top:12px">'+bullets(ctx.notes)+'</div>'+
+      '<div style="margin-top:12px">'+bullets(ctx.notes||[])+'</div>'+
     '</div>';
   }
 
-  function callAppContext(){
+  // --------- Context (prefer app hook) ---------
+  function getCtx(){
     try {
       if (window.BinderEmailPrint && typeof window.BinderEmailPrint.getContext==='function') {
         const d = window.BinderEmailPrint.getContext();
-        if (d && typeof d==='object' && Array.isArray(d.notes)) {
-          return {
-            name:(d.name||'').trim(), address:(d.address||'').trim(),
-            stage:(d.stage||'').trim(), crew:(d.crew||'').trim(),
-            notes:d.notes.filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim())
-          };
-        }
+        if (d && typeof d==='object') return {
+          name:(d.name||'').trim(),
+          address:(d.address||'').trim(),
+          stage:(d.stage||'').trim(),
+          crew:(d.crew||'').trim(),
+          notes: Array.isArray(d.notes) ? d.notes.filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim()) : []
+        };
       }
     } catch(e){ console.warn('[Email/Print] context error', e); }
-    return null;
+    // fallback minimal; still shows preview
+    return { name:'', address:'', stage:'', crew:'', notes:[] };
   }
 
-  function pickLabelValue(label){
-    const nodes = Array.from(document.querySelectorAll('.detail-header *, .job-header *')).slice(0,300);
-    for (const el of nodes){ const t=T(el); if(!t) continue; const m=t.match(new RegExp('^\\s*'+label+'\\s*:\\s*(.+)$','i')); if(m) return m[1].trim(); }
-    return '';
+  // --------- Job view detection ---------
+  function hasHeader(){
+    return !!(document.querySelector('.detail-header h1, .job-header h1, h1, .job-title'));
   }
-
-  function gatherCheckedNotes(){
-    const cbs = Array.from(document.querySelectorAll(CFG.noteCheckboxSelector));
-    const out=[];
-    for (const cb of cbs){
-      const lbl = T(cb.closest('label'));
-      if (/select\\s*all/i.test(lbl) || /select\\s*all/i.test(cb.id||'')) continue;
-      const row = cb.closest('.log-entry, .list-group-item, .note-entry, .row, .card') || cb.parentElement;
-      if (!row) continue;
-      let text='';
-      for (const sel of CFG.notesTextSelectors){ const el=row.querySelector(sel); if(el && T(el)){ text=T(el); break; } }
-      if(!text) text=T(row);
-      text=text.replace(/\\s+/g,' ').trim();
-      if(!text) continue;
-      if (/^stage\\s*:/i.test(text) || /^crew\\s*:/i.test(text)) continue;
-      if (/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) continue;
-      out.push(text);
-    }
-    const seen=new Set(); const uniq=[]; for(const t of out) if(!seen.has(t)){ seen.add(t); uniq.push(t); }
-    return uniq;
+  function hasNoteCheckboxes(){
+    return !!(document.querySelector('.log-entry input[type="checkbox"], .logs input[type="checkbox"], .log input[type="checkbox"], .list-group input[type="checkbox"]'));
   }
-
-  function fallbackContext(){
-    const name = T(q(CFG.fixedNameSelector)) || T(q('.detail-header h1')) || T(q('.job-header h1'));
-    const address = T(q(CFG.fixedAddressSelector)) || T(q('.detail-header a[href*="maps"]')) || T(q('.job-header .address'));
-    const stage = T(q(CFG.fixedStageSelector)) || pickLabelValue('Stage');
-    const crew = T(q(CFG.fixedCrewSelector)) || pickLabelValue('Crew');
-    const notes = gatherCheckedNotes();
-    return { name, address, stage, crew, notes };
+  function hasStageOrCrewText(){
+    const txt = document.body.innerText || '';
+    return /\bStage\s*:/i.test(txt) || /\bCrew\s*:/i.test(txt);
   }
-
   function isOnJobPage(){
+    // App-provided hook wins
     if (window.BinderEmailPrint && typeof window.BinderEmailPrint.isJobPage==='function') {
       try { return !!window.BinderEmailPrint.isJobPage(); } catch { return false; }
     }
-    for (const sel of CFG.jobContextSelectors) { try { if (document.querySelector(sel)) return true; } catch {} }
+    // Heuristic
+    if (!hasHeader()) return false;
+    if (hasNoteCheckboxes()) return true;
+    if (hasStageOrCrewText()) return true;
     return false;
   }
 
+  // --------- Modal & actions ---------
   function closePreview(){ const el=document.getElementById('ep-overlay'); if(el) el.remove(); }
   function openPreview(){
     if (!isOnJobPage()) return;
-    const ctx = callAppContext() || fallbackContext();
+    const ctx = getCtx();
     closePreview();
     const overlay=document.createElement('div');
     overlay.id='ep-overlay';
@@ -114,10 +87,7 @@
           '<div>Preview</div>'+
           '<button id="ep-close" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.15);background:#fff;cursor:pointer">✕</button>'+
         '</div>'+
-        '<div style="padding:14px;">'+
-          buildHTML(ctx)+
-          '<div style="font-size:12px;opacity:.7;margin-top:8px;">This preview is exactly what will be printed or emailed.</div>'+
-        '</div>'+
+        '<div style="padding:14px;">'+ html(ctx) +'</div>'+
         '<div style="padding:10px 14px;border-top:1px solid #e0e6ea;display:flex;gap:10px;justify-content:flex-end;">'+
           '<button id="ep-send"  style="padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,.15);background:#4EA7FF;color:#fff;cursor:pointer">Send Email</button>'+
           '<button id="ep-print" style="padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,.15);background:#fff;cursor:pointer">Print</button>'+
@@ -127,10 +97,10 @@
   }
 
   function printPreview(){
-    const ctx = callAppContext() || fallbackContext();
+    const ctx = getCtx();
     const docHtml='<!doctype html><html><head><meta charset="utf-8"><title>Print</title>'+
       '<style>@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}body{margin:0;padding:20px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#fff;color:#000}.ep-notes ul{margin:0;padding-left:20px}.ep-notes li{margin:6px 0}</style>'+
-      '</head><body>'+buildHTML(ctx)+'</body></html>';
+      '</head><body>'+html(ctx)+'</body></html>';
     const iframe=document.createElement('iframe');
     Object.assign(iframe.style,{position:'fixed',right:'-9999px',bottom:'-9999px'});
     document.body.appendChild(iframe);
@@ -138,22 +108,24 @@
     iframe.onload=()=>setTimeout(()=>{ iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(()=>iframe.remove(),400); },50);
   }
 
-  async function sendEmail(){
-    const ctx = callAppContext() || fallbackContext();
-    const html = buildHTML(ctx);
-    const text = html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-    const body = encodeURIComponent(text);
+  function sendEmail(){
+    const ctx = getCtx();
+    const h = html(ctx).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    const body = encodeURIComponent(h);
     const subject = encodeURIComponent(ctx.name || 'Job Update');
     location.href = 'mailto:?subject='+subject+'&body='+body;
   }
 
+  // --------- Floating button ---------
   let btn=null, lastHref=location.href;
   function ensureButton(){
     const shouldShow = isOnJobPage();
     if (shouldShow && !btn) {
       btn=document.createElement('button');
       btn.id='emailPrintFloating'; btn.textContent='Email/Print';
-      Object.assign(btn.style,{ position:'fixed', right:'16px', bottom:'16px', zIndex:'2147483647', background:'#4EA7FF', color:'#fff', border:'1px solid rgba(0,0,0,.2)', borderRadius:'999px', padding:'10px 14px', fontWeight:'700', boxShadow:'0 4px 14px rgba(0,0,0,.2)', cursor:'pointer' });
+      Object.assign(btn.style,{ position:'fixed', right:'16px', bottom:'16px', zIndex:'2147483647',
+        background:'#4EA7FF', color:'#fff', border:'1px solid rgba(0,0,0,.2)', borderRadius:'999px',
+        padding:'10px 14px', fontWeight:'700', boxShadow:'0 4px 14px rgba(0,0,0,.2)', cursor:'pointer' });
       btn.addEventListener('click', openPreview);
       document.body.appendChild(btn);
     } else if (!shouldShow && btn) { btn.remove(); btn=null; }
@@ -167,6 +139,5 @@
 
   const mo=new MutationObserver(()=>ensureButton()); mo.observe(document.documentElement,{childList:true,subtree:true});
   setInterval(()=>{ if(lastHref!==location.href){ lastHref=location.href; ensureButton(); } }, 400);
-
   setTimeout(ensureButton, CFG.showDelayMs);
 })();
