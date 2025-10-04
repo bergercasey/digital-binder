@@ -259,6 +259,26 @@ function openPreview(){
     fab.addEventListener("click", openPreview);
   }
 
+  function addDelegatedHandler(){
+    // Capture clicks even if the FAB is re-created later
+    document.addEventListener('click', function(e){
+      const target = e.target;
+      if (!target) return;
+      // Direct match
+      if (target.id === 'emailPrintFAB'){ 
+        e.preventDefault(); 
+        try { openPreview(); } catch(_){}
+        return;
+      }
+      // Click on a child within the button (unlikely, but safe)
+      const btn = target.closest && target.closest('#emailPrintFAB');
+      if (btn){
+        e.preventDefault();
+        try { openPreview(); } catch(_){}
+      }
+    }, true);
+  }
+
   function init(){
     if (document.readyState === "loading"){
       document.addEventListener("DOMContentLoaded", attach);
@@ -267,5 +287,6 @@ function openPreview(){
     }
     let tries = 0; const t = setInterval(() => { attach(); tries++; if (tries>=10) clearInterval(t); }, 400);
   }
+  addDelegatedHandler();
   init();
 })();
