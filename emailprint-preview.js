@@ -69,7 +69,7 @@
           <button id="ep-close" aria-label="Close">×</button>
         </div>
         <div id="ep-body"></div>
-        <div id="ep-foot">
+        <div id="ep-foot">\n          <button id="ep-print" class="primary">Print</button>
           <button id="ep-close-2" class="ghost">Close</button>
         </div>
       </div>
@@ -107,7 +107,65 @@
 
   function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
 
-  function openPreview(){
+  
+  function buildPrintHtml(inner){
+    // Inline minimal styles to match modal view
+    const css = `
+      :root{ --ink:#111; --line:#e5e7eb; }
+      body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; color: var(--ink); margin: 24px; }
+      .ep-name{ font-weight: 800; font-size: 18px; margin: 0 0 8px 0; }
+      .ep-note{ margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+      .ep-ts{ font-size: 12px; color: #6b7280; }
+      .ep-note :where(p, ul, ol){ margin: 6px 0; }
+      .ep-note ul{ padding-left: 20px; list-style: disc; }
+      .ep-note ol{ padding-left: 20px; list-style: decimal; }
+      @page { margin: 16mm; }
+    `;
+    return `<!doctype html>
+<html><head><meta charset="utf-8"><title>Print</title><style>${css}</style></head>
+<body>${inner}</body></html>`;
+  }
+
+  function printPreviewAndClose(){
+    const overlay = document.getElementById("ep-overlay");
+    const body = document.getElementById("ep-body");
+    if (!body) return;
+    // Create hidden iframe
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow || iframe.contentDocument;
+    const w = iframe.contentWindow;
+    const d = iframe.contentDocument || (doc && doc.document);
+    const html = buildPrintHtml(body.innerHTML);
+    (d || doc.document).open();
+    (d || doc.document).write(html);
+    (d || doc.document).close();
+
+    // Close overlay after printing
+    const cleanup = () => {
+      try { document.body.removeChild(iframe); } catch(_){}
+      if (overlay) overlay.style.display = "none";
+    };
+
+    if (w) {
+      // Safari/iOS friendly approach
+      const after = () => { w.removeEventListener('afterprint', after); cleanup(); };
+      try { w.addEventListener('afterprint', after); } catch(_){}
+      try { w.focus(); } catch(_){}
+      try { w.print(); } catch(_){ cleanup(); }
+      // Fallback cleanup
+      setTimeout(cleanup, 2000);
+    } else {
+      cleanup();
+    }
+  }
+function openPreview(){
     injectStyles();
     ensureModal();
     const overlay = document.getElementById("ep-overlay");
@@ -134,6 +192,7 @@
     `;
 
     overlay.style.display = "block";
+    const pbtn = document.getElementById('ep-print'); if (pbtn) pbtn.onclick = printPreviewAndClose;
     const close = () => { overlay.style.display = "none"; };
     document.getElementById("ep-close").onclick = close;
     document.getElementById("ep-close-2").onclick = close;

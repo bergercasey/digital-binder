@@ -33,7 +33,7 @@
         padding: 12px 16px;
         border-radius: 999px;
         font-weight: 600;
-        border: 1px solid #bfdbfe;
+        border: 1px solid #dbeafe;
         background: #bfdbfe;
         color: #0b1220;
         box-shadow: 0 6px 20px rgba(0,0,0,0.15);
