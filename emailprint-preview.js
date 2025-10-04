@@ -69,7 +69,7 @@
           <button id="ep-close" aria-label="Close">×</button>
         </div>
         <div id="ep-body"></div>
-        <div id="ep-foot">\n          <button id="ep-print" class="primary">Print</button>
+        <div id="ep-foot">\n          <button id="ep-email" class="primary">Email</button>\n          <button id="ep-email" class="primary">Email</button>\n          <button id="ep-print" class="ghost">Print</button>
           <button id="ep-close-2" class="ghost">Close</button>
         </div>
       </div>
@@ -105,7 +105,100 @@
     document.head.appendChild(st);
   }
 
-  function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
+  
+  // --- Email favorites helpers ---
+  function favsKey(){ return 'ep_favorites'; }
+  function getFavs(){
+    try { const raw = localStorage.getItem(favsKey()); return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []; } catch(_){ return []; }
+  }
+  function saveFavs(list){ try{ localStorage.setItem(favsKey(), JSON.stringify(list||[])); }catch(_){ } }
+  function addFav(email){
+    const v = (email||'').trim(); if (!v) return;
+    const list = getFavs(); if (!list.includes(v)) { list.push(v); saveFavs(list); }
+  }
+
+  function renderEmailPanel(previewHtml){
+    const overlay = document.getElementById('ep-overlay');
+    let panel = document.getElementById('ep-mail');
+    if (!panel){
+      panel = document.createElement('div'); panel.id = 'ep-mail';
+      panel.innerHTML = `
+        <div style="border-top:1px solid #e5e7eb; padding:12px 16px; display:grid; gap:8px;">
+          <div style="font-weight:600;">Send Email</div>
+          <div id="ep-favs"></div>
+          <div style="display:flex; gap:6px;">
+            <input id="ep-add-email" type="email" placeholder="add@email.com" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#374151;">
+              <input id="ep-add-save" type="checkbox" checked/> Save to favorites
+            </label>
+            <button id="ep-add-btn" class="ghost">Add</button>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <label style="min-width:60px; color:#6b7280; font-size:12px;">Subject</label>
+            <input id="ep-subj" type="text" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;"/>
+          </div>
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button id="ep-send" class="primary">Send</button>
+          </div>
+        </div>`;
+      document.getElementById('ep-modal').appendChild(panel);
+    }
+    // Render favorites
+    const wrap = document.getElementById('ep-favs');
+    const favs = getFavs();
+    if (!favs.length){
+      wrap.innerHTML = `<div style="font-size:12px; color:#6b7280;">No favorites yet. Add an email above, check "Save to favorites", then click Add.</div>`;
+    } else {
+      wrap.innerHTML = `<div style="font-size:12px; color:#6b7280; margin-bottom:4px;">Favorites</div>` + favs.map(e => {
+        const esc = e.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        return `<label style="display:inline-flex; align-items:center; gap:6px; margin:4px 8px 4px 0;"><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc}</label>`;
+      }).join('');
+    }
+    const subjDefault = (() => {
+      const name = getValue('job-name'); const po = getValue('job-po');
+      return name ? (po ? `${name} — PO ${po}` : name) : 'Job Update';
+    })();
+    const subjEl = document.getElementById('ep-subj');
+    if (subjEl && !subjEl.value) subjEl.value = subjDefault;
+
+    // Wiring
+    const addBtn = document.getElementById('ep-add-btn');
+    const addInput = document.getElementById('ep-add-email');
+    addBtn.onclick = () => {
+      const v = (addInput.value||'').trim();
+      if (!v) return;
+      if (document.getElementById('ep-add-save').checked) addFav(v);
+      addInput.value = '';
+      renderEmailPanel(previewHtml); // re-render list
+    };
+
+    document.getElementById('ep-send').onclick = async () => {
+      const to = Array.from(document.querySelectorAll('#ep-favs .ep-fav:checked')).map(el => el.value);
+      const extra = (addInput.value||'').trim();
+      if (extra) to.push(extra);
+      if (!to.length){ alert('Select at least one recipient or add an email.'); return; }
+      const subject = document.getElementById('ep-subj').value || 'Job Update';
+      try {
+        const resp = await fetch('/.netlify/functions/send-email', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ to, subject, html: previewHtml })
+        });
+        if (resp.ok){
+          alert('Email sent!');
+          // Close the overlay
+          const overlay = document.getElementById('ep-overlay');
+          if (overlay) overlay.style.display = 'none';
+        } else {
+          const t = await resp.text();
+          alert('Email failed: ' + t);
+        }
+      } catch (err) {
+        alert('Email error: ' + (err && err.message || err));
+      }
+    };
+  }
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
 
   
   
@@ -235,6 +328,7 @@ function openPreview(){
 
     overlay.style.display = "block";
     const pbtn = document.getElementById('ep-print'); if (pbtn) pbtn.onclick = printPreviewAndClose;
+    const ebtn = document.getElementById('ep-email'); if (ebtn) ebtn.onclick = () => renderEmailPanel(body.innerHTML);
     const close = () => { overlay.style.display = "none"; };
     document.getElementById("ep-close").onclick = close;
     document.getElementById("ep-close-2").onclick = close;
