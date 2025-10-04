@@ -110,7 +110,6 @@
   
   
   function buildPrintHtml(inner){
-    // Inline minimal styles to match modal view; add <base> so relative URLs resolve in web context
     const baseHref = (() => {
       try {
         const path = (location.pathname || '/');
@@ -132,10 +131,10 @@
     return `<!doctype html>
 <html>
 <head>
-<meta charset="utf-8"><title>Print</title>
-<base href="${baseHref}">
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<style>${css}</style>
+  <meta charset="utf-8"><title>Print</title>
+  <base href="${baseHref}">
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>${css}</style>
 </head>
 <body>${inner}</body>
 </html>`;
@@ -146,7 +145,6 @@
     const body = document.getElementById("ep-body");
     if (!body) return;
 
-    // Create hidden iframe
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
     iframe.style.right = "0";
@@ -164,25 +162,16 @@
       if (overlay) overlay.style.display = "none";
     };
 
-    // Use srcdoc where supported; otherwise write into the iframe document
-    let done = false;
-    const safePrint = () => {
-      if (done) return;
-      done = true
-    };
-
     const onFrameReady = () => {
       try {
         const w = iframe.contentWindow;
         if (!w) { cleanup(); return; }
-        // Wait a couple of frames to ensure layout paints (helps Chrome/Edge)
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             try { w.focus(); } catch(_){}
             const after = () => { try{ w.removeEventListener('afterprint', after);}catch(_){ } cleanup(); };
             try { w.addEventListener('afterprint', after); } catch(_){}
             try { w.print(); } catch(_){ cleanup(); }
-            // Fallback cleanup
             setTimeout(cleanup, 2500);
           });
         });
@@ -193,7 +182,7 @@
       iframe.onload = onFrameReady;
       iframe.srcdoc = html;
     } else {
-      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      const doc = iframe.contentDocument || iframe.contentWindow && iframe.contentWindow.document;
       if (doc){
         iframe.onload = onFrameReady;
         doc.open(); doc.write(html); doc.close();
@@ -202,6 +191,7 @@
       }
     }
   }
+catch(_){}
       if (overlay) overlay.style.display = "none";
     };
 
@@ -259,26 +249,6 @@ function openPreview(){
     fab.addEventListener("click", openPreview);
   }
 
-  function addDelegatedHandler(){
-    // Capture clicks even if the FAB is re-created later
-    document.addEventListener('click', function(e){
-      const target = e.target;
-      if (!target) return;
-      // Direct match
-      if (target.id === 'emailPrintFAB'){ 
-        e.preventDefault(); 
-        try { openPreview(); } catch(_){}
-        return;
-      }
-      // Click on a child within the button (unlikely, but safe)
-      const btn = target.closest && target.closest('#emailPrintFAB');
-      if (btn){
-        e.preventDefault();
-        try { openPreview(); } catch(_){}
-      }
-    }, true);
-  }
-
   function init(){
     if (document.readyState === "loading"){
       document.addEventListener("DOMContentLoaded", attach);
@@ -287,7 +257,6 @@ function openPreview(){
     }
     let tries = 0; const t = setInterval(() => { attach(); tries++; if (tries>=10) clearInterval(t); }, 400);
   }
-  addDelegatedHandler();
   init();
   try{ window._epOpenPreview = openPreview; }catch(_){}
 })();

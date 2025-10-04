@@ -13,11 +13,8 @@
     btn.style.display = 'none'; // hidden until a job tab is active
     document.body.appendChild(btn);
     // Placeholder click (no-op for Step 1)
-    btn.addEventListener('click', function(){
-      try { if (window._epOpenPreview) { window._epOpenPreview(); return; } } catch(_){}
-      console.debug('[FAB] Email/Print clicked');
-    });
-  }
+    btn.addEventListener('click', function(){ try { if (window._epOpenPreview) window._epOpenPreview(); } catch(_){ console.warn('Preview open failed'); } });
+}
 
   function injectStyles(){
     if (document.getElementById('fab-ep-styles')) return;
@@ -82,6 +79,11 @@
     createFAB();
     updateFABVisibility();
     setupObservers();
+    // Safety: rebind click in case element is replaced
+    setInterval(() => {
+      const b = document.getElementById('emailPrintFAB');
+      if (b && !b._epBound){ b._epBound = true; b.onclick = function(){ try{ if (window._epOpenPreview) window._epOpenPreview(); }catch(_){ } }; }
+    }, 600);
     // On navigation (hashchange) also update
     window.addEventListener('hashchange', updateFABVisibility);
     document.addEventListener('visibilitychange', updateFABVisibility);
