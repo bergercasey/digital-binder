@@ -1,13 +1,13 @@
-/* Email/Print Add-on v6.5 (Build 1759584183)
- * Job-only button: requires an address link OR notes list + "Delete Selected" present.
- * Header is parsed from the job card that contains the address link (avoids global page title).
+/* Email/Print Add-on v6.6 (Build 1759584694)
+ * Strict job-card gating (address link + chips text) so the button won't show on Home.
+ * Header pulled only from that card: Name (bold), Address, PO#, Crew, Current stage.
+ * Selected notes keep original bullet/list HTML.
  */
 (function(){"use strict";
 
   const SEL = {
     addressLink: 'a[href*="maps"]',
-    notesList: '#notes-list, .logs, .log',
-    deleteText: /\bdelete\s*selected\b/i,
+    chipsNeedle: /(\bStage\s*:|\bCrew\s*:|\bPO\s*:)/i,
     noteCheckbox: '.log-entry input[type="checkbox"]:checked, .list-group-item input[type="checkbox"]:checked, #notes-list input[type="checkbox"]:checked',
     noteEntry: '.log-entry, .list-group-item, .note-entry, .card',
     noteHTML: '.content, .body, .card-body, .note-text, .log-text, .ql-editor, .form-control, pre, p'
@@ -19,29 +19,38 @@
   const $$ = (sel, root=document) => { try { return Array.from(root.querySelectorAll(sel)); } catch { return []; } };
   const esc = s => String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 
+  function isChipsyText(txt) { return SEL.chipsNeedle.test(txt || ''); }
+
   function findJobCard() {
-    const addr = $(SEL.addressLink);
-    if (!addr) return null;
-    // climb until we hit a block with multi-line text (name/chips + address)
-    let box = addr.closest('div, section, article, main') || addr.parentElement;
-    while (box && (box.innerText||'').split('\n').filter(Boolean).length < 2) box = box.parentElement;
-    return box || null;
+    // Find the address link that lives inside the header block with chips "Stage:/Crew:/PO:"
+    const links = $$(SEL.addressLink);
+    for (const a of links) {
+      let cur = a.closest('div, section, article, main') || a.parentElement;
+      let hops = 0;
+      while (cur && hops < 6) { // walk up a few levels to find the card
+        const inner = (cur.innerText || '').replace(/\s+\n/g,'\n');
+        if (isChipsyText(inner) && inner.includes(a.textContent.trim())) return cur;
+        cur = cur.parentElement; hops++;
+      }
+    }
+    return null;
   }
 
   function parseHeaderFromCard(card) {
     const text = (card?.innerText || '').replace(/\s+\n/g,'\n').trim();
-    // name: text up to 'Stage:' or the first newline
+    const lines = text.split('\n').map(s=>s.trim()).filter(Boolean);
+    // Name is the longest line before we see a chip label (Stage:/Crew:/PO:)
     let name = '';
-    const stageIdx = text.search(/\bStage\s*:/i);
-    if (stageIdx > 0) name = text.slice(0, stageIdx).split('\n').pop().trim();
-    if (!name) name = text.split('\n')[0].trim();
-
-    const address = T($(SEL.addressLink, card)) || '';
+    for (const line of lines) {
+      if (isChipsyText(line)) break;
+      name = line; // keep last header-like line
+    }
+    const address = T($('a[href*="maps"]', card)) || '';
     const mStage = text.match(/\bStage\s*:\s*([^\n]+)/i);
     const mPO    = text.match(/\bPO\s*:\s*([^\n]+)/i);
     const mCrew  = text.match(/\bCrew\s*:\s*([^\n]+)/i);
     return {
-      name: name || '(No Name)',
+      name: (name || '(No Name)').trim(),
       address,
       stage: (mStage && mStage[1].trim()) || '',
       po:    (mPO && mPO[1].trim())    || '',
@@ -52,8 +61,7 @@
   function getHeader() {
     const card = findJobCard();
     if (card) return parseHeaderFromCard(card);
-    // fallback minimal
-    return { name:'(No Name)', address:'', stage:'', po:'', crew:'' };
+    return { name:'', address:'', stage:'', po:'', crew:'' };
   }
 
   function collectSelectedNotesHTML() {
@@ -62,45 +70,34 @@
     for (const cb of cbs) {
       const row = cb.closest(SEL.noteEntry) || cb.parentElement;
       if (!row) continue;
-      let html='';
+      let html = '';
       const picks = $$(SEL.noteHTML, row);
-      for (const p of picks) { const h=H(p).trim(); if(h){ html=h; break; } }
+      for (const p of picks) { const h = H(p).trim(); if (h) { html = h; break; } }
       if (!html) html = esc(T(row));
-      const textOnly = html.replace(/<[^>]+>/g,'').trim();
+      const textOnly = html.replace(/<[^>]+>/g, '').trim();
       if (/^\d{4}-\d{2}-\d{2}$/.test(textOnly)) continue;
       out.push('<div class="note-block">'+html+'</div>');
     }
-    const seen = new Set(); const uniq=[]; for(const h of out) if(!seen.has(h)){ seen.add(h); uniq.push(h); }
+    const seen=new Set(), uniq=[]; for (const h of out) if(!seen.has(h)){ seen.add(h); uniq.push(h); }
     return uniq;
   }
 
   function buildPreviewHTML() {
     const h = getHeader();
-    const notes = collectSelectedNotesHTML();
     return '<div class="ep-card" style="background:#fff;color:#000;border-radius:10px;padding:16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'+
-      '<h2 style="margin:0 0 6px 0;font-weight:800;font-size:20px;">'+esc(h.name)+'</h2>'+
+      '<h2 style="margin:0 0 6px 0;font-weight:800;font-size:20px;">'+esc(h.name||'(No Name)')+'</h2>'+
       (h.address? '<div>'+esc(h.address)+'</div>':'')+
-      '<div><strong>PO#:</strong> '+esc(h.po)+'</div>'+
-      '<div><strong>Crew:</strong> '+esc(h.crew)+'</div>'+
-      '<div><strong>Current stage:</strong> '+esc(h.stage)+'</div>'+
-      '<div style="margin-top:12px" class="ep-notes">'+(notes.length? notes.join('\n') : '<p><em>(no notes selected)</em></p>')+'</div>'+
+      '<div><strong>PO#:</strong> '+esc(h.po||'')+'</div>'+
+      '<div><strong>Crew:</strong> '+esc(h.crew||'')+'</div>'+
+      '<div><strong>Current stage:</strong> '+esc(h.stage||'')+'</div>'+
+      '<div style="margin-top:12px" class="ep-notes">'+(collectSelectedNotesHTML().join('\n') || '<p><em>(no notes selected)</em></p>')+'</div>'+
     '</div>';
-  }
-
-  function isOnJobPage() {
-    // Must have address link (job card present) OR notes list + Delete Selected button
-    if (document.querySelector(SEL.addressLink)) return true;
-    if (document.querySelector(SEL.notesList)) {
-      const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
-      if (btns.some(b => SEL.deleteText.test((b.textContent||'').trim()))) return true;
-    }
-    return false;
   }
 
   // Modal + actions
   function closePreview(){ const el=document.getElementById('ep-overlay'); if(el) el.remove(); }
   function openPreview(){
-    if (!isOnJobPage()) return;
+    if (!findJobCard()) return; // only on job
     closePreview();
     const overlay=document.createElement('div');
     overlay.id='ep-overlay';
@@ -133,7 +130,8 @@
   function sendEmail(){
     const tmp=document.createElement('div'); tmp.innerHTML=buildPreviewHTML();
     const text=tmp.innerText.replace(/\s+/g,' ').trim();
-    const subject=encodeURIComponent((findJobCard()?.innerText.split('\n')[0] || 'Job Update').trim());
+    const card=findJobCard();
+    const subject=encodeURIComponent((card?.innerText.split('\n')[0] || 'Job Update').trim());
     const body=encodeURIComponent(text);
     location.href='mailto:?subject='+subject+'&body='+body;
   }
@@ -141,14 +139,14 @@
   // Floating button
   let btn=null, lastHref=location.href;
   function ensureButton(){
-    const shouldShow = isOnJobPage();
-    if (shouldShow && !btn) {
+    const onJob = !!findJobCard();
+    if (onJob && !btn) {
       btn=document.createElement('button');
       btn.id='emailPrintFloating'; btn.textContent='Email/Print';
       Object.assign(btn.style,{ position:'fixed', right:'16px', bottom:'16px', zIndex:'2147483647', background:'#4EA7FF', color:'#fff', border:'1px solid rgba(0,0,0,.2)', borderRadius:'999px', padding:'10px 14px', fontWeight:'700', boxShadow:'0 4px 14px rgba(0,0,0,.2)', cursor:'pointer' });
       btn.addEventListener('click', openPreview);
       document.body.appendChild(btn);
-    } else if (!shouldShow && btn) { btn.remove(); btn=null; }
+    } else if (!onJob && btn) { btn.remove(); btn=null; }
   }
 
   document.addEventListener('click', (e)=>{ const id=e?.target?.id; if(id==='ep-close') return closePreview(); if(id==='ep-print') return printPreview(); if(id==='ep-send') return sendEmail(); if (e.target && e.target.parentElement && e.target.parentElement.id==='ep-overlay') closePreview(); });
