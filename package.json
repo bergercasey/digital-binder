@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "nodemailer": "^6.9.14"
+    "@netlify/blobs": "^6.3.0"
   }
 }
