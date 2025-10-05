@@ -1,9 +1,6 @@
 
 // netlify/functions/favs-get.js
-// Returns per-user email favorites from Netlify Blobs.
-// GET /.netlify/functions/favs-get?user=<username>
 import { getStore } from '@netlify/blobs';
-
 export const handler = async (event) => {
   try {
     const user = (event.queryStringParameters && event.queryStringParameters.user || '').trim();

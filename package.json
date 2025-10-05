@@ -1,5 +1,5 @@
 {
-  "name": "email-favorites-per-user",
+  "name": "email-favorites-per-user-v2",
   "private": true,
   "dependencies": {
     "@netlify/blobs": "^6.4.0"
