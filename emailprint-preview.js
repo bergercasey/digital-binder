@@ -110,16 +110,7 @@
   function _epFavsKey(){ return 'ep_favorites'; }
   function _epGetFavs(){ try{ const arr = JSON.parse(localStorage.getItem(_epFavsKey())); return Array.isArray(arr)?arr:[]; }catch(_){ return []; } }
   function _epSaveFavs(list){ try{ localStorage.setItem(_epFavsKey(), JSON.stringify(list||[])); }catch(_){ } }
-  
-  function _epRemoveFav(email){
-    const v = (email||'').trim().toLowerCase();
-    if (!v) return;
-    try{
-      const list = _epGetFavs().filter(e => String(e||'').toLowerCase() !== v);
-      _epSaveFavs(list);
-    }catch(_){}
-  }
-function _epAddFav(email){ const v=(email||'').trim(); if(!v) return; const list=_epGetFavs(); if(!list.includes(v)){ list.push(v); _epSaveFavs(list);} }
+  function _epAddFav(email){ const v=(email||'').trim(); if(!v) return; const list=_epGetFavs(); if(!list.includes(v)){ list.push(v); _epSaveFavs(list);} }
 
   function buildEmailOverlay(){
     if (document.getElementById('ep-mail-wrap')) return;
@@ -175,60 +166,15 @@ function _epAddFav(email){ const v=(email||'').trim(); if(!v) return; const list
   function showEmailOverlay(previewHtml){
     buildEmailOverlay();
     const wrap = document.getElementById('ep-mail-wrap');
-    if (!document.getElementById('ep-fav-styles')){
-      const st2 = document.createElement('style'); st2.id='ep-fav-styles';
-      st2.textContent = [
-        '#ep-mail-favs .fav-item{ display:inline-flex; align-items:center; gap:6px; margin:4px 10px 4px 0; padding:2px 4px; border-radius:6px; }',
-        '#ep-mail-favs .fav-item button.ep-del{ border:0; background:transparent; cursor:pointer; font-size:14px; line-height:1; padding:2px 4px; color:#6b7280; }',
-        '#ep-mail-favs .fav-item button.ep-del:hover{ color:#ef4444; }'
-      ].join('\n');
-      document.head.appendChild(st2);
-    }
-
     const favWrap = document.getElementById('ep-mail-favs');
     const favs = _epGetFavs();
-    
-favWrap.innerHTML = favs.length
-  ? `<div class="hint" style="margin-bottom:4px;">Favorites</div>` + favs.map(e => {
-      const esc = e.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-      return `<label class="fav-item"><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc} <button class="ep-del" data-email="${esc}" title="Remove">🗑️</button></label>`;
-    }).join('')
-  : `<div class="hint">No favorites yet. Add an email below, check "Save to favorites", then click Add.</div>`;
-
-// wire delete buttons
-Array.from(document.querySelectorAll('#ep-mail-favs .ep-del')).forEach(btn => {
-  btn.addEventListener('click', (ev) => {
-    ev.preventDefault(); ev.stopPropagation();
-    const email = btn.getAttribute('data-email') || '';
-    _epRemoveFav(email);
-    // re-render
-    const list = _epGetFavs();
-    favWrap.innerHTML = list.length
-      ? `<div class="hint" style="margin-bottom:4px;">Favorites</div>` + list.map(e => {
+    favWrap.innerHTML = favs.length
+      ? `<div class="hint" style="margin-bottom:4px;">Favorites</div>` + favs.map(e => {
           const esc = e.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-          return `<label class="fav-item"><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc} <button class="ep-del" data-email="${esc}" title="Remove">🗑️</button></label>`;
+          return `<label><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc}</label>`;
         }).join('')
       : `<div class="hint">No favorites yet. Add an email below, check "Save to favorites", then click Add.</div>`;
-    // rebind deletes after re-render
-    Array.from(favWrap.querySelectorAll('.ep-del')).forEach(b2 => {
-      b2.addEventListener('click', (ev2) => {
-        ev2.preventDefault(); ev2.stopPropagation();
-        const em2 = b2.getAttribute('data-email') || '';
-        _epRemoveFav(em2);
-        const list2 = _epGetFavs();
-        favWrap.innerHTML = list2.length
-          ? `<div class="hint" style="margin-bottom:4px;">Favorites</div>` + list2.map(e => {
-              const esc = e.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-              return `<label class="fav-item"><input type="checkbox" class="ep-fav" value="${esc}"/> ${esc} <button class="ep-del" data-email="${esc}" title="Remove">🗑️</button></label>`;
-            }).join('')
-          : `<div class="hint">No favorites yet. Add an email below, check "Save to favorites", then click Add.</div>`;
-      }, { capture: true });
-    });
-  }, { capture: true });
-});
-
-const subjDefault
- = (() => {
+    const subjDefault = (() => {
       try { 
         const name = getValue('job-name'); const po = getValue('job-po');
         if (name && po) return `${name} — PO ${po}`;
