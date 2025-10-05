@@ -4,5 +4,7 @@
   "type": "module",
   "dependencies": {
     "@netlify/blobs": "^6.3.0"
+  "dependencies": {
+    "nodemailer": "^6.9.14"
   }
 }
