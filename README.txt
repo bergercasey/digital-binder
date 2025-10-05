@@ -1,24 +1,24 @@
 
-Jobs App Icon Pack
-==================
+Per-account Favorites
 
-Files:
-  - jobs-icon-1024.png (master)
-  - jobs-icon-512.png, jobs-icon-192.png (Android/Chrome)
-  - jobs-icon-180.png, 167, 152 (Apple touch icons)
-  - jobs-icon-32.png, jobs-icon-16.png (favicons)
-  - site.webmanifest
+Files included:
+- netlify/functions/favs-get.js
+- netlify/functions/favs-set.js
+- package.json (adds @netlify/blobs)
+- email-favs-per-user.js (frontend shim)
 
-How to add (Netlify/static):
-  1) Copy all PNGs and site.webmanifest to your site's public root (same folder as index.html).
-  2) Add these tags inside <head> of index.html:
-     <link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png">
-     <link rel="apple-touch-icon" sizes="167x167" href="/jobs-icon-167.png">
-     <link rel="apple-touch-icon" sizes="152x152" href="/jobs-icon-152.png">
-     <link rel="icon" type="image/png" sizes="32x32" href="/jobs-icon-32.png">
-     <link rel="icon" type="image/png" sizes="16x16" href="/jobs-icon-16.png">
-     <link rel="manifest" href="/site.webmanifest">
-     <meta name="theme-color" content="#0b7ef2">
-  3) (Optional) For iOS PWA splash/icon, also keep 192 and 512 sizes.
+How to wire:
+1) Add the 2 Netlify functions to your repo (same folder as your other functions).
+2) Add @netlify/blobs to your Netlify build (this package.json is included; if you have a top-level one, add the dep there too).
+3) Include the frontend script after your existing email scripts:
+   <script src="emailprint-preview.js"></script>
+   <script src="email-send-style-v2.js"></script> <!-- if you kept this -->
+   <script src="email-favs-per-user.js"></script>
 
-If your app uses /public or /static folder for assets, place the files there and adjust the href paths accordingly.
+Behavior:
+- Detects the logged-in username (tries several heuristics). 
+- On opening the Email overlay, it fetches that user's favorites from the server and renders them.
+- Adding a favorite writes back to the server and updates the UI immediately.
+- Uses localStorage as fast cache and offline fallback, namespaced per user: ep_favorites::<username>.
+
+Everything else in the app remains shared across users, as requested.

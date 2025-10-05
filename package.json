@@ -1,8 +1,7 @@
 {
-  "name": "digital-binder",
+  "name": "email-favorites-per-user",
   "private": true,
-  "type": "module",
   "dependencies": {
-    "@netlify/blobs": "^6.3.0"
+    "@netlify/blobs": "^6.4.0"
   }
 }
