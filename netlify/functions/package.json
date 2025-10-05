@@ -1,7 +1,0 @@
-{
-  "name": "netlify-functions",
-  "private": true,
-  "dependencies": {
-    "nodemailer": "^6.9.14"
-  }
-}
