@@ -1,0 +1,35 @@
+
+/* note-photos.css */
+.note-photo-thumb{
+  display:inline-block;
+  width:120px;
+  max-width:120px;
+  height:auto;
+  max-height:120px;
+  object-fit:cover;
+  border-radius:8px;
+  border:1px solid #e5e7eb;
+  margin:6px 6px 6px 0;
+  cursor:zoom-in;
+}
+/* simple lightbox */
+.np-lightbox{
+  position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,.7);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+.np-lightbox img{
+  max-width:96vw; max-height:92vh; border-radius:10px; background:#fff;
+}
+.np-lightbox-close{
+  position:absolute; top:10px; right:12px; font-size:18px; color:#fff; cursor:pointer;
+  padding:8px 10px; border:1px solid rgba(255,255,255,.3); border-radius:8px;
+}
+/* tiny camera button if we have to inject one */
+.np-addphoto-btn{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:13px; line-height:1; padding:6px 10px; border-radius:8px;
+  background:#f3f4f6; border:1px solid #e5e7eb; cursor:pointer;
+}
+.np-addphoto-btn:hover{ background:#e5e7eb; }
