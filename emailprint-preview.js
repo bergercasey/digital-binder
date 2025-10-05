@@ -163,7 +163,26 @@
     }
   }
 
-  function showEmailOverlay(previewHtml){
+  
+function ep_makeEmailHtml(previewHtml){
+  try{
+    const wrap = document.createElement('div');
+    wrap.innerHTML = previewHtml || '';
+    const imgs = wrap.querySelectorAll('img.note-photo-thumb');
+    imgs.forEach(img => {
+      const full = img.getAttribute('data-full');
+      if (full) img.setAttribute('src', full);
+      // make it reasonably large for email
+      img.style.maxWidth = '720px';
+      img.style.height = 'auto';
+      img.style.borderRadius = '8px';
+      img.style.border = '1px solid #e5e7eb';
+      img.style.margin = '8px 0';
+    });
+    return wrap.innerHTML;
+  }catch(_){ return previewHtml; }
+}
+function showEmailOverlay(previewHtml){
     buildEmailOverlay();
     const wrap = document.getElementById('ep-mail-wrap');
     const favWrap = document.getElementById('ep-mail-favs');
@@ -204,7 +223,7 @@
         const resp = await fetch('/.netlify/functions/send-email', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ to, subject, html: previewHtml })
+          body: JSON.stringify({ to, subject, html: ep_makeEmailHtml(previewHtml) })
         });
         if (resp.ok){ alert('Email sent!'); hide(); const overlay = document.getElementById('ep-overlay'); if (overlay) overlay.style.display='none'; }
         else { const t = await resp.text(); alert('Email failed: ' + t); }
