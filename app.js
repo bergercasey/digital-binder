@@ -412,14 +412,32 @@
     if (inList) out.push("</ul>"); return out.join("");
   }
   function sanitizeHtml(input) {
-    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN"]);
+    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN","IMG"]);
     const wrap = document.createElement("div"); wrap.innerHTML = input || "";
     (function walk(node){
       for (let i=node.childNodes.length-1; i>=0; i--) {
         const ch = node.childNodes[i];
         if (ch.nodeType === 1) {
-          if (!allowed.has(ch.tagName)) { while (ch.firstChild) node.insertBefore(ch.firstChild, ch); node.removeChild(ch); }
-          else { for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name); walk(ch); }
+          if (!allowed.has(ch.tagName)) {
+            while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
+            node.removeChild(ch);
+          } else {
+            if (ch.tagName === "IMG") {
+              const keep = new Set(["src","data-full","alt","class","style"]);
+              for (const a of Array.from(ch.attributes)) {
+                if (!keep.has(a.name.toLowerCase())) ch.removeAttribute(a.name);
+              }
+              if (!ch.className || ch.className.indexOf("note-photo-thumb") === -1) {
+                ch.className = ((ch.className||"") + " note-photo-thumb").trim();
+              }
+              if (!ch.style || (!ch.style.maxWidth && !ch.style.width)) {
+                ch.style.maxWidth = "120px"; ch.style.height = "auto"; ch.style.borderRadius = "8px";
+              }
+            } else {
+              for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
+            }
+            walk(ch);
+          }
         }
       }
     })(wrap);
