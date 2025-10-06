@@ -1,0 +1,7 @@
+/* hide-build-banner.css */
+#build, #build-tag, #build-badge, #build-info, #app-build, #app-version,
+.build, .build-info, .build-badge, .version-badge, .app-build, .app-version,
+.top-banner, .banner, .build-label {
+  display: none !important;
+}
+header .app-title, .app-header .app-title { display:none !important; }
