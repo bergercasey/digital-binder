@@ -1,14 +1,66 @@
 
-// ---- save payload cleaner ----
+// === BEGIN: image URL ensure helpers ===
+async function epUploadDataUrlToBlob(dataUrl){
+  try{
+    const res = await fetch('/.netlify/functions/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl, ext: 'webp' })
+    });
+    if (!res.ok) return null;
+    const j = await res.json().catch(()=>null);
+    return j && j.url ? j.url : null;
+  }catch(_){ return null; }
+}
+
+async function epEnsureFullUrls(payload){
+  try{
+    const clone = JSON.parse(JSON.stringify(payload));
+    if (!clone || !Array.isArray(clone.jobs)) return payload;
+    const tasks = [];
+    clone.jobs.forEach(job => {
+      if (!job || !Array.isArray(job.notes)) return;
+      job.notes.forEach(note => {
+        if (!note || typeof note.html !== 'string') return;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = note.html;
+        const imgs = wrapper.querySelectorAll('img');
+        imgs.forEach(img => {
+          const full = img.getAttribute('data-full');
+          const fullUrl = img.getAttribute('data-full-url');
+          if (full && !fullUrl){
+            const p = (async () => {
+              const url = await epUploadDataUrlToBlob(full);
+              if (url){
+                img.setAttribute('data-full-url', url);
+                img.removeAttribute('data-full');
+              }
+            })();
+            tasks.push(p);
+          }
+        });
+        tasks.push((async () => {
+          await Promise.resolve();
+          note.html = wrapper.innerHTML;
+        })());
+      });
+    });
+    if (tasks.length) await Promise.allSettled(tasks);
+    return clone;
+  }catch(_){
+    return payload;
+  }
+}
+
 function epStripDataImagesFromHtml(html){
   try{
     if (!html || typeof html !== 'string') return html;
     html = html.replace(/\sdata-full="[^"]*"/g, '');
-    // Leave data-full-url intact
     html = html.replace(/\ssrc="data:image[^"]*"/g, '');
     return html;
   }catch(_){ return html; }
 }
+
 function epPrepareForSavePayload(payload){
   try{
     const clone = JSON.parse(JSON.stringify(payload));
@@ -24,6 +76,7 @@ function epPrepareForSavePayload(payload){
     return clone;
   }catch(_){ return payload; }
 }
+// === END: image URL ensure helpers ===
 
 /* app.js v3.12 */
 (function(){
@@ -68,7 +121,9 @@ function epPrepareForSavePayload(payload){
       }
     },
     async save(data) {
-      try {
+      data = await epEnsureFullUrls(data);
+    data = epPrepareForSavePayload(data);
+    try {
         const res = await fetch("/.netlify/functions/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -510,7 +565,7 @@ function renderAll() {
     status("Saving…");
     const payload = { ...state, version: 17 };
     try {
-      const res = await API.save(epPrepareForSavePayload(payload));
+      const res = await API.save(payload);
       status(res.local ? "Saved (no network)" : "Saved");
     } catch (e) {
       status("Error saving (stored locally)");
