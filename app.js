@@ -53,6 +53,39 @@
         console.warn("Save failed, writing to localStorage", err);
         localStorage.setItem("binder-data", JSON.stringify(data));
         return { ok: true, local: true };
+// --- BEGIN: payload slimming to keep Netlify Function body small ---
+function epPrepareForSave(data){
+  try{
+    const clone = JSON.parse(JSON.stringify(data));
+    function scrubHtml(html){
+      if (!html || typeof html !== 'string') return html;
+      html = html.replace(/\sdata-full="[^"]*"/g, '');
+      const MAX_DATAURL = 80 * 1024;
+      html = html.replace(/(<img[^>]+src="data:[^"]+")([^>]*>)/g, (m, g1, g2) => {
+        try{
+          const len = g1.length;
+          if (len > MAX_DATAURL * 2) return '';
+          return m;
+        }catch(_){ return m; }
+      });
+      return html;
+    }
+    if (clone && Array.isArray(clone.jobs)){
+      clone.jobs.forEach(job => {
+        if (job && Array.isArray(job.notes)){
+          job.notes.forEach(n => {
+            if (n && typeof n.html === 'string') n.html = scrubHtml(n.html);
+          });
+        }
+      });
+    }
+    return clone;
+  }catch(_){
+    return data;
+  }
+}
+// --- END: payload slimming ---
+
       }
     }
   };
@@ -481,9 +514,9 @@ function renderAll() {
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 17 };
+    const payload = { ...state, version: 18 };
     try {
-      const res = await API.save(payload);
+      const res = await API.save(epPrepareForSave(payload));
       status(res.local ? "Saved (no network)" : "Saved");
     } catch (e) {
       status("Error saving (stored locally)");
