@@ -1,4 +1,4 @@
-// /.netlify/functions/save
+// /.netlify/functions/save (robust)
 import { getStore } from '@netlify/blobs';
 import { checkAuth, needAuth } from './_auth.js';
 
@@ -8,9 +8,17 @@ export async function handler(event){
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
   try {
-    const store = getStore({ name: 'binder-store', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
+    const name = process.env.BLOBS_STORE || 'binder-store';
+    const opts = { name };
+    if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
+      opts.siteID = process.env.BLOBS_SITE_ID;
+      opts.token = process.env.BLOBS_TOKEN;
+    }
+    const store = getStore(opts);
     const body = event.body || '{}';
-    await store.setJSON('data', JSON.parse(body));
+    const data = JSON.parse(body);
+    data._serverSavedAt = new Date().toISOString();
+    await store.setJSON('data', data);
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
