@@ -1,4 +1,4 @@
-// /.netlify/functions/upload-image (public)
+// /.netlify/functions/upload-image
 import { getStore } from '@netlify/blobs';
 
 function parseDataUrl(dataUrl){
@@ -21,11 +21,13 @@ export async function handler(event){
       opts.token = process.env.BLOBS_TOKEN;
     }
     const store = getStore(opts);
+
     const rand = Math.random().toString(36).slice(2);
     const suffix = (ext && typeof ext === 'string') ? ext.replace(/^\./,'') : (contentType.split('/')[1] || 'bin');
     const key = `images/${Date.now()}-${rand}.${suffix}`;
+
     await store.set(key, data, { contentType });
-    const url = `/.netlify/blobs/${encodeURIComponent(name)}/${encodeURIComponent(key)}`;
+    const url = `/.netlify/functions/get-image?key=${encodeURIComponent(key)}`;
     return { statusCode: 200, headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ok:true, url, key, contentType }) };
   }catch(err){
     return { statusCode: 500, body: String(err && err.message || err) };
