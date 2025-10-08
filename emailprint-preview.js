@@ -1,3 +1,17 @@
+
+function _epExpandImages(html){
+  try{
+    const div = document.createElement('div'); div.innerHTML = html || '';
+    div.querySelectorAll('img.note-photo-thumb').forEach(img => {
+      const full = img.getAttribute('data-full-url') || img.getAttribute('src') || '';
+      img.setAttribute('src', full);
+      img.removeAttribute('width'); img.removeAttribute('height');
+      img.style.maxWidth = '720px'; img.style.width = '100%'; img.style.height = 'auto';
+      img.style.borderRadius = '8px'; img.style.border = '1px solid #e5e7eb'; img.style.margin = '8px 0';
+    });
+    return div.innerHTML;
+  }catch(_){ return html; }
+}
 // Email/Print Modal Preview — Clean build
 (function(){
   const qs = (s, r=document) => r.querySelector(s);
