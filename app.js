@@ -1,77 +1,3 @@
-
-// === BEGIN: image URL ensure helpers (sequential) ===
-async function epUploadDataUrlToBlob(dataUrl){
-  try{
-    const res = await fetch('/.netlify/functions/upload-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataUrl, ext: 'webp' })
-    });
-    if (!res.ok) return null;
-    const j = await res.json().catch(()=>null);
-    return j && j.url ? j.url : null;
-  }catch(_){ return null; }
-}
-
-async function epEnsureFullUrls(payload){
-  try{
-    const clone = JSON.parse(JSON.stringify(payload));
-    if (!clone || !Array.isArray(clone.jobs)) return payload;
-    for (const job of clone.jobs){
-      if (!job || !Array.isArray(job.notes)) continue;
-      for (const note of job.notes){
-        if (!note || typeof note.html !== 'string') continue;
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = note.html || '';
-        const imgs = Array.from(wrapper.querySelectorAll('img.note-photo-thumb, img'));
-        for (const img of imgs){
-          const fullUrl = img.getAttribute('data-full-url');
-          if (!fullUrl){
-            const full = img.getAttribute('data-full');
-            if (full && /^data:image\//i.test(full)){
-              const url = await epUploadDataUrlToBlob(full);
-              if (url){
-                img.setAttribute('data-full-url', url);
-                img.removeAttribute('data-full');
-              }
-            }
-          }
-        }
-        note.html = wrapper.innerHTML;
-      }
-    }
-    return clone;
-  }catch(_){
-    return payload;
-  }
-}
-
-function epStripDataImagesFromHtml(html){
-  try{
-    if (!html || typeof html !== 'string') return html;
-    html = html.replace(/\sdata-full="[^"]*"/g, '');
-    html = html.replace(/\ssrc="data:image[^"]*"/g, '');
-    return html;
-  }catch(_){ return html; }
-}
-
-function epPrepareForSavePayload(payload){
-  try{
-    const clone = JSON.parse(JSON.stringify(payload));
-    if (clone && Array.isArray(clone.jobs)){
-      clone.jobs.forEach(job => {
-        if (job && Array.isArray(job.notes)){
-          job.notes.forEach(n => {
-            if (n && typeof n.html === 'string') n.html = epStripDataImagesFromHtml(n.html);
-          });
-        }
-      });
-    }
-    return clone;
-  }catch(_){ return payload; }
-}
-// === END: image URL ensure helpers (sequential) ===
-
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -115,9 +41,7 @@ function epPrepareForSavePayload(payload){
       }
     },
     async save(data) {
-      data = await epEnsureFullUrls(data);
-    data = epPrepareForSavePayload(data);
-    try {
+      try {
         const res = await fetch("/.netlify/functions/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -488,32 +412,14 @@ function epPrepareForSavePayload(payload){
     if (inList) out.push("</ul>"); return out.join("");
   }
   function sanitizeHtml(input) {
-    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN","IMG"]);
+    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN"]);
     const wrap = document.createElement("div"); wrap.innerHTML = input || "";
     (function walk(node){
       for (let i=node.childNodes.length-1; i>=0; i--) {
         const ch = node.childNodes[i];
         if (ch.nodeType === 1) {
-          if (!allowed.has(ch.tagName)) {
-            while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
-            node.removeChild(ch);
-          } else {
-            if (ch.tagName === "IMG") {
-              const keep = new Set(["src","data-full","alt","class","style"]);
-              for (const a of Array.from(ch.attributes)) {
-                if (!keep.has(a.name.toLowerCase())) ch.removeAttribute(a.name);
-              }
-              if (!ch.className || ch.className.indexOf("note-photo-thumb") === -1) {
-                ch.className = ((ch.className||"") + " note-photo-thumb").trim();
-              }
-              if (!ch.style || (!ch.style.maxWidth && !ch.style.width)) {
-                ch.style.maxWidth = "120px"; ch.style.height = "auto"; ch.style.borderRadius = "8px";
-              }
-            } else {
-              for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name);
-            }
-            walk(ch);
-          }
+          if (!allowed.has(ch.tagName)) { while (ch.firstChild) node.insertBefore(ch.firstChild, ch); node.removeChild(ch); }
+          else { for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name); walk(ch); }
         }
       }
     })(wrap);
