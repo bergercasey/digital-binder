@@ -1,7 +1,5 @@
-
-// /.netlify/functions/upload-image
+// /.netlify/functions/upload-image (public)
 import { getStore } from '@netlify/blobs';
-import { checkAuth, needAuth } from './_auth.js';
 
 function parseDataUrl(dataUrl){
   const m = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl || '');
@@ -10,7 +8,6 @@ function parseDataUrl(dataUrl){
 }
 
 export async function handler(event){
-  if (needAuth()) { const auth = checkAuth(event); if (!auth.ok) return { statusCode: 401, body: 'Unauthorized' }; }
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
   try{
     const { dataUrl, ext } = JSON.parse(event.body || '{}');
