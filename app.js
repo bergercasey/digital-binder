@@ -1,16 +1,14 @@
 
-// === BEGIN persist helpers ===
+// ---- save payload cleaner ----
 function epStripDataImagesFromHtml(html){
   try{
     if (!html || typeof html !== 'string') return html;
-    // Remove data-full attributes entirely
     html = html.replace(/\sdata-full="[^"]*"/g, '');
-    // Remove any inline data:image URIs in src attributes to avoid huge payloads
-    html = html.replace(/\s*src="data:image[^"]*"/g, '');
+    // Leave data-full-url intact
+    html = html.replace(/\ssrc="data:image[^"]*"/g, '');
     return html;
   }catch(_){ return html; }
 }
-
 function epPrepareForSavePayload(payload){
   try{
     const clone = JSON.parse(JSON.stringify(payload));
@@ -26,18 +24,6 @@ function epPrepareForSavePayload(payload){
     return clone;
   }catch(_){ return payload; }
 }
-
-async function epFetchWithTimeout(url, opts, ms=12000){
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), ms);
-  try{
-    const res = await fetch(url, { ...(opts||{}), signal: ctrl.signal });
-    return res;
-  } finally {
-    clearTimeout(id);
-  }
-}
-// === END persist helpers ===
 
 /* app.js v3.12 */
 (function(){
@@ -83,7 +69,7 @@ async function epFetchWithTimeout(url, opts, ms=12000){
     },
     async save(data) {
       try {
-        const res = await epFetchWithTimeout("/.netlify/functions/save", {
+        const res = await fetch("/.netlify/functions/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),

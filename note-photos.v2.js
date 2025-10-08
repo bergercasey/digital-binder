@@ -1,4 +1,18 @@
 
+async function __npUploadFull(dataUrl){
+  try{
+    const res = await fetch('/.netlify/functions/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl, ext: 'webp' }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json().catch(()=>null);
+    return j && j.url ? j.url : null;
+  }catch(_){ return null; }
+}
+
+
 // note-photos.v2.js
 (function(){
   var THUMB = 120;
@@ -30,9 +44,22 @@
     return { fullData: fullData, thumbData: thumbData };
   }
   function makeImgHTML(thumb, full){
-    var style = 'max-width:'+THUMB+'px;max-height:'+THUMB+'px;width:'+THUMB+'px;height:auto;border-radius:8px;border:1px solid #e5e7eb;margin:6px 6px 6px 0;cursor:zoom-in;';
-    return '<img class="note-photo-thumb" src="'+thumb+'" data-full="'+full+'" alt="Note photo" style="'+style+'">';
-  }
+  // We will upload the full image in the background and prefer a URL.
+  // Temporarily insert with data-full (for immediate zoom), then replace when upload returns.
+  const id = 'np-' + Math.random().toString(36).slice(2);
+  setTimeout(async () => {
+    const url = await __npUploadFull(full);
+    if (url){
+      const el = document.querySelector('img.note-photo-thumb[data-id="'+id+'"]');
+      if (el){
+        el.setAttribute('data-full-url', url);
+        el.removeAttribute('data-full');
+      }
+    }
+  }, 10);
+  var style = 'max-width:'+THUMB+'px;max-height:'+THUMB+'px;width:'+THUMB+'px;height:auto;border-radius:8px;border:1px solid #e5e7eb;margin:6px 6px 6px 0;cursor:zoom-in;';
+  return '<img class="note-photo-thumb" data-id="'+id+'" src="'+thumb+'" data-full="'+full+'" alt="Note photo" style="'+style+'">';
+}
   async function attachPhotosToEditor(el){
     var input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
