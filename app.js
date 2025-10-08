@@ -1,3 +1,44 @@
+
+// === BEGIN persist helpers ===
+function epStripDataImagesFromHtml(html){
+  try{
+    if (!html || typeof html !== 'string') return html;
+    // Remove data-full attributes entirely
+    html = html.replace(/\sdata-full="[^"]*"/g, '');
+    // Remove any inline data:image URIs in src attributes to avoid huge payloads
+    html = html.replace(/\s*src="data:image[^"]*"/g, '');
+    return html;
+  }catch(_){ return html; }
+}
+
+function epPrepareForSavePayload(payload){
+  try{
+    const clone = JSON.parse(JSON.stringify(payload));
+    if (clone && Array.isArray(clone.jobs)){
+      clone.jobs.forEach(job => {
+        if (job && Array.isArray(job.notes)){
+          job.notes.forEach(n => {
+            if (n && typeof n.html === 'string') n.html = epStripDataImagesFromHtml(n.html);
+          });
+        }
+      });
+    }
+    return clone;
+  }catch(_){ return payload; }
+}
+
+async function epFetchWithTimeout(url, opts, ms=12000){
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try{
+    const res = await fetch(url, { ...(opts||{}), signal: ctrl.signal });
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+}
+// === END persist helpers ===
+
 /* app.js v3.12 */
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -42,7 +83,7 @@
     },
     async save(data) {
       try {
-        const res = await fetch("/.netlify/functions/save", {
+        const res = await epFetchWithTimeout("/.netlify/functions/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -53,39 +94,6 @@
         console.warn("Save failed, writing to localStorage", err);
         localStorage.setItem("binder-data", JSON.stringify(data));
         return { ok: true, local: true };
-// --- BEGIN: payload slimming to keep Netlify Function body small ---
-function epPrepareForSave(data){
-  try{
-    const clone = JSON.parse(JSON.stringify(data));
-    function scrubHtml(html){
-      if (!html || typeof html !== 'string') return html;
-      html = html.replace(/\sdata-full="[^"]*"/g, '');
-      const MAX_DATAURL = 80 * 1024;
-      html = html.replace(/(<img[^>]+src="data:[^"]+")([^>]*>)/g, (m, g1, g2) => {
-        try{
-          const len = g1.length;
-          if (len > MAX_DATAURL * 2) return '';
-          return m;
-        }catch(_){ return m; }
-      });
-      return html;
-    }
-    if (clone && Array.isArray(clone.jobs)){
-      clone.jobs.forEach(job => {
-        if (job && Array.isArray(job.notes)){
-          job.notes.forEach(n => {
-            if (n && typeof n.html === 'string') n.html = scrubHtml(n.html);
-          });
-        }
-      });
-    }
-    return clone;
-  }catch(_){
-    return data;
-  }
-}
-// --- END: payload slimming ---
-
       }
     }
   };
@@ -514,9 +522,9 @@ function renderAll() {
 
   const save = debounce(async () => {
     status("Saving…");
-    const payload = { ...state, version: 18 };
+    const payload = { ...state, version: 17 };
     try {
-      const res = await API.save(epPrepareForSave(payload));
+      const res = await API.save(epPrepareForSavePayload(payload));
       status(res.local ? "Saved (no network)" : "Saved");
     } catch (e) {
       status("Error saving (stored locally)");
