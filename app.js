@@ -412,27 +412,14 @@
     if (inList) out.push("</ul>"); return out.join("");
   }
   function sanitizeHtml(input) {
-  const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN","IMG"]);
-  const allowedAttr = new Set(["src","alt","class","data-full-url","width","height","loading"]);
-  const wrap = document.createElement("div"); wrap.innerHTML = input || "";
-  (function walk(node){
-    for (let i=node.childNodes.length-1; i>=0; i--) {
-      const ch = node.childNodes[i];
-      if (ch.nodeType === 1) {
-        if (!allowed.has(ch.tagName)) {
-          while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
-          node.removeChild(ch);
-        } else {
-          for (const a of Array.from(ch.attributes)) {
-            if (!allowedAttr.has(a.name.toLowerCase())) ch.removeAttribute(a.name);
-          }
-          walk(ch);
-        }
-      }
-    }
-  })(wrap);
-  return wrap.innerHTML.replace(/\n/g,"");
-}else { for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name); walk(ch); }
+    const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","OL","LI","P","DIV","SPAN"]);
+    const wrap = document.createElement("div"); wrap.innerHTML = input || "";
+    (function walk(node){
+      for (let i=node.childNodes.length-1; i>=0; i--) {
+        const ch = node.childNodes[i];
+        if (ch.nodeType === 1) {
+          if (!allowed.has(ch.tagName)) { while (ch.firstChild) node.insertBefore(ch.firstChild, ch); node.removeChild(ch); }
+          else { for (const a of Array.from(ch.attributes)) ch.removeAttribute(a.name); walk(ch); }
         }
       }
     })(wrap);
