@@ -1,5 +1,5 @@
 
-// === BEGIN: image URL ensure helpers ===
+// === BEGIN: image URL ensure helpers (sequential) ===
 async function epUploadDataUrlToBlob(dataUrl){
   try{
     const res = await fetch('/.netlify/functions/upload-image', {
@@ -17,35 +17,29 @@ async function epEnsureFullUrls(payload){
   try{
     const clone = JSON.parse(JSON.stringify(payload));
     if (!clone || !Array.isArray(clone.jobs)) return payload;
-    const tasks = [];
-    clone.jobs.forEach(job => {
-      if (!job || !Array.isArray(job.notes)) return;
-      job.notes.forEach(note => {
-        if (!note || typeof note.html !== 'string') return;
+    for (const job of clone.jobs){
+      if (!job || !Array.isArray(job.notes)) continue;
+      for (const note of job.notes){
+        if (!note || typeof note.html !== 'string') continue;
         const wrapper = document.createElement('div');
-        wrapper.innerHTML = note.html;
-        const imgs = wrapper.querySelectorAll('img');
-        imgs.forEach(img => {
-          const full = img.getAttribute('data-full');
+        wrapper.innerHTML = note.html || '';
+        const imgs = Array.from(wrapper.querySelectorAll('img.note-photo-thumb, img'));
+        for (const img of imgs){
           const fullUrl = img.getAttribute('data-full-url');
-          if (full && !fullUrl){
-            const p = (async () => {
+          if (!fullUrl){
+            const full = img.getAttribute('data-full');
+            if (full && /^data:image\//i.test(full)){
               const url = await epUploadDataUrlToBlob(full);
               if (url){
                 img.setAttribute('data-full-url', url);
                 img.removeAttribute('data-full');
               }
-            })();
-            tasks.push(p);
+            }
           }
-        });
-        tasks.push((async () => {
-          await Promise.resolve();
-          note.html = wrapper.innerHTML;
-        })());
-      });
-    });
-    if (tasks.length) await Promise.allSettled(tasks);
+        }
+        note.html = wrapper.innerHTML;
+      }
+    }
     return clone;
   }catch(_){
     return payload;
@@ -76,7 +70,7 @@ function epPrepareForSavePayload(payload){
     return clone;
   }catch(_){ return payload; }
 }
-// === END: image URL ensure helpers ===
+// === END: image URL ensure helpers (sequential) ===
 
 /* app.js v3.12 */
 (function(){
