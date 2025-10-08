@@ -1,75 +1,49 @@
-// note-photos.js
+
+// note-photos.js (token-based, does NOT touch app.js)
 (function(){
-  const ed = document.getElementById('new-note-editor');
-  const toolbar = document.getElementById('wysiwyg-toolbar') || document.getElementById('note-toolbar') || (ed && ed.previousElementSibling);
-  if (!ed || !toolbar) return;
+  const ed=document.getElementById('new-note-editor');
+  const tb=document.getElementById('wysiwyg-toolbar')||document.getElementById('note-toolbar')||(ed&&ed.previousElementSibling);
+  if(!ed||!tb) return;
 
-  const btn = document.createElement('button');
-  btn.type = 'button'; btn.className = 'btn'; btn.textContent = '📷 Photo';
-  btn.style.marginLeft = '6px';
-  const input = document.createElement('input');
-  input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+  const btn=document.createElement('button'); btn.type='button'; btn.className='btn'; btn.textContent='📷 Photo'; btn.style.marginLeft='6px';
+  const input=document.createElement('input'); input.type='file'; input.accept='image/*'; input.style.display='none';
+  tb.appendChild(btn); tb.appendChild(input);
+  btn.addEventListener('click',()=>input.click());
 
-  toolbar.appendChild(btn);
-  toolbar.appendChild(input);
-  btn.addEventListener('click', () => input.click());
-
-  function dataUrlFromFile(file, maxW){
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = () => { img.src = reader.result; };
-      reader.onerror = reject;
-      img.onload = () => {
-        const scale = maxW ? Math.min(1, maxW / img.naturalWidth) : 1;
-        const w = Math.max(1, Math.round(img.naturalWidth * scale));
-        const h = Math.max(1, Math.round(img.naturalHeight * scale));
-        const c = document.createElement('canvas'); c.width = w; c.height = h;
-        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-        const q = 0.82;
-        const url = c.toDataURL('image/webp', q);
-        resolve(url);
+  function toDataUrl(file,maxW){
+    return new Promise((res,rej)=>{
+      const img=new Image(); const rd=new FileReader();
+      rd.onload=()=>{img.src=rd.result;}; rd.onerror=rej;
+      img.onload=()=>{
+        const scale=maxW?Math.min(1,maxW/img.naturalWidth):1;
+        const w=Math.max(1,Math.round(img.naturalWidth*scale));
+        const h=Math.max(1,Math.round(img.naturalHeight*scale));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/webp',0.82));
       };
-      reader.readAsDataURL(file);
+      rd.readAsDataURL(file);
     });
   }
-
   async function upload(dataUrl){
-    const res = await fetch('/.netlify/functions/upload-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataUrl, ext: 'webp' })
-    });
-    if (!res.ok) throw new Error('upload failed ' + res.status);
-    const j = await res.json();
-    return j && j.url ? { url: j.url, key: j.key } : null;
+    const r=await fetch('/.netlify/functions/upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl,ext:'webp'})});
+    if(!r.ok) throw new Error('upload failed '+r.status);
+    const j=await r.json(); return j&&j.url?{url:j.url,key:j.key}:null;
   }
-
-  function insertHtmlAtCaret(html){
+  function insertAtCaret(text){
     ed.focus();
-    if (document.queryCommandSupported && document.queryCommandSupported('insertHTML')){
-      document.execCommand('insertHTML', false, html);
-      return;
-    }
-    ed.insertAdjacentHTML('beforeend', html);
+    document.execCommand && document.execCommand('insertText', false, text);
+    if(!document.execCommand){ ed.textContent += text; }
   }
-
-  input.addEventListener('change', async (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
+  input.addEventListener('change', async (e)=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
     try{
-      const full = await dataUrlFromFile(f, 1280);
-      const thumb = await dataUrlFromFile(f, 280);
-      const fullUp = await upload(full);
-      const thUp = await upload(thumb);
-      const fullUrl = fullUp && fullUp.url || full;
-      const thumbUrl = thUp && thUp.url || thumb;
-      const html = '<img class="note-photo-thumb" src="'+thumbUrl+'" data-full-url="'+fullUrl+'" alt="Photo" loading="lazy">';
-      insertHtmlAtCaret(html);
-    }catch(err){
-      alert('Could not add photo: ' + (err && err.message || err));
-    }finally{
-      e.target.value = '';
-    }
+      const full=await toDataUrl(f,1280); const thumb=await toDataUrl(f,280);
+      const upF=await upload(full); const upT=await upload(thumb);
+      const fullUrl=(upF&&upF.url)||full; const thumbUrl=(upT&&upT.url)||thumb;
+      const token = `[[PHOTO full=${fullUrl}|thumb=${thumbUrl}]]`;
+      insertAtCaret(token);
+    }catch(err){ alert('Could not add photo: '+(err&&err.message||err)); }
+    finally{ e.target.value=''; }
   });
 })();
