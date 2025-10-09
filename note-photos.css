@@ -1,6 +1,0 @@
-
-/* note-photos.css */
-.note-photo-thumb{max-width:200px;height:auto;border-radius:8px;border:1px solid #e5e7eb;margin:6px 6px 6px 0;cursor:zoom-in;}
-.np-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:9999;}
-.np-lightbox img{max-width:94vw;max-height:94vh;box-shadow:0 2px 18px rgba(0,0,0,.5);border-radius:6px;}
-.np-lightbox .np-close{position:absolute;top:14px;right:18px;color:#fff;font-size:20px;cursor:pointer;user-select:none;}
