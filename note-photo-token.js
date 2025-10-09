@@ -1,47 +1,35 @@
-// note-photo-token.js (Step 2)
-// Adds a 'Photo (token)' button and auto-loads the renderer/lightbox/CSS.
+// note-photo-token.js (Step 2 SAFE)
+// Loads once, adds a 'Photo (token)' button, and autoloads the renderer/lightbox/CSS.
 (function(){
-  function ensureAsset(tag, attr, value){
-    if (document.querySelector(tag+'['+attr+'="'+value+'"]')) return;
-    const el = document.createElement(tag);
-    el.setAttribute(attr, value);
-    if (tag === 'link'){ el.rel = 'stylesheet'; document.head.appendChild(el); }
-    else { document.body.appendChild(el); }
+  if (window.__NP_STEP2_LOADED) return; window.__NP_STEP2_LOADED = true;
+  function ensure(tag, attr, val){
+    if (document.querySelector(tag+'['+attr+'="'+val+'"]')) return;
+    var el=document.createElement(tag); el.setAttribute(attr,val);
+    if(tag==='link'){ el.rel='stylesheet'; document.head.appendChild(el); }
+    else{ document.body.appendChild(el); }
   }
-
-  // Auto-load assets exactly once
-  function bootAssets(){
-    ensureAsset('link','href','note-photos.css');
-    ensureAsset('script','src','lightbox.js');
-    ensureAsset('script','src','token-renderer.js');
+  function boot(){
+    ensure('link','href','note-photos.css');
+    ensure('script','src','lightbox.js');
+    ensure('script','src','token-renderer.safe.js');
   }
-
-  function addButton(){
-    const ed = document.getElementById('new-note-editor');
-    const tb = document.getElementById('wysiwyg-toolbar') || document.getElementById('note-toolbar') || (ed && ed.previousElementSibling);
-    if (!ed || !tb) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn';
-    btn.textContent = '📷 Photo (token)';
-    btn.style.marginLeft = '6px';
-    tb.appendChild(btn);
-    function insertToken(){
-      const token = ' [[PHOTO full=PASTE_FULL_URL|thumb=PASTE_THUMB_URL]] ';
+  function addBtn(){
+    var ed=document.getElementById('new-note-editor');
+    var tb=document.getElementById('wysiwyg-toolbar')||document.getElementById('note-toolbar')||(ed&&ed.previousElementSibling);
+    if(!ed||!tb) return;
+    var b=document.createElement('button'); b.type='button'; b.className='btn'; b.textContent='📷 Photo (token)'; b.style.marginLeft='6px';
+    tb.appendChild(b);
+    b.addEventListener('click', function(){
+      var tok=' [[PHOTO full=PASTE_FULL_URL|thumb=PASTE_THUMB_URL]] ';
       ed.focus();
       try{
-        if (document.queryCommandSupported && document.queryCommandSupported('insertText')){
-          document.execCommand('insertText', false, token); return;
+        if(document.queryCommandSupported&&document.queryCommandSupported('insertText')){
+          document.execCommand('insertText',false,tok); return;
         }
       }catch(_){}
-      ed.textContent += token;
-    }
-    btn.addEventListener('click', insertToken);
+      ed.textContent += tok;
+    });
   }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', function(){ bootAssets(); addButton(); });
-  } else {
-    bootAssets(); addButton();
-  }
+  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', function(){ boot(); addBtn(); }); }
+  else { boot(); addBtn(); }
 })();
