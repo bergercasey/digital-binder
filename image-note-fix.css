@@ -1,0 +1,11 @@
+
+/* fixes/image-note-fix.css */
+img[alt="Photo"]{
+  max-width:100%;
+  height:auto;
+  object-fit:contain;
+  display:block;
+  margin:6px auto;
+  border:1px solid #ddd;
+  border-radius:6px;
+}
