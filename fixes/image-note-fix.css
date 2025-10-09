@@ -1,0 +1,7 @@
+
+/* Ensure inserted images display cleanly inside notes */
+img[alt="Photo"] {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
