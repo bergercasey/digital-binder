@@ -1,12 +1,36 @@
-// fixes/photo-token-insert.js — toolbar-anchored PHOTO token insert
+// fixes/photo-token-insert.js — V3 (LOCKED to the single "Add Note" block)
 (function(){
-  if (window.__photoTokenInsertInitV2) return; window.__photoTokenInsertInitV2 = true;
+  if (window.__photoTokenInsertInitV3) return; window.__photoTokenInsertInitV3 = true;
 
   // Tiny helpers
-  const $ = (s, r) => (r || document).querySelector(s);
+  const $  = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const t  = el => (el && (el.textContent || el.value) || "").trim().toLowerCase();
 
-  // Insert text at caret in a TEXTAREA
+  // 1) Find exactly ONE Add Note block: the button labeled "Add Note" and its local textarea + toolbar
+  function findAddNoteBlock(){
+    const add = $$('button, a').find(b => t(b) === 'add note');
+    if (!add) return null;
+
+    // Walk up a few levels to the logical container that holds the editor + toolbar
+    let root = add.parentElement;
+    for (let i=0; i<8 && root; i++, root = root.parentElement){
+      const ta = $('textarea', root);
+      if (!ta) continue;
+
+      // toolbar is the row directly before the textarea with multiple small buttons (B/I/…/List)
+      let toolbar = ta.previousElementSibling;
+      for (let j=0; j<4 && toolbar; j++, toolbar = toolbar.previousElementSibling){
+        const btns = toolbar && toolbar.querySelectorAll ? toolbar.querySelectorAll('button, a') : [];
+        if (btns && btns.length >= 2) return {root: root, textarea: ta, toolbar: toolbar};
+      }
+      // if no obvious toolbar, still return (we'll place the button above textarea)
+      return {root: root, textarea: ta, toolbar: null};
+    }
+    return null;
+  }
+
+  // 2) Insert text at caret in the (plain) textarea
   function insertAtCaretTextarea(textarea, text){
     try{
       const start = textarea.selectionStart ?? textarea.value.length;
@@ -23,7 +47,7 @@
     textarea.focus();
   }
 
-  // Scale dataURL to a given width
+  // 3) Scale dataURL
   function scale(dataURL, maxW){
     return new Promise(resolve=>{
       const img = new Image();
@@ -40,13 +64,13 @@
     });
   }
 
-  // One hidden file picker reused
+  // 4) One hidden file picker
   let picker;
   function getPicker(){
     if (!picker){
       picker = document.createElement('input');
       picker.type = 'file';
-      picker.accept = 'image/*';     // library/camera chooser
+      picker.accept = 'image/*';     // library/camera chooser; NO capture attr
       picker.id = 'photo-token-picker';
       picker.style.display = 'none';
       document.body.appendChild(picker);
@@ -54,46 +78,56 @@
     return picker;
   }
 
-  // Find the editable that belongs to the SAME block as the toolbar button
-  function findEditableForToolbar(btn){
-    // 1) find the toolbar element (the button’s parent or a close ancestor with multiple small buttons)
-    let toolbar = btn.closest('div,section,header,footer,nav,form') || btn.parentElement;
-    // 2) find the nearest textarea or contenteditable in the same block, preferring elements AFTER the toolbar
-    const block = toolbar.closest('div,section,form,li,article') || toolbar.parentElement || document;
-    // prefer “forward” siblings first
-    let el = toolbar.nextElementSibling;
-    for (let i=0; i<6 && el; i++, el = el.nextElementSibling){
-      if (el.matches && (el.matches('textarea') || el.matches('[contenteditable="true"]'))) return el;
-      const inside = el.querySelector && (el.querySelector('textarea,[contenteditable="true"]'));
-      if (inside) return inside;
+  // 5) Ensure exactly ONE button in the Add Note toolbar; remove all other stray copies
+  function ensureSingleButton(targetToolbar, fallbackBefore){
+    // Remove any existing 📷 anywhere else
+    document.querySelectorAll('#photo-token-btn').forEach(node => {
+      if (!targetToolbar || !targetToolbar.contains(node)) node.remove();
+    });
+
+    if (targetToolbar){
+      if (targetToolbar.querySelector('#photo-token-btn')) return targetToolbar.querySelector('#photo-token-btn');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'photo-token-btn';
+      b.className = 'btn btn-light';
+      b.textContent = '📷';
+      b.title = 'Attach photo';
+      b.style.marginLeft = '6px';
+
+      // Place after "- List" if present, else append
+      const items = Array.from(targetToolbar.querySelectorAll('button, a'));
+      const listBtn = items.find(x => {
+        const k = (x.textContent || '').trim().toLowerCase();
+        return k === '- list' || k.includes('list');
+      });
+      if (listBtn && listBtn.parentElement === targetToolbar){
+        listBtn.insertAdjacentElement('afterend', b);
+      } else {
+        targetToolbar.appendChild(b);
+      }
+      return b;
+    } else if (fallbackBefore) {
+      // No toolbar? put button just above textarea, but ensure single
+      if (fallbackBefore.parentElement && !fallbackBefore.parentElement.querySelector('#photo-token-btn')){
+        const b = document.createElement('button');
+        b.type='button'; b.id='photo-token-btn';
+        b.className='btn btn-light'; b.textContent='📷'; b.title='Attach photo';
+        b.style.margin='6px 0';
+        fallbackBefore.parentElement.insertBefore(b, fallbackBefore);
+        return b;
+      }
     }
-    // fallback: search within the block
-    const ta = block.querySelector('textarea');
-    if (ta) return ta;
-    const ce = block.querySelector('[contenteditable="true"]');
-    if (ce) return ce;
-    // last resort: first textarea on page
-    return document.querySelector('textarea');
+    return null;
   }
 
-  // Ensure a 📷 button exists in a toolbar element
-  function ensureButtonInToolbar(toolbar){
-    if (!toolbar) return;
-    if (toolbar.querySelector('#photo-token-btn')) return;
+  // 6) Wire the button to insert a [[PHOTO …]] token into the SAME textarea
+  function wireButton(btn, textarea){
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
 
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.id = 'photo-token-btn';
-    b.className = 'btn btn-light';
-    b.textContent = '📷';
-    b.title = 'Attach photo';
-    b.style.marginLeft = '6px';
-
-    b.addEventListener('click', (e)=>{
+    btn.addEventListener('click', (e)=>{
       e.preventDefault();
-      const editable = findEditableForToolbar(b);
-      if (!editable){ alert('Could not find the note box near this toolbar.'); return; }
-
       const p = getPicker();
       p.onchange = (ev)=>{
         const file = ev.target.files && ev.target.files[0];
@@ -104,61 +138,25 @@
           const full  = await scale(e2.target.result, 1200);
           const thumb = await scale(e2.target.result, 320);
           const token = `\n[[PHOTO full="${full}" thumb="${thumb}"]]\n`;
-
-          if (editable.tagName && editable.tagName.toLowerCase()==='textarea'){
-            insertAtCaretTextarea(editable, token);
-          } else {
-            // contenteditable fallback (insert token text)
-            editable.focus();
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount){
-              const range = sel.getRangeAt(0);
-              range.deleteContents();
-              range.insertNode(document.createTextNode(token));
-              range.collapse(false);
-              sel.removeAllRanges(); sel.addRange(range);
-            } else {
-              editable.insertAdjacentText('beforeend', token);
-            }
-            editable.dispatchEvent(new Event('input', {bubbles:true}));
-          }
-
-          p.value='';
+          insertAtCaretTextarea(textarea, token);
+          p.value = '';
         };
         r.readAsDataURL(file);
       };
       p.click();
     });
-
-    // place after “- List” if present; else append to toolbar
-    const items = Array.from(toolbar.querySelectorAll('button, a'));
-    const listBtn = items.find(x => ((x.textContent||'').trim().toLowerCase() === '- list') ||
-                                    ((x.textContent||'').toLowerCase().includes('list')));
-    if (listBtn && listBtn.parentElement === toolbar){
-      listBtn.insertAdjacentElement('afterend', b);
-    } else {
-      toolbar.appendChild(b);
-    }
   }
 
-  // Find all candidate toolbars (B / I / U / HL / List cluster) and ensure button
+  // 7) Attach once; re-assert every 1s in case UI re-renders
   function attach(){
-    document.querySelectorAll('div,section,form,header,footer,nav').forEach(el=>{
-      const buttons = el.querySelectorAll && el.querySelectorAll('button, a');
-      if (!buttons || buttons.length < 2) return;
-      // heuristically detect the tiny formatting row by presence of "- List" or B/I
-      const labels = Array.from(buttons).map(b => (b.textContent||'').trim().toLowerCase());
-      const looksLikeToolbar = labels.some(t => t === '- list' || t.includes('list') || t === 'b' || t === 'i' || t === 'u' || t.includes('hl'));
-      if (!looksLikeToolbar) return;
-      // also make sure a textarea/contenteditable exists nearby in same block
-      const block = el.closest('div,section,form,article,li') || el.parentElement;
-      if (!block) return;
-      if (!block.querySelector('textarea,[contenteditable="true"]')) return;
+    const block = findAddNoteBlock();
+    if (!block) return;
+    const { textarea, toolbar } = block;
 
-      ensureButtonInToolbar(el);
-    });
+    const btn = ensureSingleButton(toolbar, textarea);
+    wireButton(btn, textarea);
   }
 
   attach();
-  setInterval(attach, 800); // keep present if UI re-renders
+  setInterval(attach, 1000);
 })();
