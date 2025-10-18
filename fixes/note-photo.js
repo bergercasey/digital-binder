@@ -1,50 +1,51 @@
-// fixes/note-photo.js — Photo button in the tiny toolbar; inserts into the Add Note textarea
+// fixes/note-photo.js — toolbar 📷 that inserts into Add Note (textarea or contenteditable)
 (function () {
   if (window.__notePhotoToolbarInit) return; window.__notePhotoToolbarInit = true;
 
-  const $ = (s, r) => (r || document).querySelector(s);
+  const $  = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const txt = el => (el && (el.textContent || el.value) || "").trim().toLowerCase();
 
-  // Find the "Add Note" section => its textarea + the little toolbar row above it
+  // Find the "Add Note" area: its toolbar row + the real editable field
   function findAddNoteSection() {
-    // 1) Find an "Add Note" button
     const addBtns = $$('button, a').filter(b => txt(b) === 'add note');
     for (const btn of addBtns) {
-      // Look upward a few levels for a container that also contains a textarea
       let p = btn.parentElement;
       for (let i = 0; i < 6 && p; i++, p = p.parentElement) {
-        const ta = $('textarea', p);
-        if (!ta) continue;
+        // Accept textarea OR contenteditable inside the same block
+        let ta = $('textarea', p);
+        let ce = $('[contenteditable="true"]', p);
+        const editable = ta || ce;
+        if (!editable) continue;
 
-        // Find the toolbar element just BEFORE the textarea that has small buttons (B / I / etc)
-        let toolbar = ta.previousElementSibling;
+        // Toolbar just BEFORE the editable with multiple small buttons (B / I / HL / List)
+        let toolbar = editable.previousElementSibling;
         for (let j = 0; j < 4 && toolbar; j++, toolbar = toolbar.previousElementSibling) {
           const btns = toolbar && toolbar.querySelectorAll ? toolbar.querySelectorAll('button, a') : [];
-          if (btns && btns.length >= 2) {
-            return { container: p, textarea: ta, toolbar: toolbar };
-          }
+          if (btns && btns.length >= 2) return { container: p, editable, toolbar };
         }
-        // If not found, allow placing before the textarea anyway
-        return { container: p, textarea: ta, toolbar: null };
+        // If no toolbar detected, still return
+        return { container: p, editable, toolbar: null };
       }
     }
 
-    // Fallback: first textarea on page
+    // Fallback: first textarea or contenteditable on the page
     const ta = $('textarea');
-    if (ta) {
-      let toolbar = ta.previousElementSibling;
+    const ce = $('[contenteditable="true"]');
+    const editable = ta || ce;
+    if (editable) {
+      let toolbar = editable.previousElementSibling;
       for (let j = 0; j < 4 && toolbar; j++, toolbar = toolbar.previousElementSibling) {
         const btns = toolbar && toolbar.querySelectorAll ? toolbar.querySelectorAll('button, a') : [];
-        if (btns && btns.length >= 2) return { container: document, textarea: ta, toolbar };
+        if (btns && btns.length >= 2) return { container: document, editable, toolbar };
       }
-      return { container: document, textarea: ta, toolbar: null };
+      return { container: document, editable, toolbar: null };
     }
     return null;
   }
 
-  // Insert HTML at caret in a textarea
-  function insertAtCursor(textarea, html) {
+  // Insert HTML at caret for TEXTAREA
+  function insertAtCursorTextArea(textarea, html) {
     try {
       const start = textarea.selectionStart ?? textarea.value.length;
       const end   = textarea.selectionEnd ?? textarea.value.length;
@@ -53,14 +54,42 @@
       textarea.value = before + html + after;
       const pos = (before + html).length;
       textarea.selectionStart = textarea.selectionEnd = pos;
-    } catch (e) {
+    } catch (_) {
       textarea.value += html;
     }
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     textarea.focus();
   }
 
-  // Downscale so notes stay fast
+  // Insert HTML at caret for CONTENTEDITABLE
+  function insertAtCaretContentEditable(el, html) {
+    el.focus();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const frag = range.createContextualFragment(html);
+      const lastNode = frag.lastChild;
+      range.insertNode(frag);
+      // move caret after inserted content
+      const newRange = document.createRange();
+      newRange.setStartAfter(lastNode);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+    } else {
+      el.insertAdjacentHTML('beforeend', html);
+      // move caret to end
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      r.collapse(false);
+      const s = window.getSelection();
+      s.removeAllRanges(); s.addRange(r);
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  // Downscale images so notes stay snappy
   function downscale(dataURL, maxW = 1200) {
     return new Promise(res => {
       const img = new Image();
@@ -78,22 +107,24 @@
     });
   }
 
-  function onPick(file, textarea) {
+  function onPick(file, editable) {
     if (!file) return;
     if (!/^image\//.test(file.type)) { alert('Please pick an image.'); return; }
     const r = new FileReader();
     r.onload = async e => {
       const scaled = await downscale(e.target.result, 1200);
       const html = `\n<img src="${scaled}" alt="Photo" style="max-width:100%;height:auto;display:block;margin:6px auto;border:1px solid #ddd;border-radius:6px;">\n`;
-      insertAtCursor(textarea, html);
+      if (editable.tagName && editable.tagName.toLowerCase() === 'textarea') {
+        insertAtCursorTextArea(editable, html);
+      } else {
+        insertAtCaretContentEditable(editable, html);
+      }
     };
     r.readAsDataURL(file);
   }
 
   function addToolbarButton(section) {
-    const { textarea, toolbar } = section;
-
-    // Avoid dupes
+    const { editable, toolbar } = section;
     if ($('#note-photo-toolbar-btn', toolbar || document)) return;
 
     // Hidden picker (no capture so iOS shows Library/Camera choice)
@@ -118,40 +149,10 @@
 
     btn.addEventListener('click', (e) => { e.preventDefault(); picker.click(); });
     picker.addEventListener('change', (e) => {
-      onPick(e.target.files && e.target.files[0], textarea);
+      onPick(e.target.files && e.target.files[0], editable);
       e.target.value = '';
     });
 
     if (toolbar) {
-      // Put it directly after the List button if present; else just append
-      const maybeList = Array.from(toolbar.querySelectorAll('button, a')).find(b => txt(b).includes('list') || txt(b) === '- list');
-      if (maybeList && maybeList.parentElement === toolbar) {
-        maybeList.insertAdjacentElement('afterend', btn);
-      } else {
-        toolbar.appendChild(btn);
-      }
-    } else {
-      // If no toolbar element exists, place it right above the textarea
-      textarea.parentElement ? textarea.parentElement.insertBefore(btn, textarea) : textarea.before(btn);
-    }
-  }
-
-  function init() {
-    const section = findAddNoteSection();
-    if (section) { addToolbarButton(section); return; }
-
-    // If UI renders late, watch briefly
-    const obs = new MutationObserver(() => {
-      const s = findAddNoteSection();
-      if (s) { addToolbarButton(s); obs.disconnect(); }
-    });
-    obs.observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(() => obs.disconnect(), 3000);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
-  } else {
-    init();
-  }
-})();
+      // Put it right after "- List" if present
+      const maybeList = Array.from(toolba
