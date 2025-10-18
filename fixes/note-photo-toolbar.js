@@ -1,4 +1,5 @@
-// fixes/note-photo-toolbar.js — LOCK the 📷 button into the tiny toolbar and insert into Add Note
+// fixes/note-photo-toolbar.js — 📷 in toolbar; inserts "[Photo attached]" into textarea
+// and shows a live thumbnail preview just below the note editor.
 (function(){
   if (window.__notePhotoToolbarLockInit) return; window.__notePhotoToolbarLockInit = true;
 
@@ -7,20 +8,19 @@
   const text = el => (el && (el.textContent || el.value) || "").trim().toLowerCase();
 
   function findAddNoteBlocks(){
-    // Buttons/links whose label is exactly "Add Note"
     const adds = $$('button, a').filter(b => text(b) === 'add note');
     const blocks = [];
     for (const btn of adds){
       let p = btn.parentElement;
-      for (let i = 0; i < 8 && p; i++, p = p.parentElement){
+      for (let i=0; i<8 && p; i++, p=p.parentElement){
         const ta = $('textarea', p);
         const ce = $('[contenteditable="true"]', p);
         const editable = ta || ce;
-        if (!editable) continue;
+        if (!editable){ continue; }
 
-        // The tiny toolbar just BEFORE the editor (has >= 2 buttons e.g. B / I / ...)
+        // toolbar right before editable
         let toolbar = editable.previousElementSibling;
-        for (let j = 0; j < 4 && toolbar; j++, toolbar = toolbar.previousElementSibling){
+        for (let j=0; j<4 && toolbar; j++, toolbar = toolbar.previousElementSibling){
           const btns = toolbar && toolbar.querySelectorAll ? toolbar.querySelectorAll('button, a') : [];
           if (btns && btns.length >= 2){ blocks.push({root:p, editable, toolbar}); break; }
         }
@@ -28,14 +28,13 @@
         break;
       }
     }
-    // Fallback if no explicit "Add Note" found
+    // fallback
     if (!blocks.length){
-      const ta = $('textarea');
-      const ce = $('[contenteditable="true"]');
+      const ta = $('textarea'); const ce = $('[contenteditable="true"]');
       const editable = ta || ce;
       if (editable){
         let toolbar = editable.previousElementSibling;
-        for (let j = 0; j < 4 && toolbar; j++, toolbar = toolbar.previousElementSibling){
+        for (let j=0; j<4 && toolbar; j++, toolbar = toolbar.previousElementSibling){
           const btns = toolbar && toolbar.querySelectorAll ? toolbar.querySelectorAll('button, a') : [];
           if (btns && btns.length >= 2){ blocks.push({root:document, editable, toolbar}); break; }
         }
@@ -45,30 +44,27 @@
     return blocks;
   }
 
-  function ensureButton(toolbar, onClick){
-    // Remove duplicates
-    $$('#note-photo-toolbar-btn', toolbar).forEach(n => n.remove());
+  function ensurePreviewBox(root, editable){
+    let box = $('#note-photo-preview-box', root);
+    if (box) return box;
+    box = document.createElement('div');
+    box.id = 'note-photo-preview-box';
+    box.style.cssText = 'margin:6px 0 0; display:flex; gap:8px; flex-wrap:wrap;';
+    // place right under the editor
+    if (editable.nextSibling){ editable.parentElement.insertBefore(box, editable.nextSibling); }
+    else { editable.parentElement.appendChild(box); }
+    return box;
+  }
 
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.id = 'note-photo-toolbar-btn';
-    b.textContent = '📷';
-    b.title = 'Insert photo';
-    b.className = 'btn btn-light';
-    b.style.marginLeft = '6px';
-    b.addEventListener('click', (e)=>{ e.preventDefault(); onClick(); });
-
-    // Place right after "- List" if present, else append
-    const items = Array.from(toolbar.querySelectorAll('button, a'));
-    const listBtn = items.find(x => {
-      const k = text(x);
-      return k === '- list' || k.includes('list');
-    });
-    if (listBtn && listBtn.parentElement === toolbar){
-      listBtn.insertAdjacentElement('afterend', b);
-    } else {
-      toolbar.appendChild(b);
-    }
+  function addThumb(previewBox, dataURL){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid #ddd;border-radius:6px;padding:4px;';
+    const img = document.createElement('img');
+    img.src = dataURL;
+    img.alt = 'Photo';
+    img.style.cssText = 'display:block;max-width:140px;max-height:140px;height:auto;';
+    wrap.appendChild(img);
+    previewBox.appendChild(wrap);
   }
 
   function downscale(dataURL, maxW=1200){
@@ -87,45 +83,37 @@
     });
   }
 
-  function insertAtCursorTextArea(textarea, html){
-    try{
-      const start = textarea.selectionStart ?? textarea.value.length;
-      const end   = textarea.selectionEnd ?? textarea.value.length;
-      const before = textarea.value.slice(0, start);
-      const after  = textarea.value.slice(end);
-      textarea.value = before + html + after;
-      const pos = (before + html).length;
-      textarea.selectionStart = textarea.selectionEnd = pos;
-    }catch(_){
-      textarea.value += html;
-    }
-    textarea.dispatchEvent(new Event('input', {bubbles:true}));
-    textarea.focus();
-  }
-
-  function insertAtCaretContentEditable(el, html){
-    el.focus();
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount && el.contains(sel.anchorNode)){
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      const frag = range.createContextualFragment(html);
-      const lastNode = frag.lastChild;
-      range.insertNode(frag);
-      const nr = document.createRange();
-      nr.setStartAfter(lastNode);
-      nr.collapse(true);
-      sel.removeAllRanges(); sel.addRange(nr);
+  function insertMarker(editable){
+    const marker = '\n[Photo attached]\n';
+    if (editable.tagName && editable.tagName.toLowerCase() === 'textarea'){
+      try{
+        const start = editable.selectionStart ?? editable.value.length;
+        const end   = editable.selectionEnd ?? editable.value.length;
+        const before = editable.value.slice(0, start);
+        const after  = editable.value.slice(end);
+        editable.value = before + marker + after;
+        const pos = (before + marker).length;
+        editable.selectionStart = editable.selectionEnd = pos;
+      }catch(_){
+        editable.value += marker;
+      }
+      editable.dispatchEvent(new Event('input', {bubbles:true}));
+      editable.focus();
     } else {
-      el.insertAdjacentHTML('beforeend', html);
-      const r = document.createRange();
-      r.selectNodeContents(el); r.collapse(false);
-      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      editable.focus();
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount && editable.contains(sel.anchorNode)){
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(marker));
+      } else {
+        editable.insertAdjacentText('beforeend', marker);
+      }
+      editable.dispatchEvent(new Event('input', {bubbles:true}));
     }
-    el.dispatchEvent(new Event('input', {bubbles:true}));
   }
 
-  // One hidden picker reused
+  // one hidden picker reused
   let picker;
   function getPicker(){
     if (!picker){
@@ -139,24 +127,47 @@
     return picker;
   }
 
+  function ensureButton(toolbar, onClick){
+    // remove dupes within this toolbar
+    const existing = toolbar.querySelector('#note-photo-toolbar-btn');
+    if (existing) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'note-photo-toolbar-btn';
+    b.textContent = '📷';
+    b.title = 'Attach photo';
+    b.className = 'btn btn-light';
+    b.style.marginLeft = '6px';
+    b.addEventListener('click', (e)=>{ e.preventDefault(); onClick(); });
+
+    // place after "- List" if present
+    const items = Array.from(toolbar.querySelectorAll('button, a'));
+    const listBtn = items.find(x => {
+      const k = (x.textContent || '').trim().toLowerCase();
+      return k === '- list' || k.includes('list');
+    });
+    if (listBtn && listBtn.parentElement === toolbar){
+      listBtn.insertAdjacentElement('afterend', b);
+    } else {
+      toolbar.appendChild(b);
+    }
+  }
+
   function attach(){
     const blocks = findAddNoteBlocks();
-    blocks.forEach(({editable, toolbar})=>{
+    blocks.forEach(({editable, toolbar, root})=>{
       const onPick = ()=>{
         const p = getPicker();
-        p.onchange = (e)=>{
+        p.onchange = async (e)=>{
           const file = e.target.files && e.target.files[0];
           if (!file) return;
           if (!/^image\//.test(file.type)){ alert('Please pick an image.'); p.value=''; return; }
           const r = new FileReader();
           r.onload = async ev => {
             const scaled = await downscale(ev.target.result, 1200);
-            const html = `\n<img src="${scaled}" alt="Photo" style="max-width:100%;height:auto;display:block;margin:6px auto;border:1px solid #ddd;border-radius:6px;">\n`;
-            if (editable.tagName && editable.tagName.toLowerCase()==='textarea'){
-              insertAtCursorTextArea(editable, html);
-            } else {
-              insertAtCaretContentEditable(editable, html);
-            }
+            const box = ensurePreviewBox(root, editable);
+            addThumb(box, scaled);
+            insertMarker(editable);   // so you see something inside the note
             p.value='';
           };
           r.readAsDataURL(file);
@@ -164,23 +175,20 @@
         p.click();
       };
 
-      if (toolbar){
-        ensureButton(toolbar, onPick);
-      } else {
-        // If no toolbar exists, place a button directly above the editor
-        if (!document.getElementById('note-photo-toolbar-btn')){
+      if (toolbar){ ensureButton(toolbar, onPick); }
+      else {
+        // if no toolbar, put a small button above editable
+        if (!root.querySelector('#note-photo-toolbar-btn')){
           const b = document.createElement('button');
-          b.type = 'button'; b.id='note-photo-toolbar-btn';
-          b.textContent='📷'; b.className='btn btn-light';
-          b.style.margin='6px 0';
-          b.addEventListener('click', (e)=>{ e.preventDefault(); onPick(); });
+          b.type='button'; b.id='note-photo-toolbar-btn'; b.textContent='📷'; b.className='btn btn-light';
+          b.style.margin='6px 0'; b.addEventListener('click', (e)=>{ e.preventDefault(); onPick(); });
           editable.parentElement ? editable.parentElement.insertBefore(b, editable) : editable.before(b);
         }
       }
     });
   }
 
-  // Keep it present even if the UI re-renders
   attach();
-  setInterval(attach, 600);
+  setInterval(attach, 700); // keep it present if UI re-renders
 })();
+
