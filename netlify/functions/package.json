@@ -1,0 +1,12 @@
+{
+  "name": "binder-concurrency-dropin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^6.4.0"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}
