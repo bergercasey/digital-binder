@@ -8,11 +8,7 @@ export async function handler(event) {
     if (!auth.ok) return { statusCode: 401, body: 'Unauthorized' };
   }
   try {
-    const store = getStore({
-      name: 'binder-store',
-      siteID: process.env.BLOBS_SITE_ID,
-      token: process.env.BLOBS_TOKEN
-    });
+    const store = getStore({ name: 'binder-store' }); // Netlify defaults
     const data = await store.get('data', { type: 'json' });
     return {
       statusCode: 200,
