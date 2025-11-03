@@ -1,5 +1,5 @@
 {
-  "name": "binder-concurrency-dropin",
+  "name": "binder-rescue-fix",
   "version": "1.0.0",
   "private": true,
   "type": "module",
