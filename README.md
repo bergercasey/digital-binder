@@ -1,31 +1,30 @@
-# Binder — Email/Print Integration (GitHub Ready)
+# Concurrency-Safe Save/Load Drop‑In (build1)
 
-This repo is flattened so you can push it directly to GitHub.
+This package adds **optimistic concurrency** to your Netlify Blobs save/load so stale tabs can't overwrite newer data.
 
-## What’s included
-- `index.html` at the **root**
-- `email-print-addon/emailPrint.js` auto-injected next to your **Delete Selection** button
-- Preview with **Name (bold), Address, Current stage, Crew**, then **selected notes** as a bulleted list
-- Print popup that **auto-closes** after printing
-- Email uses the **same preview** (HTML via `window.env.EMAIL_API_URL`, otherwise `mailto:` fallback)
+## What’s inside
+- `netlify/functions/save.js` — rejects stale writes (409) using `serverVersion`
+- `netlify/functions/load.js` — returns the current document (with `serverVersion`)
+- `netlify/functions/_auth.js` — optional auth stub (currently disabled)
+- `public/dropin-concurrency-client.js` — client helpers you can **import/merge** into your app (API + save flow)
+- `public/example.html` — tiny demo wired to the helpers so you can verify the flow
+- `netlify.toml` — sets functions dir and Node runtime
+- `package.json` — adds `@netlify/blobs` dependency
 
-## Optional: wire your email backend
-Add before `</body>` (or in a small `<script>` block):
-```html
-<script>
-  window.env = {
-    EMAIL_API_URL: "https://your-netlify-function/send-email",
-    DEFAULT_TO: "you@yourdomain.com"
-  };
-</script>
-```
+## Quick Start (recommended for your existing app)
+1. Copy the **`netlify/functions`** folder into your repo (replace existing `load.js` and `save.js`).
+2. Keep your current UI code, but **merge** `public/dropin-concurrency-client.js`:
+   - Track and send `serverVersion` with every save.
+   - On 409 (stale), **do not overwrite** — prompt the user to reload/merge.
+3. Commit and push to GitHub → Netlify will auto‑deploy and install deps from `package.json`.
 
-## Selectors (override only if needed)
-```html
-<script>
-  window.EMAIL_PRINT_CONFIG = {
-    deleteButtonSelector: 'button#deleteSelected',
-    selectedNoteCheckboxSelector: 'input[type=checkbox][data-role="log-select"]:checked'
-  };
-</script>
-```
+> If your repo doesn't have a `package.json`, add the one here (or merge its deps) so Netlify can install `@netlify/blobs`.
+
+## Verify after deploy
+- Open **`/.netlify/functions/load`** on your site — you should see JSON (with `serverVersion` when data exists).
+- Open `public/example.html` from your build output (or run locally) and click **Save**. Then open a second tab and try to overwrite with an older version — the second tab should get **409 stale** and refuse to overwrite.
+
+## Offline note
+This drop‑in **removes silent localStorage fallbacks**. If you want offline support, show a clear **OFFLINE – not synced** banner and never auto‑push local data over server data without confirmation.
+
+— Built: 2025-11-03T16:18:14.809763
