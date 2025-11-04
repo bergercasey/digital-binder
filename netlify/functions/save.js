@@ -9,31 +9,23 @@ function cfg() {
 }
 
 export async function handler(event) {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+  if (event.httpMethod !== 'POST')
+    return { statusCode: 405, body: 'Method Not Allowed' };
+
   try {
     const { siteID, token } = cfg();
     const store = getStore({ name: 'binder-store', siteID, token });
 
     const incoming = JSON.parse(event.body || '{}');
 
-    // block accidental wipes unless explicitly allowed
-    const allowEmpty = !!incoming?.__allowEmpty;
-    if (!allowEmpty) {
-      const keys = Object.keys(incoming || {});
-      if (keys.length < 2) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-          body: JSON.stringify({ ok:false, reason:'suspicious-empty' })
-        };
-      }
-    }
-    delete incoming.__allowEmpty;
+    // ---- TEMP: disable "suspicious-empty" guard during rescue ----
+    // (We'll turn this back on once your data is restored.)
 
-    // optimistic concurrency
+    // optimistic concurrency (kept)
     const current = await store.get('data', { type: 'json' }) || null;
     const currVer = current?.serverVersion ?? 0;
     const incVer  = incoming?.serverVersion ?? 0;
+
     if (incVer < currVer) {
       return {
         statusCode: 409,
@@ -63,3 +55,4 @@ export async function handler(event) {
     };
   }
 }
+
