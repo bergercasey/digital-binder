@@ -13,12 +13,17 @@ export async function handler() {
     const { siteID, token } = cfg();
     const store = getStore({ name: 'binder-store', siteID, token });
     const data = await store.get('data', { type: 'json' });
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify(data || null)
+      body: JSON.stringify(data ?? null)
     };
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: String(e) }) };
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      body: JSON.stringify({ error: String(e) })
+    };
   }
 }
