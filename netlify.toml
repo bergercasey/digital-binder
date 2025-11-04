@@ -1,8 +1,8 @@
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-  external_node_modules = ["@netlify/blobs"]
-
 [build]
-  publish = "."   # 👈 use repo root (or set to the actual folder that has index.html)
-  command = ""
+  publish = "."   # or your actual folder with index.html
+
+[functions]
+  node_bundler = "esbuild"
+
+[context.production.environment]
+  NODE_VERSION = "18"
