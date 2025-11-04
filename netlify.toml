@@ -4,5 +4,5 @@
   external_node_modules = ["@netlify/blobs"]
 
 [build]
-  publish = "public"
+  publish = "."   # 👈 use repo root (or set to the actual folder that has index.html)
   command = ""
