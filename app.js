@@ -71,10 +71,12 @@
     ],
     ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
   };
+// expose state and a serializer for the HUD
 window.state = state;
 window.serializeAppState = () => ({ ...state, version: 17 });
-// tell the HUD you're ready
+// tell the HUD we're ready (so the bubble doesn't get stuck)
 window.dispatchEvent(new Event('serializer-ready'));
+
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
   function toast(msg, ms=1800) {
