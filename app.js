@@ -71,6 +71,16 @@
     ],
     ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
   };
+
+// Expose current state + a serializer for the HUD (save-manager.js)
+window.state = state;
+window.serializeAppState = function () {
+  return { ...state, version: 17, serverVersion: (window._serverVersion || 0) };
+};
+// Let the HUD know we’re ready to provide serialized state
+window.dispatchEvent(new Event('serializer-ready'));
+
+
 // expose state and a serializer for the HUD
 window.state = state;
 window.serializeAppState = () => ({ ...state, version: 17 });
@@ -467,8 +477,27 @@ function renderAll() {
     else job.notes.push({ d: ymd(), ...(payload || {}) });
   }
 
-  const save = debounce(async () => {
-    status("Saving…");
+  const save = debounce(() => {
+  status("Saving…");
+  // Prefer the HUD one-writer path to avoid double POSTs
+  if (window.queueSaveNow) {
+    window.queueSaveNow();
+    return; // IMPORTANT: do not also call API.save() here
+  }
+  // Fallback ONLY if HUD didn’t load
+  const payload = { ...state, version: 17, serverVersion: (window._serverVersion || 0) };
+  fetch("/.netlify/functions/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(payload),
+    keepalive: true
+  })
+  .then(() => status("Saved"))
+  .catch(() => {
+    status("Saved locally — will retry");
+    try { localStorage.setItem("binder-data", JSON.stringify(payload)); } catch {}
+  });
+}, 300);
     const payload = { ...state, version: 17 };
     try {
       const res = await API.save(payload);
