@@ -1,118 +1,107 @@
-// save-manager.js — build5 (patient boot)
-(function(){
-  const CSS = `#saveHud{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);padding:8px 12px;border-radius:10px;background:rgba(20,24,38,.95);color:#fff;font:14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999}
-  #saveHud.ok{background:#124c20}#saveHud.saving{background:#141826}#saveHud.offline{background:#593100}#saveHud.stale{background:#5a102a}#saveHud.error{background:#5a1010}#saveHud.wait{background:#2b2f45}`;
+/* save-manager.js v6 (tablet-safe, never wipes data) */
+(function () {
+  const LS_KEY = 'binder-data';
+  const STATUS = {
+    set(t){ const el = document.getElementById('dbg-status'); if (el) el.textContent = t; },
+    log(m){ if (window.__log) window.__log(m); }
+  };
 
-  
-  function whenAppReady(cb){
-    if (window.__APP_READY__) return cb&&cb();
-    document.addEventListener('app:ready', ()=>cb&&cb(), {once:true});
-  }
-
-  function injectHUD(){
-    if(document.getElementById('saveHud')) return;
-    const style=document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
-    const hud=document.createElement('div'); hud.id='saveHud'; hud.hidden=false; hud.className='wait';
-    const span=document.createElement('span'); span.id='saveHudText'; span.textContent='Waiting for app…';
-    hud.appendChild(span); document.body.appendChild(hud);
-  }
-  const $hud=()=>document.getElementById('saveHud');
-  const $txt=()=>document.getElementById('saveHudText');
-  function hud(state, text){
-    const el=$hud(); if(!el) return;
-    el.className = state; if($txt()) $txt().textContent = text||'';
-    el.hidden = false; if(state==='ok') setTimeout(()=>{ el.hidden = true; }, 1200);
-  }
-
-  const SaveManager=(function(){
-    let serverVersion=0, inFlight=false, pending=null;
-    async function init(){
-      try{
-        const r = await fetch('/.netlify/functions/load', { cache:'no-store' });
-        if(r.ok){
-          const data = await r.json();
-          serverVersion = (data && data.serverVersion) || 0;
-          window._serverVersion = serverVersion;
-        }
-      }catch(_){}
+  async function netlifyLoad() {
+    try {
+      const res = await fetch('/.netlify/functions/load', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      STATUS.log('Cloud load OK ('+ text.length +' bytes)');
+      return text;
+    } catch (e) {
+      STATUS.log('Cloud load failed: ' + e.message);
+      return null;
     }
-    function queueSave(snapshot){ pending = snapshot; tick(); }
-    async function tick(){
-      if(inFlight || !pending) return;
-      const snapshot = pending; pending = null;
-      const payload = { ...snapshot, serverVersion: (window._serverVersion ?? serverVersion) };
-      inFlight = true; hud('saving','Saving to cloud…');
-      try{
-        const r = await fetch('/.netlify/functions/save', {
-          method:'POST',
-          headers:{'Content-Type':'application/json','Cache-Control':'no-store'},
-          body: JSON.stringify(payload),
-          keepalive: true
-        });
-        const raw = await r.text(); let body=null; try{ body = JSON.parse(raw) }catch{}
-        if(r.status===200 && body && body.ok){
-          serverVersion = body.serverVersion || (serverVersion+1);
-          window._serverVersion = serverVersion;
-          hud('ok','Saved to cloud');
-        }else if(r.status===409){
-          hud('stale','Newer copy on server — tap to reload'); 
-          $hud().onclick = ()=>location.reload();
-        }else if(r.status===400){
-          hud('error','Save rejected');
-          console.warn('Save 400', raw);
-        }else{
-          hud('error',`Save error ${r.status}`);
-          console.warn('Save error', r.status, raw);
+  }
+
+  async function netlifySave(raw) {
+    try {
+      const res = await fetch('/.netlify/functions/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      STATUS.log('Cloud save OK');
+      return true;
+    } catch (e) {
+      STATUS.log('Cloud save failed: ' + e.message);
+      return false;
+    }
+  }
+
+  function lsGet() {
+    try {
+      const s = localStorage.getItem(LS_KEY);
+      if (s) STATUS.log('Loaded from localStorage ('+ s.length +' bytes)');
+      return s;
+    } catch { return null; }
+  }
+  function lsSet(raw) {
+    try { localStorage.setItem(LS_KEY, raw); STATUS.log('Saved to localStorage'); } catch {}
+  }
+
+  async function loadData() {
+    STATUS.set('Loading…');
+    // 1) Try cloud
+    let raw = await netlifyLoad();
+    // 2) Fallback to localStorage
+    if (!raw) raw = lsGet();
+    // 3) Final fallback to empty default (but do NOT overwrite existing storage yet)
+    if (!raw) {
+      STATUS.log('No existing data found. Using defaults.');
+      raw = JSON.stringify({ contractors: [], jobs: [], settings: {} });
+    }
+    // publish to app once ready
+    function publish() {
+      try {
+        if (typeof window.deserializeAppState === 'function') {
+          window.deserializeAppState(raw);
+        } else {
+          // Minimal compatibility: place on a global
+          window.__APP_STATE__ = JSON.parse(raw);
+          if (typeof window.render === 'function') window.render();
         }
-      }catch(e){
-        hud('offline','Offline — will retry…');
-        pending = snapshot; setTimeout(tick, 1500);
-      }finally{
-        inFlight=false; if(pending) setTimeout(tick, 75);
+        STATUS.set('Ready');
+      } catch (e) {
+        STATUS.set('Ready (with warnings)');
+        STATUS.log('Deserialize error: ' + e.message);
       }
     }
-    return { init, queueSave };
-  })();
-
-  function hasSerializer(){ return (typeof window.serializeAppState === 'function'); }
-
-  function startWithSerializer(){
-    const serializer = window.serializeAppState;
-    if(!serializer){ hud('error','Configure serializeAppState()'); return; }
-    SaveManager.init();
-    const debounced=(function(fn,ms){ let t; return ()=>{ clearTimeout(t); t=setTimeout(fn,ms); }; })(()=>{
-      try{
-        const snap = serializer();
-        if(!snap || typeof snap!=='object'){ hud('error','serializeAppState() returned nothing'); return; }
-        SaveManager.queueSave(snap);
-      }catch(err){ hud('error','serializeAppState() failed'); console.error(err); }
-    }, 250);
-    ['input','change'].forEach(evt=> document.addEventListener(evt, debounced, true));
-    hud('ok','Ready');
+    if (window.__APP_READY__) publish();
+    else document.addEventListener('app:ready', publish, { once: true });
   }
 
-  function waitForSerializer(maxMs){
-    const started = Date.now();
-    function check(){
-      if(hasSerializer()){ startWithSerializer(); return; }
-      if(Date.now() - started >= maxMs){ hud('error','Configure serializeAppState()'); return; }
-      setTimeout(check, 250);
-    }
-    check();
-  }
-
-  function boot(){
-    injectHUD();
-    if(hasSerializer()){ startWithSerializer(); }
-    else {
-      hud('wait','Waiting for app…');
-      window.addEventListener('serializer-ready', ()=>{
-        if(hasSerializer()) startWithSerializer();
-      }, { once:true });
-      waitForSerializer(15000);
+  async function saveNow() {
+    try {
+      const raw = (typeof window.serializeAppState === 'function') ? window.serializeAppState() : JSON.stringify(window.__APP_STATE__ || {});
+      if (!raw) return;
+      lsSet(raw);               // always save locally
+      await netlifySave(raw);   // try cloud (ignore failure)
+    } catch (e) {
+      STATUS.log('Save error: ' + e.message);
     }
   }
 
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  // Expose a throttled autosave
+  let t=null;
+  window.requestAutosave = function () {
+    if (t) cancelAnimationFrame(t);
+    t = requestAnimationFrame(saveNow);
+  };
+
+  // Start
+  loadData();
+
+  // Debug helpers (for tablet without console)
+  window.__dump = function () {
+    const raw = lsGet();
+    STATUS.log('Dump len=' + (raw ? raw.length : 0));
+    return raw;
+  };
 })();
