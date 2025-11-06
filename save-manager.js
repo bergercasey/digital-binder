@@ -1,4 +1,4 @@
-/* save-manager.js v6 (tablet-safe, never wipes data) */
+/* save-manager.js v7 (aggressive hydration; never wipes; tablet log) */
 (function () {
   const LS_KEY = 'binder-data';
   const STATUS = {
@@ -46,35 +46,56 @@
     try { localStorage.setItem(LS_KEY, raw); STATUS.log('Saved to localStorage'); } catch {}
   }
 
+  let hydrated = false;
+  function hydrate(raw) {
+    if (hydrated) return;
+    try {
+      if (typeof window.deserializeAppState === 'function') {
+        window.deserializeAppState(raw);
+        STATUS.log('Deserialized via app hook.');
+      } else {
+        // Minimal compatibility fallback
+        window.__APP_STATE__ = JSON.parse(raw);
+        if (typeof window.render === 'function') {
+          window.render();
+          STATUS.log('Rendered via global render().');
+        } else {
+          STATUS.log('No deserialize/render found; state placed at window.__APP_STATE__.');
+        }
+      }
+      hydrated = true;
+      STATUS.set('Ready');
+      try { document.dispatchEvent(new Event('data:hydrated')); } catch(_) {}
+    } catch (e) {
+      STATUS.set('Ready (with warnings)');
+      STATUS.log('Hydrate error: ' + e.message);
+    }
+  }
+
   async function loadData() {
     STATUS.set('Loading…');
     // 1) Try cloud
     let raw = await netlifyLoad();
     // 2) Fallback to localStorage
     if (!raw) raw = lsGet();
-    // 3) Final fallback to empty default (but do NOT overwrite existing storage yet)
+    // 3) Final fallback to empty default, but DO NOT overwrite storage yet
     if (!raw) {
       STATUS.log('No existing data found. Using defaults.');
       raw = JSON.stringify({ contractors: [], jobs: [], settings: {} });
     }
-    // publish to app once ready
-    function publish() {
-      try {
-        if (typeof window.deserializeAppState === 'function') {
-          window.deserializeAppState(raw);
-        } else {
-          // Minimal compatibility: place on a global
-          window.__APP_STATE__ = JSON.parse(raw);
-          if (typeof window.render === 'function') window.render();
-        }
-        STATUS.set('Ready');
-      } catch (e) {
-        STATUS.set('Ready (with warnings)');
-        STATUS.log('Deserialize error: ' + e.message);
-      }
+
+    // Store pending data so app can read it later if needed
+    window.__PENDING_DATA__ = raw;
+
+    // Hydrate now if app is ready; otherwise do both: timeout + event
+    if (window.__APP_READY__) {
+      hydrate(raw);
+    } else {
+      // Force hydration after 500ms even if app never signals ready
+      setTimeout(() => hydrate(raw), 500);
+      // And also listen for app:ready to hydrate (idempotent)
+      document.addEventListener('app:ready', () => hydrate(raw), { once: true });
     }
-    if (window.__APP_READY__) publish();
-    else document.addEventListener('app:ready', publish, { once: true });
   }
 
   async function saveNow() {

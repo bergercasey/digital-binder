@@ -13,7 +13,7 @@
     /* Tiny inline debug HUD so you don't need DevTools */
     #dbg {
       position: fixed; left: 8px; right: 8px; bottom: 8px;
-      background: rgba(0,0,0,.75); color: #fff; font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: rgba(0,0,0,.85); color: #fff; font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       border-radius: 10px; padding: 8px 10px; z-index: 99999;
       box-shadow: 0 4px 16px rgba(0,0,0,.35);
     }
@@ -45,7 +45,7 @@
   </script>
 </head>
 <body>
-  <!-- Your existing header / app UI renders above/below; we only add this debugger -->
+  <!-- Bottom debug HUD -->
   <div id="dbg">
     <b>Status:</b> <span id="dbg-status">Booting…</span>
     <small> (Tap to hide)</small>
@@ -57,13 +57,13 @@
       e.currentTarget.style.display = 'none';
     });
     document.addEventListener('app:ready', () => {
-      document.getElementById('dbg-status').textContent = 'Ready';
+      document.getElementById('dbg-status').textContent = 'Ready (app signaled)';
       window.__log('App signaled ready.');
     });
   </script>
 
-  <!-- Load order: save-manager first so it can listen, then app -->
-  <script src="save-manager.js?v=6" defer></script>
+  <!-- IMPORTANT: for this app, load app.js FIRST to build the shell; then hydrate via save-manager -->
   <script src="app.js?v=3.12" defer></script>
+  <script src="save-manager.js?v=7" defer></script>
 </body>
 </html>
