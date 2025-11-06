@@ -143,7 +143,11 @@ header { position: relative; }
   <link rel="manifest" href="/site.webmanifest?v=1758978146">
   <meta name="theme-color" content="#0b7ef2">
   <link rel="stylesheet" href="fixes/note-photo-force.css">
-<script src="/save-manager.js?v=4" defer></script>
+
+  <!-- your app FIRST -->
+  <script src="/app.js?v=3.12" defer></script>
+  <!-- the HUD SECOND -->
+  <script src="/save-manager.js?v=4" defer></script>
 
 </head>
 
@@ -180,7 +184,7 @@ header { position: relative; }
     <aside>
       <div class="aside-head"><strong>Contractors</strong><span class="muted" id="contractor-count"></span></div>
       <div class="list" id="contractor-list"></div>
-      <div class="muted" style="font-size:11px; margin-top:8px;">Tip: Double‑click a contractor to open</div>
+      <div class="muted" style="font-size:11px; margin-top:8px;">Tip: Double-click a contractor to open</div>
     </aside>
 
     <section class="content view active" id="view-main">
@@ -255,8 +259,6 @@ header { position: relative; }
 </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
-  <script defer src="app.js"></script>
-
 
 <script>
   document.addEventListener('DOMContentLoaded', async () => {
@@ -270,7 +272,6 @@ header { position: relative; }
   });
 </script>
 
-
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('logoutBtn');
@@ -283,7 +284,6 @@ header { position: relative; }
     }
   });
 </script>
-
 
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
@@ -305,7 +305,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch {}
 });
 </script>
-
 
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
