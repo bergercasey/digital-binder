@@ -1,0 +1,8 @@
+[build]
+  publish = "."   # or your actual folder with index.html
+
+[functions]
+  node_bundler = "esbuild"
+
+[context.production.environment]
+  NODE_VERSION = "18"
