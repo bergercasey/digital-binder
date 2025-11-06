@@ -1004,3 +1004,30 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
   })();
 })();
+
+
+
+// ===== App Ready Handshake =====
+try {
+  if (typeof window.serializeAppState !== 'function') {
+    window.serializeAppState = function () {
+      try {
+        const snapshot = typeof getStateSnapshot === 'function' ? getStateSnapshot() : (typeof state !== 'undefined' ? state : {});
+        return JSON.stringify(snapshot);
+      } catch (e) { 
+        console.error('serializeAppState failed', e); 
+        return '{}';
+      }
+    };
+  }
+  if (typeof window.__notifyAppReady === 'function') {
+    window.__notifyAppReady();
+  } else {
+    window.__APP_READY__ = true;
+    try { document.dispatchEvent(new Event('app:ready')); } catch (_) {}
+  }
+} catch (e) {
+  console.error('Ready handshake failed', e);
+}
+
+})();

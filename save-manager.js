@@ -3,6 +3,12 @@
   const CSS = `#saveHud{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);padding:8px 12px;border-radius:10px;background:rgba(20,24,38,.95);color:#fff;font:14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999}
   #saveHud.ok{background:#124c20}#saveHud.saving{background:#141826}#saveHud.offline{background:#593100}#saveHud.stale{background:#5a102a}#saveHud.error{background:#5a1010}#saveHud.wait{background:#2b2f45}`;
 
+  
+  function whenAppReady(cb){
+    if (window.__APP_READY__) return cb&&cb();
+    document.addEventListener('app:ready', ()=>cb&&cb(), {once:true});
+  }
+
   function injectHUD(){
     if(document.getElementById('saveHud')) return;
     const style=document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);

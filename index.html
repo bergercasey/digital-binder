@@ -145,7 +145,18 @@ header { position: relative; }
   <link rel="stylesheet" href="fixes/note-photo-force.css">
 
   <!-- your app FIRST -->
-  <script src="app.js?v=3.12" defer></script>
+  
+  <script>
+    window.__APP_READY__ = false;
+    if (typeof window.serializeAppState !== 'function') {
+      window.serializeAppState = () => '{}';
+    }
+    window.__notifyAppReady = function () {
+      window.__APP_READY__ = true;
+      try { document.dispatchEvent(new Event('app:ready')); } catch (_) {}
+    };
+  </script>
+<script src="app.js?v=3.12" defer></script>
   <!-- the HUD SECOND -->
   <script src="save-manager.js?v=4" defer></script>
 
