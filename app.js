@@ -71,9 +71,10 @@
     ],
     ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
   };
-// expose to the HUD
 window.state = state;
-window.serializeAppState = function () { return { ...state, version: 17 }; };
+window.serializeAppState = () => ({ ...state, version: 17 });
+// tell the HUD you're ready
+window.dispatchEvent(new Event('serializer-ready'));
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
   function toast(msg, ms=1800) {
