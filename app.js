@@ -86,6 +86,20 @@ window.state = state;
 window.serializeAppState = () => ({ ...state, version: 17 });
 // tell the HUD we're ready (so the bubble doesn't get stuck)
 window.dispatchEvent(new Event('serializer-ready'));
+// ADD THIS right after you dispatch 'serializer-ready'
+window.deserializeAppState = function (raw) {
+  try {
+    const incoming = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    // merge shallowly to keep existing refs/methods
+    Object.assign(state, incoming);
+    window.state = state;           // keep your global in sync
+    if (typeof render === 'function') render();  // or whatever your app's refresh is
+    // Optional: announce that app is interactive
+    try { document.dispatchEvent(new Event('app:ready')); } catch (_) {}
+  } catch (e) {
+    console.error('deserializeAppState error:', e);
+  }
+};
 
 
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
