@@ -1,6 +1,7 @@
-/* save-manager.js v8 (self-HUD, aggressive hydration, never wipes) */
+/* save-manager.js v10 (hybrid loader: cloud -> localStorage, hydrate on 'serializer-ready') */
 (function () {
-  // --- Lightweight HUD injected dynamically so index.html doesn't need edits ---
+  const LS_KEY = 'binder-data';
+
   const HUD = (() => {
     const wrap = document.createElement('div');
     wrap.id = 'dbg';
@@ -21,8 +22,6 @@
     };
   })();
 
-  const LS_KEY = 'binder-data';
-
   async function netlifyLoad() {
     try {
       const res = await fetch('/.netlify/functions/load', { cache: 'no-store' });
@@ -36,45 +35,16 @@
     }
   }
 
-  async function netlifySave(raw) {
-    try {
-      const res = await fetch('/.netlify/functions/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: raw
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      HUD.log('Cloud save OK');
-      return true;
-    } catch (e) {
-      HUD.log('Cloud save failed: ' + e.message);
-      return false;
-    }
-  }
+  function lsGet() { try { return localStorage.getItem(LS_KEY); } catch { return null; } }
+  function lsSet(raw) { try { localStorage.setItem(LS_KEY, raw); HUD.log('Saved to localStorage'); } catch {} }
 
-  function lsGet() {
+  function hydrateWith(raw) {
     try {
-      const s = localStorage.getItem(LS_KEY);
-      if (s) HUD.log('Loaded from localStorage ('+ s.length +' bytes)');
-      return s;
-    } catch { return null; }
-  }
-  function lsSet(raw) {
-    try { localStorage.setItem(LS_KEY, raw); HUD.log('Saved to localStorage'); } catch {}
-  }
-
-  let hydrated = false;
-  function hydrate(raw) {
-    if (hydrated) return;
-    try {
-      // Preferred: app-defined hook
       if (typeof window.deserializeAppState === 'function') {
         window.deserializeAppState(raw);
         HUD.log('Deserialized via app hook.');
       } else {
-        // Fallbacks: populate a common global and dispatch an event many apps listen for
-        window.__APP_STATE__ = JSON.parse(raw);
-        try { document.dispatchEvent(new CustomEvent('data:available', { detail: window.__APP_STATE__ })); } catch {}
+        window.__APP_STATE__ = typeof raw === 'string' ? JSON.parse(raw) : raw;
         if (typeof window.render === 'function') {
           window.render();
           HUD.log('Rendered via global render().');
@@ -82,16 +52,14 @@
           HUD.log('No deserialize/render found; state placed at window.__APP_STATE__.');
         }
       }
-      hydrated = true;
       HUD.set('Ready');
-      try { document.dispatchEvent(new Event('data:hydrated')); } catch(_) {}
     } catch (e) {
       HUD.set('Ready (with warnings)');
       HUD.log('Hydrate error: ' + e.message);
     }
   }
 
-  async function loadData() {
+  async function loadAndHydrate() {
     HUD.set('Loading…');
     let raw = await netlifyLoad();
     if (!raw) raw = lsGet();
@@ -99,30 +67,30 @@
       HUD.log('No existing data found. Using defaults.');
       raw = JSON.stringify({ contractors: [], jobs: [], settings: {} });
     }
-    window.__PENDING_DATA__ = raw;
-    // Hydrate soon regardless of app ready signal
-    setTimeout(() => hydrate(raw), 400);
-    document.addEventListener('app:ready', () => hydrate(raw), { once: true });
+    lsSet(raw);
+
+    const tryHydrate = () => hydrateWith(raw);
+    document.addEventListener('serializer-ready', tryHydrate, { once: true });
+    setTimeout(tryHydrate, 200);
+    setTimeout(tryHydrate, 1000);
   }
 
-  async function saveNow() {
-    try {
-      const raw = (typeof window.serializeAppState === 'function') ? window.serializeAppState() : JSON.stringify(window.__APP_STATE__ || {});
-      if (!raw) return;
-      lsSet(raw);
-      await netlifySave(raw);
-    } catch (e) {
-      HUD.log('Save error: ' + e.message);
-    }
-  }
+  loadAndHydrate();
 
-  // Expose a throttled autosave for your handlers
   let t=null;
   window.requestAutosave = function () {
     if (t) cancelAnimationFrame(t);
-    t = requestAnimationFrame(saveNow);
+    t = requestAnimationFrame(() => {
+      try {
+        const raw = (typeof window.serializeAppState === 'function')
+          ? JSON.stringify(window.serializeAppState())
+          : JSON.stringify(window.__APP_STATE__ || {});
+        if (!raw) return;
+        lsSet(raw);
+        try { navigator.sendBeacon('/.netlify/functions/save', new Blob([raw], { type:'application/json' })); } catch {}
+      } catch (e) {
+        HUD.log('Autosave error: ' + e.message);
+      }
+    });
   };
-
-  // Boot
-  loadData();
 })();
