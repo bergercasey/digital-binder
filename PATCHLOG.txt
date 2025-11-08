@@ -1,5 +1,0 @@
-[API.load] Could not find `const data = await res.json();` to inject.
-[state] Added serializer + serializer-ready after state declaration.
-[save] Replaced debounced save() with HUD-aware version.
-[boot] Could not find state merge inside boot().
-[index.html] Script order OK.
