@@ -152,6 +152,46 @@ header { position: relative; }
 <script src="/hydrate-shim.js?v=1" defer></script>
   <script src="/render-ping.js?v=1" defer></script>
   <script src="/introspect.js?v=1" defer></script>
+  <script>
+(function () {
+  function hud(msg){
+    var el = document.getElementById('dbg-log');
+    if (!el) return;
+    var t = new Date().toLocaleTimeString();
+    el.textContent += "\n[" + t + "] " + msg;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // Try after the HUD says it's ready to serialize (means data is loaded)
+  window.addEventListener('serializer-ready', function () {
+    setTimeout(function () {
+      // If any global renderer exists, call it and bail
+      var renderFn = window.render || window.renderAll || window.renderMain;
+      if (typeof renderFn === 'function') {
+        hud('Renderer present — calling it now');
+        try { renderFn(); } catch(e){ hud('Renderer threw: ' + e.message); }
+        return;
+      }
+
+      // Otherwise, inject the patched app script dynamically (cache-busted)
+      hud('No renderer on window — injecting app.patched.js');
+      var s = document.createElement('script');
+      s.defer = true;
+      s.src = 'app.patched.js?v=' + Date.now();
+      s.onload = function () {
+        var rf = window.render || window.renderAll || window.renderMain;
+        hud('Patched script loaded — renderer is ' + (rf ? 'present' : 'missing'));
+        if (typeof rf === 'function') {
+          try { rf(); } catch(e){ hud('Renderer threw after patch: ' + e.message); }
+        }
+      };
+      s.onerror = function(){ hud('Failed to load app.patched.js'); };
+      document.head.appendChild(s);
+    }, 300);
+  }, { once: true });
+})();
+</script>
+
 </head>
 
 <body>
