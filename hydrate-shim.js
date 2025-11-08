@@ -1,5 +1,22 @@
-/* hydrate-shim.js v3 (force-view + broad refresh triggers) */
+/* hydrate-shim.js v4 (diagnostic + smart mapping) */
 (function () {
+  function hud(msg){
+    var el=document.getElementById('dbg-log');
+    if(!el) return;
+    var t=new Date().toLocaleTimeString();
+    el.textContent += "\n["+t+"] " + msg;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // Try to adapt different shapes: {contractors,...}, {data:{...}}, {binder:{...}}
+  function pickPayload(obj){
+    if (!obj || typeof obj !== 'object') return obj;
+    if (obj.contractors || obj.jobs || obj.settings) return obj;
+    if (obj.data && (obj.data.contractors || obj.data.jobs || obj.data.settings)) return obj.data;
+    if (obj.binder && (obj.binder.contractors || obj.binder.jobs || obj.binder.settings)) return obj.binder;
+    return obj;
+  }
+
   function deepMerge(target, src) {
     if (!src || typeof src !== 'object') return target;
     for (const k of Object.keys(src)) {
@@ -14,72 +31,55 @@
     return target;
   }
 
-  function callFirst(names) {
-    for (const n of names) {
-      try {
-        if (typeof window[n] === 'function') { window[n](); return n; }
-      } catch (_) {}
-    }
-    return null;
-  }
-
-  function tryClick(selList) {
-    for (const sel of selList) {
-      try {
-        const el = document.querySelector(sel);
-        if (el) { el.click(); return sel; }
-      } catch(_) {}
-    }
-    return null;
-  }
-
-  function install() {
-    if (typeof window.deserializeAppState === 'function') return;
-
-    window.deserializeAppState = function (raw) {
-      try {
+  function install(){
+    // install once
+    window.deserializeAppState = function(raw){
+      try{
         var incoming = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-        if (!incoming || typeof incoming !== 'object') return;
+        hud('Incoming keys: ' + Object.keys(incoming || {}).join(', '));
+        var payload = pickPayload(incoming);
+        hud('Payload keys: ' + Object.keys(payload || {}).join(', '));
+        // Log sizes to confirm data presence
+        try{
+          hud('Sizes: contractors=' + ((payload&&payload.contractors&&payload.contractors.length)||0) +
+              ', jobs=' + ((payload&&payload.jobs&&payload.jobs.length)||0) +
+              ', settings=' + (payload&&payload.settings ? 'yes':'no'));
+        }catch(_){}
 
-        // Ensure a global state object exists, then deeply merge
-        if (!window.state || typeof window.state !== 'object') window.state = {};
-        deepMerge(window.state, incoming);
-
-        // Force a sane default view if your app uses state.ui.view
-        if (!window.state.ui) window.state.ui = {};
-        if (!window.state.ui.view) window.state.ui.view = 'main';
+        // Prefer REPLACE to keep exact shape then merge UI back if needed
+        var prev = (window.state && window.state.ui) ? { ui: window.state.ui } : {};
+        window.state = payload || {};
+        // ensure ui object exists
+        window.state.ui = window.state.ui || prev.ui || { view:'main' };
         window.__APP_STATE__ = window.state;
 
-        // Broadcast data-available signals
-        try { document.dispatchEvent(new CustomEvent('data:available', { detail: window.state })); } catch (_){}
-        try { document.dispatchEvent(new Event('state:updated')); } catch (_){}
+        // Broadcast
+        try { document.dispatchEvent(new CustomEvent('data:available', { detail: window.state })); } catch(_){}
+        try { document.dispatchEvent(new Event('state:updated')); } catch(_){}
 
-        // Try the most common render entry points
-        const hit = callFirst([
-          'render','refresh','update','mount','init','boot','start',
-          'renderMain','showMain','showHome','viewMain','rebuild','redraw','repaint',
-          'initUI','rebuildUI'
-        ]);
+        // If app exposes a render hook, call it
+        if (typeof window.render === 'function') { window.render(); hud('Called window.render()'); }
+        else if (typeof window.renderAll === 'function') { window.renderAll(); hud('Called window.renderAll()'); }
+        else if (typeof window.renderMain === 'function') { window.renderMain(); hud('Called window.renderMain()'); }
+        else {
+          // As a fallback, force a one-time reload so app boots reading LS
+          try { localStorage.setItem('binder-data', JSON.stringify(incoming)); } catch(_){}
+          if (!sessionStorage.getItem('v4_reloaded')){
+            sessionStorage.setItem('v4_reloaded','1');
+            hud('No render hook. Forcing a one-time reload to boot from LS…');
+            location.reload();
+            return;
+          }
+        }
 
-        // Nudge SPA routers
-        try { window.location.hash = '#/home'; } catch(_){}
-        try { window.dispatchEvent(new Event('hashchange')); } catch(_){}
-        try { window.dispatchEvent(new Event('popstate')); } catch(_){}
-
-        // Try clicking a home/main button
-        const clicked = tryClick([
-          '#homeBtn', '.btn-home', 'button[title="Home"]', '[data-action="home"]',
-          'nav a[href="#/home"]', 'button#home', 'a#home'
-        ]);
-
-        // Announce app ready
-        try { document.dispatchEvent(new Event('app:ready')); } catch (_){}
-      } catch (e) {
+        try { document.dispatchEvent(new Event('app:ready')); } catch(_){}
+      }catch(e){
         console.error('deserializeAppState error:', e);
+        hud('deserialize error: ' + e.message);
       }
     };
   }
 
+  // install immediately
   install();
-  window.addEventListener('serializer-ready', install, { once: true });
 })();
