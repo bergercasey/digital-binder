@@ -93,7 +93,7 @@ window.deserializeAppState = function (raw) {
     // merge shallowly to keep existing refs/methods
     Object.assign(state, incoming);
     window.state = state;           // keep your global in sync
-    if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();  // or whatever your app's refresh is
+    if (typeof renderAll==="function") renderAll();  // or whatever your app's refresh is
     // Optional: announce that app is interactive
     try { document.dispatchEvent(new Event('app:ready')); } catch (_) {}
   } catch (e) {
@@ -483,9 +483,9 @@ function renderAll() {
     renderPanel();
     status("Ready");
   }
-  // Expose render for external callers
-  window.render = renderAll;
-  window.renderAll = renderAll;
+// --- Export renderer for external triggers ---
+window.render = renderAll;
+window.renderAll = renderAll;
 
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
