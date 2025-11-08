@@ -1,4 +1,4 @@
-/* app.js v3.12 */
+/* app.patched.js (clean) */
 (function(){
   const $ = (id) => document.getElementById(id);
   let statusEl;
@@ -19,7 +19,7 @@
   };
 
   function hexToRGBA(hex, alpha=0.28) {
-    if (!hex) return `rgba(0,0,0,${alpha})`;
+    if (!hex) return `rgba(0,0,0,${alpha})";
     const m = hex.replace('#','');
     const bigint = parseInt(m.length === 3 ? m.split('').map(c=>c+c).join('') : m, 16);
     const r = (bigint >> 16) & 255;
@@ -31,28 +31,13 @@
   const API = {
     async load() {
       try {
-        const res = await fetch("/.netlify/functions/load");
+        const res = await fetch("/.netlify/functions/load", { cache: "no-store" });
         if (!res.ok) throw new Error("load failed");
         return await res.json();
       } catch (err) {
         console.warn("Load failed, falling back to localStorage", err);
         const raw = localStorage.getItem("binder-data");
         return raw ? JSON.parse(raw) : null;
-      }
-    },
-    async save(data) {
-      try {
-        const res = await fetch("/.netlify/functions/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-        if (!res.ok) throw new Error("save failed");
-        return await res.json();
-      } catch (err) {
-        console.warn("Save failed, writing to localStorage", err);
-        localStorage.setItem("binder-data", JSON.stringify(data));
-        return { ok: true, local: true };
       }
     }
   };
@@ -72,36 +57,28 @@
     ui: { selectedContractorId: null, selectedJobId: null, view: "main", showArchived: false, archiveSelected: {}, editing: false }
   };
 
-// Expose current state + a serializer for the HUD (save-manager.js)
-window.state = state;
-window.serializeAppState = function () {
-  return { ...state, version: 17, serverVersion: (window._serverVersion || 0) };
-};
-// Let the HUD know we’re ready to provide serialized state
-window.dispatchEvent(new Event('serializer-ready'));
+  // ---- Serializer/Deserializer (for HUD / save-manager) ----
+  window.state = state;
+  window.serializeAppState = function () {
+    return { ...state, version: 17, serverVersion: (window._serverVersion || 0) };
+  };
+  window.dispatchEvent(new Event("serializer-ready"));
 
+  window.deserializeAppState = function (raw) {
+    try {
+      const incoming = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (incoming && typeof incoming === "object") {
+        Object.assign(state, incoming);
+      }
+      window.state = state;
+      if (typeof renderAll === "function") renderAll();
+      try { document.dispatchEvent(new Event("app:ready")); } catch (_) {}
+    } catch (e) {
+      console.error("deserializeAppState error:", e);
+    }
+  };
 
-// expose state and a serializer for the HUD
-window.state = state;
-window.serializeAppState = () => ({ ...state, version: 17 });
-// tell the HUD we're ready (so the bubble doesn't get stuck)
-window.dispatchEvent(new Event('serializer-ready'));
-// ADD THIS right after you dispatch 'serializer-ready'
-window.deserializeAppState = function (raw) {
-  try {
-    const incoming = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    // merge shallowly to keep existing refs/methods
-    Object.assign(state, incoming);
-    window.state = state;           // keep your global in sync
-    if (typeof renderAll==="function") renderAll();  // or whatever your app's refresh is
-    // Optional: announce that app is interactive
-    try { document.dispatchEvent(new Event('app:ready')); } catch (_) {}
-  } catch (e) {
-    console.error('deserializeAppState error:', e);
-  }
-};
-
-
+  // ---- UI helpers ----
   function status(msg) { if (statusEl) statusEl.textContent = msg; }
   function toast(msg, ms=1800) {
     const wrap = $("toast-wrap"); if (!wrap) return;
@@ -130,6 +107,7 @@ window.deserializeAppState = function (raw) {
 
   function renderContractors() {
     const list = $("contractor-list");
+    if (!list) return;
     list.innerHTML = "";
     const count = state.contractors.length;
     $("contractor-count").textContent = count === 1 ? "1 contractor" : count + " contractors";
@@ -149,9 +127,7 @@ window.deserializeAppState = function (raw) {
         if (val !== c.name) { c.name = val; save(); renderContractors(); }
       });
 
-      // Open on SINGLE CLICK (ignore clicks on the input)
-      box.addEventListener("click", (ev) => {
-        // allow click on nameInput to open (was guarded before)
+      box.addEventListener("click", () => {
         finishInit();
         state.ui.selectedContractorId = c.id; state.ui.selectedJobId = null; renderAll();
       });
@@ -169,6 +145,7 @@ window.deserializeAppState = function (raw) {
   function renderTabs() {
     const c = currentContractor();
     const tabs = $("job-tabs");
+    if (!tabs) return;
     tabs.innerHTML = "";
     if (!c) return;
 
@@ -196,7 +173,7 @@ window.deserializeAppState = function (raw) {
       label.appendChild(line1); label.appendChild(line2);
 
       el.appendChild(label);
-      el.addEventListener("click", () => { state.ui.editing = false; state.ui.editing = false; state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
+      el.addEventListener("click", () => { state.ui.editing = false; finishInit(); state.ui.selectedJobId = j.id; renderAll(); });
       tabs.appendChild(el);
     });
   }
@@ -204,7 +181,7 @@ window.deserializeAppState = function (raw) {
   function renderSettings() {
     $("roster-input").value = state.roster.join("\n");
     $("stages-input").value = state.stages.join("\n");
-    const wrap = $("stage-colors"); wrap.innerHTML = "";
+    const wrap = $("stage-colors"); if (!wrap) return; wrap.innerHTML = "";
     state.stages.slice(0,10).forEach(stage => {
       const row = document.createElement("div"); row.className = "row";
       const label = document.createElement("label"); label.textContent = stage;
@@ -224,7 +201,6 @@ window.deserializeAppState = function (raw) {
     if (j && !j.initComplete) { j.initComplete = true; save(); }
   }
 
-  // Search now includes PO#
   function searchAndOpen(q) {
     const query = (q || "").trim().toLowerCase();
     if (!query) return;
@@ -238,23 +214,19 @@ window.deserializeAppState = function (raw) {
         const po = (j.po || "").toLowerCase();
         const leading = parseLeadingNumber(j.name);
         let score = -1;
-        // Name
         if (name === query) score = 100;
         else if (name.startsWith(query)) score = Math.max(score, 85);
         else if (name.includes(query)) score = Math.max(score, 70);
-        // Address
         if (addr) {
           if (addr === query) score = Math.max(score, 100);
           else if (addr.startsWith(query)) score = Math.max(score, 88);
           else if (addr.includes(query)) score = Math.max(score, 72);
         }
-        // PO
         if (po) {
           if (po === query) score = Math.max(score, 100);
           else if (po.startsWith(query)) score = Math.max(score, 95);
           else if (po.includes(query)) score = Math.max(score, 80);
         }
-        // Leading job #
         if (num !== null && leading === num) score = Math.max(score, 92);
         if (score >= 0) candidates.push({ c, j, score });
       });
@@ -280,7 +252,6 @@ window.deserializeAppState = function (raw) {
     const c = currentContractor(); const j = currentJob();
 
     if (!c) {
-      // Landing
       jobFields.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; landing.style.display = "flex";
       if (state.companyLogoDataUrl) { companyLogoImg.src = state.companyLogoDataUrl; companyLogoImg.style.display = "block"; companyLogoEmpty.style.display = "none"; }
       else { companyLogoImg.style.display = "none"; companyLogoEmpty.style.display = "block"; }
@@ -288,7 +259,6 @@ window.deserializeAppState = function (raw) {
     }
 
     if (!j) {
-      // Contractor selected, no job
       landing.style.display = "none"; jobFields.style.display = "none";
       contractorPanel.style.display = "flex"; contractorControls.style.display = "flex";
       contractorLogo.src = c.logoDataUrl || state.companyLogoDataUrl || "";
@@ -307,12 +277,10 @@ window.deserializeAppState = function (raw) {
       return;
     }
 
-    // Job selected
-    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block"; (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
-    // Sync Edit label
+    landing.style.display = "none"; contractorPanel.style.display = "none"; contractorControls.style.display = "none"; jobFields.style.display = "block"; jobActions.style.display = "block";
+    (function(){ const fieldsEl = $("job-fields-inner"); if (fieldsEl) fieldsEl.style.display = state.ui.editing ? "block" : "none"; })(); renderJobSummary(j);
     (function(){ const b=$("edit-job"); if(b){ b.textContent = state.ui.editing ? "Done" : "Edit Job"; } })();
 
-    // Fields
     $("job-name").value = j?.name || "";
     $("job-po").value = j?.po || "";
     $("job-address").value = j?.address || "";
@@ -332,7 +300,6 @@ window.deserializeAppState = function (raw) {
         if (!j) return;
         if (cb.checked) { if (!j.crew.includes(name)) j.crew.push(name); }
         else { j.crew = j.crew.filter(x => x !== name); }
-        // Crew changes NEVER logged
         markUpdated(j); save(); $("job-updated").textContent = new Date(j.updatedAt).toLocaleString();
       });
       const txt = document.createElement("span"); txt.textContent = name;
@@ -349,10 +316,9 @@ window.deserializeAppState = function (raw) {
       item.appendChild(d); item.appendChild(body);
       list.appendChild(item);
     });
-    $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";$("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
+    $("job-updated").textContent = j?.updatedAt ? new Date(j.updatedAt).toLocaleString() : "—";
   }
 
-  
   function renderArchives() {
     const list = $("archive-list"); const count = $("archive-count");
     if (!list) return;
@@ -422,7 +388,6 @@ window.deserializeAppState = function (raw) {
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  // --- Notes helpers (HTML + markdown-lite fallback) ---
   function escapeHtml(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function inlineFmt(s) {
     let x = s; x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -456,7 +421,6 @@ window.deserializeAppState = function (raw) {
     return wrap.innerHTML.replace(/\n/g,"");
   }
 
-  // --- Printing helpers ---
   function buildPrintSheet(job, idx) {
     const el = $("print-sheet"); if (!el) return;
     const title = escapeHtml(job.name || "Job");
@@ -476,17 +440,17 @@ window.deserializeAppState = function (raw) {
     el.innerHTML = `<div class="print-head"><div class="print-title">${title}</div><div class="print-meta">${meta}</div></div>` + body;
   }
 
-function renderAll() {
+  function renderAll() {
     showView(state.ui.view);
     renderContractors();
     renderTabs();
     renderPanel();
     status("Ready");
   }
-// --- Export renderer for external triggers ---
-window.render = renderAll;
-window.renderAll = renderAll;
 
+  // Export renderer so other scripts can call it
+  window.render = renderAll;
+  window.renderAll = renderAll;
 
   function markUpdated(job) { job.updatedAt = new Date().toISOString(); }
   function pushNote(job, payload) {
@@ -495,153 +459,34 @@ window.renderAll = renderAll;
     else job.notes.push({ d: ymd(), ...(payload || {}) });
   }
 
+  // ---- Unified save() (debounced) ----
   const save = debounce(() => {
-  status("Saving…");
-  // Prefer the HUD one-writer path to avoid double POSTs
-  if (window.queueSaveNow) {
-    window.queueSaveNow();
-    return; // IMPORTANT: do not also call API.save() here
-  }
-  // Fallback ONLY if HUD didn’t load
-  const payload = { ...state, version: 17, serverVersion: (window._serverVersion || 0) };
-  fetch("/.netlify/functions/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    body: JSON.stringify(payload),
-    keepalive: true
-  })
-  .then(() => status("Saved"))
-  .catch(() => {
-    status("Saved locally — will retry");
-    try { localStorage.setItem("binder-data", JSON.stringify(payload)); } catch {}
-  });
-}, 300);
-    const payload = { ...state, version: 17 };
-    try {
-      const res = await API.save(payload);
-      status(res.local ? "Saved (no network)" : "Saved");
-    } catch (e) {
-      status("Error saving (stored locally)");
-    }
+    status("Saving…");
+    // If HUD provides queueSaveNow, let it own the network path
+    if (window.queueSaveNow) { window.queueSaveNow(); return; }
+    const payload = { ...state, version: 17, serverVersion: (window._serverVersion || 0) };
+    fetch("/.netlify/functions/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify(payload),
+      keepalive: true
+    })
+    .then(() => status("Saved"))
+    .catch(() => {
+      status("Saved locally — will retry");
+      try { localStorage.setItem("binder-data", JSON.stringify(payload)); } catch {}
+    });
   }, 300);
 
   function wire() {
     statusEl = $("status");
 
-    // WYSIWYG toolbar with selection restore and highlight toggle
-    (function(){
-      const ed = $("new-note-editor"); if (!ed) return;
-      function isInsideEditor(node){ let n=node; while(n){ if(n===ed) return true; n=n.parentNode; } return false; }
-      function placeCaretAtEnd(){ const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
-      let savedRange = null;
-      function saveSel() {
-        const sel = window.getSelection && window.getSelection();
-        if (sel && sel.rangeCount > 0 && isInsideEditor(sel.anchorNode)) savedRange = sel.getRangeAt(0);
-      }
-      function restoreSel() {
-        const sel = window.getSelection && window.getSelection();
-        if (!sel) return;
-        if (!savedRange || !isInsideEditor(savedRange.commonAncestorContainer)) { placeCaretAtEnd(); return; }
-        sel.removeAllRanges(); sel.addRange(savedRange);
-      }
-      // Keep selection when clicking toolbar
-      ["note-bold","note-italic","note-underline","note-highlight","note-bullet"].forEach(id => {
-        const b = $(id); if (!b) return;
-        b.addEventListener("mousedown", (e)=>{ e.preventDefault(); restoreSel(); });
-      });
-      ed.addEventListener("mouseup", saveSel);
-      ed.addEventListener("keyup", saveSel);
-      ed.addEventListener("mouseleave", saveSel);
-      function focusEd(){ ed.focus(); restoreSel(); if(!isInsideEditor((window.getSelection()&&window.getSelection().anchorNode))) placeCaretAtEnd(); }
-      function surround(tag){
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0 || !isInsideEditor(sel.anchorNode)) { placeCaretAtEnd(); saveSel(); return; }
-        const r = sel.getRangeAt(0);
-        try { const el = document.createElement(tag); r.surroundContents(el); saveSel(); }
-        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); saveSel(); }
-      }
-      function unwrapTag(tag) {
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const r = sel.getRangeAt(0);
-        const container = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement; if (!isInsideEditor(container)) return;
-        const marks = Array.from(container.querySelectorAll(tag));
-        marks.forEach(m => {
-          const range = document.createRange();
-          range.selectNodeContents(m);
-          if (r.intersectsNode(m)) {
-            while (m.firstChild) m.parentNode.insertBefore(m.firstChild, m);
-            m.parentNode.removeChild(m);
-          }
-        });
-        saveSel();
-      }
-      // Commands
-      const cmd = (name) => { focusEd(); document.execCommand(name); refresh(); saveSel(); };
-      const b = $("note-bold"); if (b) b.addEventListener("click", (e)=>{ e.preventDefault(); cmd("bold"); });
-      const i = $("note-italic"); if (i) i.addEventListener("click", (e)=>{ e.preventDefault(); cmd("italic"); });
-      const u = $("note-underline"); if (u) u.addEventListener("click", (e)=>{ e.preventDefault(); cmd("underline"); });
-      
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{
-        e.preventDefault(); focusEd();
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0 || !isInsideEditor(sel.anchorNode)) { placeCaretAtEnd(); saveSel(); }
-        try { document.execCommand("insertUnorderedList"); } catch(e) {}
-        const sel2 = window.getSelection && window.getSelection();
-        if (!isInsideEditor(sel2.anchorNode)) { placeCaretAtEnd(); }
-        // Fallback manual toggle
-        function nearest(node, tag){ let n = node && (node.nodeType===1 ? node : node.parentElement); tag = String(tag||"").toUpperCase(); while(n){ if(n===ed) break; if(n.tagName===tag) return n; n=n.parentElement;} return null; }
-        function unwrapList(ul){ if(!ul||!ul.parentNode) return; if(!isInsideEditor(ul)) return; const frag=document.createDocumentFragment(); const lis=Array.from(ul.children); lis.forEach((li,idx)=>{ while(li.firstChild) frag.appendChild(li.firstChild); if(idx<lis.length-1) frag.appendChild(document.createElement("br"));}); ul.parentNode.replaceChild(frag, ul); }
-        function wrapSelectionWithList(range){ if(!isInsideEditor(range.commonAncestorContainer)) return; const ul=document.createElement("ul"); const li=document.createElement("li"); const contents=range.extractContents(); if(!contents||!contents.firstChild){ li.appendChild(document.createElement("br")); } else { li.appendChild(contents);} ul.appendChild(li); range.insertNode(ul); const r2=document.createRange(); r2.selectNodeContents(li); r2.collapse(true); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r2); }
-        const r = (window.getSelection() && window.getSelection().getRangeAt(0));
-        const li = nearest((window.getSelection() && window.getSelection().anchorNode), "LI");
-        if (li) { const ul = nearest(li, "UL"); unwrapList(ul); }
-        else { if (!nearest((window.getSelection() && window.getSelection().anchorNode), "LI")) wrapSelectionWithList(r); }
-        refresh(); saveSel();
-      });
-     $("note-highlight"); const hl = $("note-highlight");
-      if (hl) hl.addEventListener("click", (e)=>{
-        e.preventDefault(); focusEd();
-        // Toggle: if selection is inside <mark>, unwrap; otherwise apply
-        const sel = window.getSelection && window.getSelection();
-        let insideMark = false;
-        if (sel && sel.anchorNode && isInsideEditor(sel.anchorNode)) {
-          let n = sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement;
-          while (n) { if (n.tagName === "MARK") { insideMark = true; break; } n = n.parentElement; }
-        }
-        if (insideMark) { unwrapTag("mark"); } else { surround("mark"); }
-        refresh(); saveSel();
-      });
-      // Active-state
-      function hasAncestor(node, tagName){
-        let n = node && (node.nodeType===1 ? node : node.parentElement);
-        while (n) { if (n.tagName === tagName) return true; n = n.parentElement; }
-        return false;
-      }
-      function refresh(){
-        let onB=false,onI=false,onU=false,onHL=false;
-        try { onB=document.queryCommandState("bold"); onI=document.queryCommandState("italic"); onU=document.queryCommandState("underline"); } catch(e){}
-        const sel = window.getSelection && window.getSelection();
-        const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
-        onHL = !!(node && hasAncestor(node,"MARK"));
-        if ($("note-bold")) $("note-bold").classList.toggle("active", !!onB);
-        if ($("note-italic")) $("note-italic").classList.toggle("active", !!onI);
-        if ($("note-underline")) $("note-underline").classList.toggle("active", !!onU);
-        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!onHL);
-      }
-      document.addEventListener("selectionchange", refresh);
-      ed.addEventListener("keyup", refresh);
-      refresh();
-    })();
-
-    // Edit Job toggle
     const editBtn = $("edit-job");
     if (editBtn) {
       const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
       setLabel();
       editBtn.addEventListener("click", () => {
         const j = currentJob(); if (!j) return;
-        // If turning OFF editing for the first time, mark setup complete so later changes log
         if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
         state.ui.editing = !state.ui.editing;
         setLabel();
@@ -649,7 +494,6 @@ window.renderAll = renderAll;
       });
     }
 
-    // Archives: toolbar button + view controls
     const btnArchTop = $("open-archives-top");
     if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
 
@@ -682,7 +526,6 @@ window.renderAll = renderAll;
       save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
     });
 
-
     $("to-settings").addEventListener("click", () => { finishInit(); renderSettings(); showView("settings"); });
     $("to-main").addEventListener("click", () => { finishInit(); showView("main"); });
 
@@ -699,7 +542,6 @@ window.renderAll = renderAll;
       save(); renderSettings(); renderTabs(); renderPanel(); toast("Settings saved");
     });
 
-    // Company logo upload
     const companyFile = $("company-logo-file");
     companyFile?.addEventListener("change", () => {
       const f = companyFile.files?.[0]; if (!f) return;
@@ -723,17 +565,12 @@ window.renderAll = renderAll;
       const j = { id: uuid(), name: "New Job", stage: "Bid", crew: [], notes: [], createdAt: Date.now(), updatedAt: null, po: "", address: "", ready: false, archived: false };
       c.jobs = c.jobs || []; c.jobs.push(j);
       state.ui.selectedJobId = j.id;
-      // Switch to edit mode for brand-new jobs so fields are visible
       state.ui.editing = true;
-      // Jump back to main view and render
       showView("main"); save(); renderAll();
-      // Focus the Job Name field so you can type immediately
       setTimeout(() => { const nm = $("job-name"); if (nm && nm.focus) nm.focus(); }, 0);
     });
 
-    // [removed email/print listener]\n
-
-$("archive-job").addEventListener("click", () => {
+    $("archive-job").addEventListener("click", () => {
       const j = currentJob(); if (!j) return;
       finishInit();
       j.archived = !j.archived;
@@ -751,7 +588,6 @@ $("archive-job").addEventListener("click", () => {
       toast("Job deleted");
     });
 
-    // Name / PO / Address edits — only log after initComplete
     $("job-name").addEventListener("blur", (e) => {
       const j = currentJob(); if (!j) return;
       const val = e.target.value.trim();
@@ -809,7 +645,6 @@ $("archive-job").addEventListener("click", () => {
     $("refresh-btn").addEventListener("click", async () => {
       const data = await API.load();
       if (data) { state = { ...state, ...data, ui: { ...state.ui, ...(state.ui || {}) } }; }
-      // Always force MAIN view and clear selections after reload; also finish init for current job
       finishInit();
       state.ui.view = "main";
       state.ui.selectedContractorId = null;
@@ -818,7 +653,6 @@ $("archive-job").addEventListener("click", () => {
       toast("Reloaded");
     });
 
-    // Header search wiring
     const headerInput = $("header-search");
     const headerBtn = $("header-search-btn");
     headerInput?.addEventListener("keydown", (e)=>{ if (e.key === "Enter") searchAndOpen(headerInput.value); });
@@ -829,15 +663,12 @@ $("archive-job").addEventListener("click", () => {
     status("Loading…");
     const data = await API.load();
     if (data) state = { ...state, ...data };
-    // Always land on MAIN and clear selected contractor & job
     state.ui.view = "main";
     state.ui.selectedContractorId = null;
     state.ui.selectedJobId = null;
     renderAll();
   }
 
-  
-  // Global delegated handler for Edit Job (more reliable on iPad/touch)
   document.addEventListener("click", (ev) => {
     const btn = ev.target && (ev.target.id === "edit-job" ? ev.target : ev.target.closest && ev.target.closest("#edit-job"));
     if (!btn) return;
@@ -846,206 +677,6 @@ $("archive-job").addEventListener("click", () => {
     state.ui.editing = !state.ui.editing;
     renderPanel();
   }, { passive: true });
-window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
 
-    // WYSIWYG toolbar with selection restore and highlight toggle
-    (function(){
-      const ed = $("new-note-editor"); if (!ed) return;
-      let savedRange = null;
-      function saveSel() {
-        const sel = window.getSelection && window.getSelection();
-        if (sel && sel.rangeCount > 0) savedRange = sel.getRangeAt(0);
-      }
-      function restoreSel() {
-        if (!savedRange) return;
-        const sel = window.getSelection && window.getSelection();
-        if (!sel) return;
-        sel.removeAllRanges(); sel.addRange(savedRange);
-      }
-      // Keep selection when clicking toolbar
-      ["note-bold","note-italic","note-underline","note-highlight","note-bullet"].forEach(id => {
-        const b = $(id); if (!b) return;
-        b.addEventListener("mousedown", (e)=>{ e.preventDefault(); restoreSel(); });
-      });
-      ed.addEventListener("mouseup", saveSel);
-      ed.addEventListener("keyup", saveSel);
-      ed.addEventListener("mouseleave", saveSel);
-      function focusEd(){ ed.focus(); restoreSel(); }
-      function surround(tag){
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const r = sel.getRangeAt(0);
-        try { const el = document.createElement(tag); r.surroundContents(el); saveSel(); }
-        catch(e){ document.execCommand('insertHTML', false, `<${tag}>${sel.toString()}</${tag}>`); saveSel(); }
-      }
-      function unwrapTag(tag) {
-        const sel = window.getSelection && window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const r = sel.getRangeAt(0);
-        const container = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
-        const marks = Array.from(container.querySelectorAll(tag));
-        marks.forEach(m => {
-          const range = document.createRange();
-          range.selectNodeContents(m);
-          if (r.intersectsNode(m)) {
-            while (m.firstChild) m.parentNode.insertBefore(m.firstChild, m);
-            m.parentNode.removeChild(m);
-          }
-        });
-        saveSel();
-      }
-      // Commands
-      const cmd = (name) => { focusEd(); document.execCommand(name); refresh(); saveSel(); };
-      const b = $("note-bold"); if (b) b.addEventListener("click", (e)=>{ e.preventDefault(); cmd("bold"); });
-      const i = $("note-italic"); if (i) i.addEventListener("click", (e)=>{ e.preventDefault(); cmd("italic"); });
-      const u = $("note-underline"); if (u) u.addEventListener("click", (e)=>{ e.preventDefault(); cmd("underline"); });
-      const bl = $("note-bullet"); if (bl) bl.addEventListener("click", (e)=>{ e.preventDefault(); cmd("insertUnorderedList"); });
-      const hl = $("note-highlight"); if (hl) hl.addEventListener("click", (e)=>{
-        e.preventDefault(); focusEd();
-        // Toggle: if selection is inside <mark>, unwrap; otherwise apply
-        const sel = window.getSelection && window.getSelection();
-        let insideMark = false;
-        if (sel && sel.anchorNode) {
-          let n = sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement;
-          while (n) { if (n.tagName === "MARK") { insideMark = true; break; } n = n.parentElement; }
-        }
-        if (insideMark) { unwrapTag("mark"); } else { surround("mark"); }
-        refresh(); saveSel();
-      });
-      // Active-state
-      function hasAncestor(node, tagName){
-        let n = node && (node.nodeType===1 ? node : node.parentElement);
-        while (n) { if (n.tagName === tagName) return true; n = n.parentElement; }
-        return false;
-      }
-      function refresh(){
-        let onB=false,onI=false,onU=false,onHL=false;
-        try { onB=document.queryCommandState("bold"); onI=document.queryCommandState("italic"); onU=document.queryCommandState("underline"); } catch(e){}
-        const sel = window.getSelection && window.getSelection();
-        const node = sel && sel.anchorNode ? (sel.anchorNode.nodeType===1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
-        onHL = !!(node && hasAncestor(node,"MARK"));
-        if ($("note-bold")) $("note-bold").classList.toggle("active", !!onB);
-        if ($("note-italic")) $("note-italic").classList.toggle("active", !!onI);
-        if ($("note-underline")) $("note-underline").classList.toggle("active", !!onU);
-        if ($("note-highlight")) $("note-highlight").classList.toggle("active", !!onHL);
-      }
-      document.addEventListener("selectionchange", refresh);
-      ed.addEventListener("keyup", refresh);
-      refresh();
-    })();
-
-    // Edit Job toggle
-    const editBtn = $("edit-job");
-    if (editBtn) {
-      const setLabel = () => { editBtn.textContent = state.ui.editing ? "Done" : "Edit Job"; };
-      setLabel();
-      editBtn.addEventListener("click", () => {
-        const j = currentJob(); if (!j) return;
-        // If turning OFF editing for the first time, mark setup complete so later changes log
-        if (state.ui.editing && j && !j.initComplete) j.initComplete = true;
-        state.ui.editing = !state.ui.editing;
-        setLabel();
-        renderPanel();
-      });
-    }
-
-    // Archives: toolbar button + view controls
-    const btnArchTop = $("open-archives-top");
-    if (btnArchTop) btnArchTop.addEventListener("click", () => { finishInit(); showView("archives"); renderArchives(); });
-
-    const backArch = $("back-from-archives");
-    if (backArch) backArch.addEventListener("click", () => { finishInit(); showView("main"); renderAll(); });
-
-    const searchArch = $("archive-search");
-    if (searchArch) searchArch.addEventListener("input", () => { renderArchives(); });
-
-    const selAll = $("archive-select-all");
-    if (selAll) selAll.addEventListener("change", (e) => {
-      const checked = e.target.checked;
-      const cards = Array.from(document.querySelectorAll("#archive-list .card"));
-      const map = state.ui.archiveSelected || {};
-      cards.forEach(card => {
-        const cb = card.querySelector('input[type=checkbox]'); if (!cb) return;
-        cb.checked = checked;
-        const id = card.getAttribute("data-id"); if (id) map[id] = checked;
-      });
-      state.ui.archiveSelected = map; updateDeleteBtn();
-    });
-
-    const delBtn = $("archive-delete-selected");
-    if (delBtn) delBtn.addEventListener("click", () => {
-      const ids = Object.entries(state.ui.archiveSelected||{}).filter(([,v]) => v).map(([k]) => k);
-      if (!ids.length) return;
-      if (!confirm("Delete selected archived jobs? This cannot be undone.")) return;
-      state.contractors.forEach(c => { c.jobs = c.jobs.filter(j => !(j.archived && ids.includes(j.id))); });
-      state.ui.archiveSelected = {};
-      save(); renderArchives(); renderContractors(); renderTabs(); renderPanel(); toast("Deleted selected archived jobs");
-    });
- wire(); boot(); });
-
-  // === Minimal: Delete Selected (uses existing .pe_row_chk from checks.js) ===
-  (function(){
-    function installBtn(){
-      var addBtn = document.getElementById('add-note');
-      if (!addBtn || document.getElementById('delete-notes')) return;
-      var del = document.createElement('button');
-      del.id = 'delete-notes';
-      del.className = 'danger';
-      del.textContent = 'Delete Selected';
-      del.style.marginLeft = '8px';
-      addBtn.parentNode.insertBefore(del, addBtn.nextSibling);
-      del.addEventListener('click', function(){
-        try{
-          if (typeof currentJob !== 'function') { alert('No job context'); return; }
-          var j = currentJob(); if (!j || !Array.isArray(j.notes)) { alert('No notes found'); return; }
-          var list = document.getElementById('notes-list'); if (!list) { alert('Notes list not found'); return; }
-          var rows = Array.prototype.slice.call(list.querySelectorAll('.note-item'));
-          var toDelete = new Set();
-          rows.forEach(function(row, idx){
-            var cb = row.querySelector('.note-date input.pe_row_chk');
-            if (cb && cb.checked) toDelete.add(idx);
-          });
-          if (toDelete.size === 0) { alert('Select at least one log entry.'); return; }
-          j.notes = (j.notes || []).filter(function(_n, i){ return !toDelete.has(i); });
-          if (typeof markUpdated === 'function') markUpdated(j);
-          if (typeof save === 'function') save();
-          if (typeof renderPanel === 'function') renderPanel();
-        }catch(e){ console.warn('Delete Selected failed', e); alert('Delete failed.'); }
-      });
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', installBtn);
-    } else {
-      installBtn();
-    }
-    // also retry a few times for late DOM
-    var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
-  })();
-})();
-
-
-
-// ===== App Ready Handshake =====
-try {
-  if (typeof window.serializeAppState !== 'function') {
-    window.serializeAppState = function () {
-      try {
-        const snapshot = typeof getStateSnapshot === 'function' ? getStateSnapshot() : (typeof state !== 'undefined' ? state : {});
-        return JSON.stringify(snapshot);
-      } catch (e) { 
-        console.error('serializeAppState failed', e); 
-        return '{}';
-      }
-    };
-  }
-  if (typeof window.__notifyAppReady === 'function') {
-    window.__notifyAppReady();
-  } else {
-    window.__APP_READY__ = true;
-    try { document.dispatchEvent(new Event('app:ready')); } catch (_) {}
-  }
-} catch (e) {
-  console.error('Ready handshake failed', e);
-}
-
+  window.addEventListener("DOMContentLoaded", () => { wire(); boot(); });
 })();
