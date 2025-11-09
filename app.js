@@ -1219,4 +1219,77 @@ async function updateNextAutoBackup() {
     if (el) el.textContent = 'Next auto backup: unavailable';
   }
 }
+// --- Note images (Dropbox/URL → inline) ---
+(function(){
+  // Convert a Dropbox share link to a direct file URL
+  function normalizeImageURL(url) {
+    try {
+      const u = new URL(String(url).trim());
+      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com') {
+        u.hostname = 'dl.dropboxusercontent.com';
+        u.search = ''; // force raw file
+      }
+      return u.toString();
+    } catch { return url; }
+  }
+
+  function isLikelyImageURL(url) {
+    return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url)
+        || /(^https?:\/\/)?(www\.)?dropbox\.com\//i.test(url)
+        || /(^https?:\/\/)?dl\.dropboxusercontent\.com\//i.test(url);
+  }
+
+  // Safe render: turns URLs into <img> (or <a>), keeps everything else as text
+  function renderNoteContentInto(el, text) {
+    el.textContent = ''; // clear
+    const parts = String(text).split(/(\s+)/); // keep spaces
+    for (const part of parts) {
+      if (/^\s+$/.test(part)) { el.appendChild(document.createTextNode(part)); continue; }
+      if (/^https?:\/\/\S+$/i.test(part) && isLikelyImageURL(part)) {
+        const img = document.createElement('img');
+        img.src = normalizeImageURL(part);
+        img.alt = 'image';
+        img.loading = 'lazy';
+        img.className = 'note-img';
+        el.appendChild(img);
+      } else if (/^https?:\/\/\S+$/i.test(part)) {
+        const a = document.createElement('a');
+        a.href = part; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = part;
+        el.appendChild(a);
+      } else {
+        el.appendChild(document.createTextNode(part));
+      }
+    }
+  }
+
+  // Process all existing notes, and re-process whenever notes list changes
+  function processNotes(){
+    const root = document.getElementById('notes-list');
+    if (!root) return;
+    root.querySelectorAll('.note-item .note-text').forEach(el=>{
+      // Use the original raw text once; if the element gets rebuilt, this resets naturally
+      const raw = el.dataset.rawNote || el.textContent || '';
+      if (!el.dataset.rawNote) el.dataset.rawNote = raw;
+      renderNoteContentInto(el, raw);
+    });
+  }
+
+  // Initial run (once DOM ready)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', processNotes, { once:true });
+  } else {
+    processNotes();
+  }
+
+  // Watch the notes list for changes (adds/edits)
+  const root = document.getElementById('notes-list');
+  if (root) {
+    const obs = new MutationObserver(()=>processNotes());
+    obs.observe(root, { childList:true, subtree:true });
+  }
+
+  // Optional manual hook if you want to call it yourself elsewhere
+  window.refreshNoteImages = processNotes;
+})();
 })();
