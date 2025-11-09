@@ -968,4 +968,24 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     // also retry a few times for late DOM
     var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
   })();
+// --- Admin Tools: Backup Button ---
+(function(){
+  const btn=document.getElementById('btn-backup');
+  const log=(msg)=>{ const el=document.getElementById('admin-log'); if(el) el.textContent=msg; };
+
+  if(btn){
+    btn.addEventListener('click',async ()=>{
+      log('Running manual backup...');
+      try{
+        const res = await fetch('/.netlify/functions/manual-backup',{method:'POST'});
+        const j = await res.json();
+        if(j.ok){
+          log('Backup complete:\n' + j.backupKey);
+        }else{
+          log('Backup failed: ' + (j.error || JSON.stringify(j)));
+        }
+      }catch(e){ log('Error: ' + e.message); }
+    });
+  }
+})(); // --- end Admin Tools ---
 })();
