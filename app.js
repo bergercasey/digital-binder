@@ -1066,25 +1066,47 @@ try {
     } catch(e){ log('Error: ' + e.message); }
   });
 
-  // 2) Download Backup (cloud, robust)
+  // 2) Download Backup (cloud, iPad-safe — no navigation)
 if (btnDownload) btnDownload.addEventListener('click', async ()=>{
   log('Preparing download…');
   try {
     const url = '/.netlify/functions/download-current';
-    // quick HEAD to catch 401s without triggering a blank download
+
+    // Check auth first (avoids downloading "{}" or a blank file)
     const head = await fetch(url, { method: 'HEAD', headers: { 'cache-control': 'no-cache' } });
-    if (head.ok) {
-      window.location.href = url;  // triggers actual file download
-      log('Download started from cloud');
-    } else if (head.status === 401) {
+    if (head.status === 401) {
       log('Not logged in. Open /.netlify/functions/auth-login, then try again.');
-    } else {
-      log('Download failed: status ' + head.status);
+      return;
     }
+    if (!head.ok) {
+      log('Download failed: status ' + head.status);
+      return;
+    }
+
+    // Fetch the actual file as a blob so we don't leave the page
+    const res = await fetch(url, { headers: { 'cache-control': 'no-cache' } });
+    if (!res.ok) { log('Download failed: status ' + res.status); return; }
+
+    const disp = res.headers.get('content-disposition') || '';
+    const m = /filename="([^"]+)"/i.exec(disp);
+    const filename = m ? m[1] : `job-binder-backup-cloud-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;          // iPad/Files respects this when invoked from a click
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+
+    log('Download started: ' + filename);
   } catch (e) {
     log('Error: ' + e.message);
   }
 });
+
 
 // 3) Restore Latest (from cloud backups folder)
   if (btnRestoreLatest) btnRestoreLatest.addEventListener('click', async ()=>{
