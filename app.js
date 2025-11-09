@@ -1048,24 +1048,13 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     } catch(e){ log('Error: ' + e.message); }
   });
 
-  // 2) Download Backup (to iPad Files as .json)
-  if (btnDownload) btnDownload.addEventListener('click', async ()=>{
-    log('Preparing download…');
-    try {
-      const data = await getCurrentData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const ts = new Date().toISOString().replace(/[:.]/g,'-');
-      const filename = `job-binder-backup-${ts}.json`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      log('Download started: ' + filename);
-    } catch(e){ log('Error: ' + e.message); }
-  });
+// 2) Download Backup (to iPad Files as .json) — FIXED
+if (btnDownload) btnDownload.addEventListener('click', async ()=>{
+  log('Preparing download…');
+  try {
+    let data = null;
+    ...
+
 
   // 3) Restore Latest (from cloud backups folder)
   if (btnRestoreLatest) btnRestoreLatest.addEventListener('click', async ()=>{
