@@ -23,6 +23,10 @@ export default async () => {
       lastAutoBackupAt: new Date().toISOString(),
       backupKey
     });
+await store.setJSON('meta/last.json', {
+  lastSavedAt: new Date().toISOString(),
+  note: 'auto backup'
+});
 
     return { statusCode: 200, body: JSON.stringify({ ok:true, backupKey }) };
   } catch(e){
