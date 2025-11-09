@@ -28,6 +28,10 @@ export async function handler(event) {
       lastBackupAt: new Date().toISOString(),
       backupKey
     });
+await store.setJSON('meta/last.json', {
+  lastSavedAt: new Date().toISOString(),
+  note: 'manual backup'
+});
 
     return {
       statusCode: 200,
