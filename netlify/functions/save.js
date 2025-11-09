@@ -20,21 +20,19 @@ export async function handler(event) {
 
     const body = JSON.parse(event.body || '{}');
 
-    // 1) Primary write (unchanged)
+    // 1) Primary write (main current state)
     await store.setJSON('data', body);
 
-    // 2) Meta: last-saved timestamp (tiny helper you can read from a function/UI)
+    // 2) Meta: last-saved timestamp (for /last-saved and admin status)
     const nowIso = new Date().toISOString();
     await store.setJSON('meta/last.json', { lastSavedAt: nowIso });
 
-    // 3) Safety net: timestamped backup you can restore from in the Blobs UI
-    const backupKey = `backups/${nowIso.replace(/[:.]/g, '-')}.json`;
-    await store.setJSON(backupKey, body);
+    // NOTE: No per-save backup here. Weekly and manual backups handle snapshots.
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify({ ok: true, key: 'data', backup: backupKey, lastSavedAt: nowIso })
+      body: JSON.stringify({ ok: true, key: 'data', lastSavedAt: nowIso })
     };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: String(err) }) };
