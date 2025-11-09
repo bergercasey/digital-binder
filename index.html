@@ -341,5 +341,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   <script src="email-fav-trash-addon.js"></script>
 <script src="email-font-tweak-v2.js"></script>
   <script src="email-send-style.js"></script>
+  <div id="admin-panel"
+     style="position:fixed;right:10px;bottom:10px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px;
+            box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:14px;display:none;z-index:9999;">
+  <div style="font-weight:600;margin-bottom:6px">Admin Tools</div>
+  <button id="btn-backup">Backup Now</button>
+  <div id="admin-log" style="margin-top:8px;max-width:260px;word-break:break-word;color:#333"></div>
+</div>
+
+<script>
+  /* Double-tap page title to toggle the Admin panel */
+  let tapCount=0,timer=null;
+  document.addEventListener('click',(e)=>{
+    if (e.target.closest('h1') || e.target.closest('#app-title')) {
+      tapCount++; clearTimeout(timer);
+      timer=setTimeout(()=>tapCount=0,800);
+      if (tapCount>=2){
+        const panel=document.getElementById('admin-panel');
+        if(panel) panel.style.display = panel.style.display==='none'?'block':'none';
+        tapCount=0;
+      }
+    }
+  });
+</script>
 </body>
 </html>
