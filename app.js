@@ -968,7 +968,25 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     // also retry a few times for late DOM
     var tries=0, t=setInterval(function(){ installBtn(); tries++; if(tries>=10) clearInterval(t); }, 400);
   })();
-// --- Admin Tools: Backup Button ---
+// --- Admin Tools Wiring (guarded) ---
+try {
+  (function(){
+    const $=(id)=>document.getElementById(id);
+    const log=(m)=>{ const el=$('admin-log'); if(el) el.textContent=String(m); };
+
+    const btnBackup=$('btn-backup');
+    const btnDownload=$('btn-download');
+    const btnRestoreLatest=$('btn-restore-latest');
+    const fileRestore=$('file-restore');
+
+    // ... (your existing admin handlers here) ...
+  })();
+} catch (e) {
+  // If anything goes wrong in the admin panel code, it won't break the app
+  console && console.warn && console.warn('Admin panel error:', e);
+}
+
+  // --- Admin Tools: Backup Button ---
 (function(){
   const btn=document.getElementById('btn-backup');
   const log=(msg)=>{ const el=document.getElementById('admin-log'); if(el) el.textContent=msg; };
