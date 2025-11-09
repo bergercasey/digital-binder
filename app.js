@@ -1184,12 +1184,16 @@ async function updateBackupStatus() {
 document.addEventListener('click',(e)=>{
   if (e.target.closest('h1') || e.target.closest('#app-title')) {
     // small delay so panel is visible first
-    setTimeout(()=>updateBackupStatus(),400);
+setTimeout(()=>{ updateBackupStatus(); updateNextAutoBackup(); }, 400);
   }
 });
 
 // also refresh after each manual/auto backup
-window.refreshBackupStatus = updateBackupStatus;
+window.refreshBackupStatus = function () {
+  updateBackupStatus();
+  updateNextAutoBackup();
+};
+
 // --- Next auto-backup fetcher ---
 async function updateNextAutoBackup() {
   try {
