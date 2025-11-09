@@ -1190,4 +1190,29 @@ document.addEventListener('click',(e)=>{
 
 // also refresh after each manual/auto backup
 window.refreshBackupStatus = updateBackupStatus;
+// --- Next auto-backup fetcher ---
+async function updateNextAutoBackup() {
+  try {
+    const r = await fetch('/.netlify/functions/next-auto-backup', { headers: { 'cache-control': 'no-cache' } });
+    const el = document.getElementById('next-backup-status');
+    if (!el) return;
+
+    if (!r.ok) { el.textContent = 'Next auto backup: unavailable'; return; }
+
+    const j = await r.json();
+    if (j.nextAutoBackupAt) {
+      const dt = new Date(j.nextAutoBackupAt);
+      const txt = dt.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      el.textContent = `Next auto backup: ${txt}`;
+    } else {
+      el.textContent = 'Next auto backup: not scheduled yet';
+    }
+  } catch {
+    const el = document.getElementById('next-backup-status');
+    if (el) el.textContent = 'Next auto backup: unavailable';
+  }
+}
 })();
