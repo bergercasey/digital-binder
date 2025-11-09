@@ -1066,26 +1066,27 @@ try {
     } catch(e){ log('Error: ' + e.message); }
   });
 
-  // 2) Download Backup (to iPad Files as .json)
-  if (btnDownload) btnDownload.addEventListener('click', async ()=>{
-    log('Preparing download…');
-    try {
-      const data = await getCurrentData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const ts = new Date().toISOString().replace(/[:.]/g,'-');
-      const filename = `job-binder-backup-${ts}.json`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      log('Download started: ' + filename);
-    } catch(e){ log('Error: ' + e.message); }
-  });
+  // 2) Download Backup (cloud, robust)
+if (btnDownload) btnDownload.addEventListener('click', async ()=>{
+  log('Preparing download…');
+  try {
+    const url = '/.netlify/functions/download-current';
+    // quick HEAD to catch 401s without triggering a blank download
+    const head = await fetch(url, { method: 'HEAD', headers: { 'cache-control': 'no-cache' } });
+    if (head.ok) {
+      window.location.href = url;  // triggers actual file download
+      log('Download started from cloud');
+    } else if (head.status === 401) {
+      log('Not logged in. Open /.netlify/functions/auth-login, then try again.');
+    } else {
+      log('Download failed: status ' + head.status);
+    }
+  } catch (e) {
+    log('Error: ' + e.message);
+  }
+});
 
-  // 3) Restore Latest (from cloud backups folder)
+// 3) Restore Latest (from cloud backups folder)
   if (btnRestoreLatest) btnRestoreLatest.addEventListener('click', async ()=>{
     log('Restoring from latest backup…');
     try {
