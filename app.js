@@ -988,4 +988,129 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
     });
   }
 })(); // --- end Admin Tools ---
+// --- Admin Tools Wiring ---
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const log=(m)=>{ const el=$('admin-log'); if(el) el.textContent=String(m); };
+
+  const btnBackup = $('btn-backup');
+  const btnDownload = $('btn-download');
+  const btnRestoreLatest = $('btn-restore-latest');
+  const fileRestore = $('file-restore');
+
+  // Helper: get current canonical data
+  // Prefer your own exporter if you have it; otherwise fetch from cloud.
+  async function getCurrentData() {
+    try {
+      if (typeof window.exportCurrentData === 'function') {
+        return window.exportCurrentData(); // snapshot from the live app state
+      }
+      // fallback to cloud copy
+      const r = await fetch('/.netlify/functions/load');
+      if (r.ok) {
+        const j = await r.json();
+        return j && j.data ? j.data : {};
+      }
+    } catch(_) {}
+    // final fallback to local cache if present
+    try {
+      const raw = localStorage.getItem('binder-data');
+      if (raw) return JSON.parse(raw);
+    } catch(_) {}
+    return {};
+  }
+
+  // Helper: push data to cloud & local (restore-from-file path)
+  async function saveAll(data) {
+    try {
+      const r = await fetch('/.netlify/functions/save', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify(data)
+      });
+      if (!r.ok) throw new Error('Save failed: '+r.status);
+      try { localStorage.setItem('binder-data', JSON.stringify(data)); } catch(_){}
+      return true;
+    } catch(e){
+      log(e.message);
+      return false;
+    }
+  }
+
+  // 1) Backup Now (cloud)
+  if (btnBackup) btnBackup.addEventListener('click', async ()=>{
+    log('Running manual backup…');
+    try {
+      const res = await fetch('/.netlify/functions/manual-backup', { method:'POST' });
+      const j = await res.json();
+      if (j.ok) log('Backup complete:\n' + j.backupKey);
+      else log('Backup failed: ' + (j.error || JSON.stringify(j)));
+    } catch(e){ log('Error: ' + e.message); }
+  });
+
+  // 2) Download Backup (to iPad Files as .json)
+  if (btnDownload) btnDownload.addEventListener('click', async ()=>{
+    log('Preparing download…');
+    try {
+      const data = await getCurrentData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const ts = new Date().toISOString().replace(/[:.]/g,'-');
+      const filename = `job-binder-backup-${ts}.json`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      log('Download started: ' + filename);
+    } catch(e){ log('Error: ' + e.message); }
+  });
+
+  // 3) Restore Latest (from cloud backups folder)
+  if (btnRestoreLatest) btnRestoreLatest.addEventListener('click', async ()=>{
+    log('Restoring from latest backup…');
+    try {
+      const res = await fetch('/.netlify/functions/restore-latest', { method:'POST' });
+      const j = await res.json().catch(()=>({}));
+      if (res.ok) {
+        log('Restored from: ' + (j.restoredFrom || 'latest backup'));
+        // Optionally reload page/state if you have an importer:
+        if (typeof window.importData === 'function') {
+          // Re-load fresh data from cloud then inject:
+          const r = await fetch('/.netlify/functions/load');
+          const x = r.ok ? await r.json() : null;
+          if (x && x.data) window.importData(x.data);
+        } else {
+          // fallback: refresh to pull new cloud state:
+          setTimeout(()=>location.reload(), 600);
+        }
+      } else {
+        log('Restore failed: ' + (j.error || res.status));
+      }
+    } catch(e){ log('Error: ' + e.message); }
+  });
+
+  // 4) Restore From File (pick a .json you downloaded earlier)
+  if (fileRestore) fileRestore.addEventListener('change', async (ev)=>{
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    log('Reading file…');
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      log('Uploading to cloud…');
+      const ok = await saveAll(data);
+      if (!ok) return;
+      log('Restore complete.');
+      if (typeof window.importData === 'function') {
+        window.importData(data);
+      } else {
+        setTimeout(()=>location.reload(), 600);
+      }
+    } catch(e){ log('Error: ' + e.message); }
+    finally { ev.target.value = ''; } // reset picker
+  });
+
+})(); // --- end Admin Tools ---
 })();
