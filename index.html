@@ -350,6 +350,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 </div>
 
 <script>
+ <div id="admin-panel"
+     style="position:fixed;right:10px;bottom:10px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px;
+            box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:14px;display:none;z-index:9999;">
+  <div style="font-weight:600;margin-bottom:6px">Admin Tools</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button id="btn-backup">Backup Now</button>
+    <button id="btn-download">Download Backup</button>
+    <button id="btn-restore-latest">Restore Latest</button>
+    <label style="display:inline-flex;align-items:center;gap:6px;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer">
+      <input id="file-restore" type="file" accept="application/json,.json" style="display:none">
+      Restore From File
+    </label>
+  </div>
+  <div id="admin-log" style="margin-top:8px;max-width:280px;word-break:break-word;color:#333"></div>
+</div>
+
+<script>
   /* Double-tap page title to toggle the Admin panel */
   let tapCount=0,timer=null;
   document.addEventListener('click',(e)=>{
@@ -364,5 +381,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 </script>
+
 </body>
 </html>
