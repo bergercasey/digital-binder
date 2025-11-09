@@ -1113,4 +1113,40 @@ window.addEventListener("DOMContentLoaded", () => { statusEl = $("status");
   });
 
 })(); // --- end Admin Tools ---
+// --- Backup status fetcher ---
+async function updateBackupStatus() {
+  try {
+    const r = await fetch('/.netlify/functions/last-saved');
+    if (!r.ok) throw new Error('status '+r.status);
+    const j = await r.json();
+    const el = document.getElementById('backup-status');
+    if (!el) return;
+    if (j.lastSavedAt) {
+      const dt = new Date(j.lastSavedAt);
+      const dateStr = dt.toLocaleString(undefined, {
+        month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
+      });
+      let type = 'Cloud';
+      if (j.note?.includes('auto')) type = 'Auto (Cloud)';
+      if (j.note?.includes('manual')) type = 'Manual (Cloud)';
+      el.textContent = `Last Backup: ${dateStr} • Type: ${type}`;
+    } else {
+      el.textContent = 'No backup recorded yet';
+    }
+  } catch(e){
+    const el = document.getElementById('backup-status');
+    if (el) el.textContent = 'Backup status unavailable';
+  }
+}
+
+// run on panel open
+document.addEventListener('click',(e)=>{
+  if (e.target.closest('h1') || e.target.closest('#app-title')) {
+    // small delay so panel is visible first
+    setTimeout(()=>updateBackupStatus(),400);
+  }
+});
+
+// also refresh after each manual/auto backup
+window.refreshBackupStatus = updateBackupStatus;
 })();
