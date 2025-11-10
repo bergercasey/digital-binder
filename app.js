@@ -1222,19 +1222,34 @@ async function updateNextAutoBackup() {
 })();
 // --- Note images (Dropbox/URL → inline) — SAFE VERSION ---
 (function(){
-  const NOTES_ROOT_ID = 'notes-list';
+  const NOTES_ROOT_ID = 'notes-list'; // change if your container uses a different id
   let obs = null;
   let isRendering = false;
 
+  // Convert any Dropbox share link to a direct file URL
   function normalizeImageURL(url){
     try{
       const u = new URL(String(url).trim());
-      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com'){
+
+      // Rewrite only dropbox.com hosts
+      if (u.hostname.endsWith('dropbox.com')) {
+        // Newer format uses /scl/fi/<id>/<file>; map it to /s/<id>/<file>
+        u.pathname = u.pathname.replace(/^\/scl\/fi\//, '/s/');
+
+        // Force raw-file host
         u.hostname = 'dl.dropboxusercontent.com';
-        u.search = '';
+
+        // Keep useful params; ensure dl=1 to request the file
+        u.searchParams.set('dl', '1');
+
+        return u.toString();
       }
+
+      // Already dl.dropboxusercontent.com or another host
       return u.toString();
-    }catch{ return url; }
+    } catch {
+      return url;
+    }
   }
 
   function isLikelyImageURL(url){
@@ -1243,18 +1258,32 @@ async function updateNextAutoBackup() {
         || /(^https?:\/\/)?dl\.dropboxusercontent\.com\//i.test(url);
   }
 
+  // Safe render: URLs → <img> (or <a>), everything else stays text
   function renderNoteContentInto(el, text){
     el.textContent = '';
-    const parts = String(text).split(/(\s+)/);
+    const parts = String(text).split(/(\s+)/); // preserve spaces
     for (const part of parts){
       if (/^\s+$/.test(part)) { el.appendChild(document.createTextNode(part)); continue; }
-      if (/^https?:\/\/\S+$/i.test(part) && isLikelyImageURL(part)){
+
+      const looksURL = /^https?:\/\/\S+$/i.test(part);
+      if (looksURL && isLikelyImageURL(part)){
+        const src = normalizeImageURL(part);
         const img = document.createElement('img');
-        img.src = normalizeImageURL(part);
-        img.alt = 'image'; img.loading = 'lazy';
+        img.src = src;
+        img.alt = 'image';
+        img.loading = 'lazy';
         img.className = 'note-img';
+
+        // If it still can't load, fall back to a clickable link
+        img.onerror = () => {
+          const a = document.createElement('a');
+          a.href = part; a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = part;
+          img.replaceWith(a);
+        };
+
         el.appendChild(img);
-      } else if (/^https?:\/\/\S+$/i.test(part)) {
+      } else if (looksURL){
         const a = document.createElement('a');
         a.href = part; a.target = '_blank'; a.rel = 'noopener';
         a.textContent = part;
@@ -1288,12 +1317,12 @@ async function updateNextAutoBackup() {
     if (!root || obs) return;
     obs = new MutationObserver((muts)=>{
       if (isRendering) return;
-      // only react to added rows; debounce to next tick
-      let interesting = false;
+      // react only when rows are added; debounce to next tick
+      let added = false;
       for (const m of muts){
-        if (m.addedNodes && m.addedNodes.length){ interesting = true; break; }
+        if (m.addedNodes && m.addedNodes.length) { added = true; break; }
       }
-      if (interesting) setTimeout(processNotes, 0);
+      if (added) setTimeout(processNotes, 0);
     });
     obs.observe(root, { childList:true, subtree:true });
   }
@@ -1309,6 +1338,6 @@ async function updateNextAutoBackup() {
     init();
   }
 
-  // manual hook if you ever need it
+  // Manual hook if needed elsewhere
   window.refreshNoteImages = processNotes;
 })();
