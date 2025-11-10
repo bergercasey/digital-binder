@@ -1220,37 +1220,38 @@ async function updateNextAutoBackup() {
   }
 }
 })();
-// --- Note images (Dropbox/URL → inline) ---
+// --- Note images (Dropbox/URL → inline) — SAFE VERSION ---
 (function(){
-  // Convert a Dropbox share link to a direct file URL
-  function normalizeImageURL(url) {
-    try {
+  const NOTES_ROOT_ID = 'notes-list';
+  let obs = null;
+  let isRendering = false;
+
+  function normalizeImageURL(url){
+    try{
       const u = new URL(String(url).trim());
-      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com') {
+      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com'){
         u.hostname = 'dl.dropboxusercontent.com';
-        u.search = ''; // force raw file
+        u.search = '';
       }
       return u.toString();
-    } catch { return url; }
+    }catch{ return url; }
   }
 
-  function isLikelyImageURL(url) {
+  function isLikelyImageURL(url){
     return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url)
         || /(^https?:\/\/)?(www\.)?dropbox\.com\//i.test(url)
         || /(^https?:\/\/)?dl\.dropboxusercontent\.com\//i.test(url);
   }
 
-  // Safe render: turns URLs into <img> (or <a>), keeps everything else as text
-  function renderNoteContentInto(el, text) {
-    el.textContent = ''; // clear
-    const parts = String(text).split(/(\s+)/); // keep spaces
-    for (const part of parts) {
+  function renderNoteContentInto(el, text){
+    el.textContent = '';
+    const parts = String(text).split(/(\s+)/);
+    for (const part of parts){
       if (/^\s+$/.test(part)) { el.appendChild(document.createTextNode(part)); continue; }
-      if (/^https?:\/\/\S+$/i.test(part) && isLikelyImageURL(part)) {
+      if (/^https?:\/\/\S+$/i.test(part) && isLikelyImageURL(part)){
         const img = document.createElement('img');
         img.src = normalizeImageURL(part);
-        img.alt = 'image';
-        img.loading = 'lazy';
+        img.alt = 'image'; img.loading = 'lazy';
         img.className = 'note-img';
         el.appendChild(img);
       } else if (/^https?:\/\/\S+$/i.test(part)) {
@@ -1264,33 +1265,50 @@ async function updateNextAutoBackup() {
     }
   }
 
-  // Process all existing notes, and re-process whenever notes list changes
   function processNotes(){
-    const root = document.getElementById('notes-list');
+    const root = document.getElementById(NOTES_ROOT_ID);
     if (!root) return;
-    root.querySelectorAll('.note-item .note-text').forEach(el=>{
-      // Use the original raw text once; if the element gets rebuilt, this resets naturally
-      const raw = el.dataset.rawNote || el.textContent || '';
-      if (!el.dataset.rawNote) el.dataset.rawNote = raw;
-      renderNoteContentInto(el, raw);
+
+    isRendering = true; // prevent observer loop
+    try{
+      root.querySelectorAll('.note-item .note-text, .note-text').forEach(el=>{
+        if (el.dataset.noteImgProcessed === '1') return; // only once
+        const raw = el.textContent || '';
+        el.dataset.noteRaw = raw;
+        renderNoteContentInto(el, raw);
+        el.dataset.noteImgProcessed = '1';
+      });
+    } finally {
+      isRendering = false;
+    }
+  }
+
+  function startObserver(){
+    const root = document.getElementById(NOTES_ROOT_ID);
+    if (!root || obs) return;
+    obs = new MutationObserver((muts)=>{
+      if (isRendering) return;
+      // only react to added rows; debounce to next tick
+      let interesting = false;
+      for (const m of muts){
+        if (m.addedNodes && m.addedNodes.length){ interesting = true; break; }
+      }
+      if (interesting) setTimeout(processNotes, 0);
     });
-  }
-
-  // Initial run (once DOM ready)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', processNotes, { once:true });
-  } else {
-    processNotes();
-  }
-
-  // Watch the notes list for changes (adds/edits)
-  const root = document.getElementById('notes-list');
-  if (root) {
-    const obs = new MutationObserver(()=>processNotes());
     obs.observe(root, { childList:true, subtree:true });
   }
 
-  // Optional manual hook if you want to call it yourself elsewhere
+  function init(){
+    processNotes();
+    startObserver();
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, { once:true });
+  } else {
+    init();
+  }
+
+  // manual hook if you ever need it
   window.refreshNoteImages = processNotes;
 })();
-
