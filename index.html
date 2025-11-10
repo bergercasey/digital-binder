@@ -134,7 +134,16 @@
 /* Top-right user display */
 header { position: relative; }
 .header-right { position: absolute; right: 12px; top: 8px; display: inline-flex; gap: 8px; align-items: center; }
-    </style>
+  .note-img {
+  max-width: 100%;     /* never overflow note width */
+  height: auto;        /* keep correct aspect ratio */
+  display: block;      /* put each image on its own line */
+  border: 1px solid #e5e7eb;  /* light border */
+  border-radius: 6px;  /* small rounded corners */
+  margin: 6px 0;       /* space around the image */
+}
+
+  </style>
 <link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png?v=1758978146">
   <link rel="apple-touch-icon" sizes="167x167" href="/jobs-icon-167.png?v=1758978146">
   <link rel="apple-touch-icon" sizes="152x152" href="/jobs-icon-152.png?v=1758978146">
