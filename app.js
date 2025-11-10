@@ -1219,7 +1219,8 @@ async function updateNextAutoBackup() {
     if (el) el.textContent = 'Next auto backup: unavailable';
   }
 }
-})();// --- Note images (Dropbox/URL → inline) ---
+})();
+// --- Note images (Dropbox/URL → inline) ---
 (function(){
   // Convert a Dropbox share link to a direct file URL
   function normalizeImageURL(url) {
