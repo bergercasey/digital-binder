@@ -134,14 +134,15 @@
 /* Top-right user display */
 header { position: relative; }
 .header-right { position: absolute; right: 12px; top: 8px; display: inline-flex; gap: 8px; align-items: center; }
-  .note-img {
-  max-width: 100%;     /* never overflow note width */
-  height: auto;        /* keep correct aspect ratio */
-  display: block;      /* put each image on its own line */
-  border: 1px solid #e5e7eb;  /* light border */
-  border-radius: 6px;  /* small rounded corners */
-  margin: 6px 0;       /* space around the image */
+.note-img {
+  max-width: 60%;          /* shrink width to about 60% of note area */
+  height: auto;            /* keep proportions */
+  display: block;
+  margin: 6px auto;        /* center horizontally */
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
 }
+
 
   </style>
 <link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png?v=1758978146">
