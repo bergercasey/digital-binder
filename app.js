@@ -1292,4 +1292,3 @@ async function updateNextAutoBackup() {
   // Optional manual hook if you want to call it yourself elsewhere
   window.refreshNoteImages = processNotes;
 })();
-})();
