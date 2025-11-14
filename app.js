@@ -1265,23 +1265,34 @@ async function updateNextAutoBackup() {
     }
   }
 
-  function processNotes(){
-    const root = document.getElementById(NOTES_ROOT_ID);
-    if (!root) return;
+ function processNotes(){
+  const root = document.getElementById(NOTES_ROOT_ID);
+  if (!root) return;
 
-    isRendering = true; // prevent observer loop
-    try{
-      root.querySelectorAll('.note-item .note-text, .note-text').forEach(el=>{
-        if (el.dataset.noteImgProcessed === '1') return; // only once
-        const raw = el.textContent || '';
-        el.dataset.noteRaw = raw;
-        renderNoteContentInto(el, raw);
+  isRendering = true; // prevent observer loop
+  try{
+    root.querySelectorAll('.note-item .note-text, .note-text').forEach(el=>{
+      if (el.dataset.noteImgProcessed === '1') return; // only once
+
+      // ✅ If this note already has HTML structure (lists, paragraphs, line breaks),
+      // don't rebuild it from text or we'll lose the formatting.
+      const existingHtml = el.innerHTML || '';
+      if (/(<(ul|ol|li|br|p)[\s>])/i.test(existingHtml)) {
         el.dataset.noteImgProcessed = '1';
-      });
-    } finally {
-      isRendering = false;
-    }
+        return;
+      }
+
+      // Plain-text note: keep old behavior (convert URLs to images/links)
+      const raw = el.textContent || '';
+      el.dataset.noteRaw = raw;
+      renderNoteContentInto(el, raw);
+      el.dataset.noteImgProcessed = '1';
+    });
+  } finally {
+    isRendering = false;
   }
+}
+
 
   function startObserver(){
     const root = document.getElementById(NOTES_ROOT_ID);
