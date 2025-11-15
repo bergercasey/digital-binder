@@ -1226,16 +1226,12 @@ async function updateNextAutoBackup() {
   let obs = null;
   let isRendering = false;
 
-  function normalizeImageURL(url){
-    try{
-      const u = new URL(String(url).trim());
-      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com'){
-        u.hostname = 'dl.dropboxusercontent.com';
-        u.search = '';
-      }
-      return u.toString();
-    }catch{ return url; }
-  }
+function isLikelyImageURL(url){
+  // Treat it as an image if the URL looks like a direct image file
+  return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url);
+}
+
+
 
   function isLikelyImageURL(url){
     return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url)
