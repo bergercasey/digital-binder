@@ -217,22 +217,63 @@
 
   
   function buildPrintHtml(inner){
-    // Inline minimal styles to match modal view
-    const css = `
-      :root{ --ink:#111; --line:#e5e7eb; }
-      body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; color: var(--ink); margin: 24px; }
-      .ep-name{ font-weight: 800; font-size: 18px; margin: 0 0 8px 0; }
-      .ep-note{ margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
-      .ep-ts{ font-size: 12px; color: #6b7280; }
-      .ep-note :where(p, ul, ol){ margin: 6px 0; }
-      .ep-note ul{ padding-left: 20px; list-style: disc; }
-      .ep-note ol{ padding-left: 20px; list-style: decimal; }
-      @page { margin: 16mm; }
-    `;
-    return `<!doctype html>
+  // Inline minimal styles to match modal view — but scaled down for print
+  const css = `
+    :root{ --ink:#111; --line:#e5e7eb; }
+
+    body{
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      margin: 10px;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .ep-name{
+      font-weight: 800;
+      font-size: 14px;
+      margin: 0 0 6px 0;
+    }
+
+    .ep-note{
+      margin: 4px 0;
+      padding: 4px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      page-break-inside: avoid;
+    }
+
+    .ep-ts{
+      font-size: 10px;
+      color: #6b7280;
+    }
+
+    .ep-note :where(p, ul, ol){
+      margin: 4px 0;
+    }
+
+    .ep-note ul{
+      padding-left: 16px;
+      list-style: disc;
+    }
+
+    .ep-note ol{
+      padding-left: 16px;
+      list-style: decimal;
+    }
+
+    img{
+      max-width: 100%;
+      height: auto;
+    }
+
+    @page { margin: 10mm; }
+  `;
+  return `<!doctype html>
 <html><head><meta charset="utf-8"><title>Print</title><style>${css}</style></head>
 <body>${inner}</body></html>`;
-  }
+}
+
 
   function printPreviewAndClose(){
     const overlay = document.getElementById("ep-overlay");
