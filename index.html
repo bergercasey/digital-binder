@@ -142,42 +142,6 @@ header { position: relative; }
   border: 1px solid #e5e7eb;
   border-radius: 6px;
 }
-/* ---------- PRINT SETTINGS (strong override) ---------- */
-@media print {
-
-  /* Set a smaller base size for everything */
-  html {
-    font-size: 5px !important;   /* try 10px; go to 9px or 8px if you want even smaller */
-  }
-
-  body {
-    font-size: 1rem !important;   /* follow html */
-    line-height: 1.2 !important;
-  }
-
-  /* Common text containers */
-  h1 { font-size: 1.6rem !important; margin: 0.3em 0 !important; }
-  h2, h3 { font-size: 1.3rem !important; margin: 0.25em 0 !important; }
-
-  td, th, div, span, p, .note-text {
-    font-size: 1rem !important;
-    line-height: 1.2 !important;
-  }
-
-  /* Hide controls that don't need to print */
-  .toolbar,
-  #admin-panel,
-  button {
-    display: none !important;
-  }
-
-  /* Make images smaller on paper */
-  .note-img {
-    max-width: 45% !important;
-    height: auto !important;
-    margin: 4px auto !important;
-  }
-}
 
   </style>
 <link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png?v=1758978146">
