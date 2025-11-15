@@ -392,15 +392,91 @@
     box.style.display = state.ui.editing ? "none" : "block";
   }
 
-  // --- Notes helpers (HTML + markdown-lite fallback) ---
-  function escapeHtml(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-  function inlineFmt(s) {
-    let x = s; x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    x = x.replace(/__(.+?)__/g, '<u>$1</u>');
-    x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2</em>');
-    x = x.replace(/==(.+?)==/g, '<mark>$1</mark>');
-    return x;
+// --- Notes helpers (HTML + markdown-lite fallback) ---
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+}
+
+// detect simple "this whole line is an image URL"
+function isImageUrl(url) {
+  return /^https?:\/\/\S+\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i
+    .test(String(url || "").trim());
+}
+
+function inlineFmt(s) {
+  let x = s;
+  x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>');
+  x = x.replace(/__(.+?)__/g, '<u>$1<\/u>');
+  x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2<\/em>');
+  x = x.replace(/==(.+?)==/g, '<mark>$1<\/mark>');
+  return x;
+}
+
+function formatMarkdownLite(s) {
+  const lines = String(s || "").split(/\n/);
+  const out = [];
+  let inList = false;
+
+  for (const raw of lines) {
+    const rawLine = String(raw || "");
+    const trimmed = rawLine.trim();
+
+    // If the whole line is an image URL -> render image
+    if (trimmed && isImageUrl(trimmed)) {
+      if (inList) { out.push("</ul>"); inList = false; }
+      const safe = escapeHtml(trimmed);
+      out.push('<img src="' + safe + '" class="note-img">');
+      continue;
+    }
+
+    const line = escapeHtml(rawLine);
+
+    // list item (dash)
+    if (/^\s*-\s+/.test(line)) {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      const item = line.replace(/^\s*-\s+/, "");
+      out.push("<li>" + inlineFmt(item) + "</li>");
+    }
+    else {
+      if (inList) { out.push("</ul>"); inList = false; }
+      out.push(inlineFmt(line) + "<br>");
+    }
   }
+
+  if (inList) out.push("</ul>");
+  return out.join("");
+}
+
+function sanitizeHtml(input) {
+  const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","LI","P","DIV","SPAN","IMG"]);
+  const wrap = document.createElement("div");
+  wrap.innerHTML = input || "";
+  (function walk(node){
+    for (let i=node.childNodes.length-1; i>=0; i--) {
+      const ch = node.childNodes[i];
+      const t = ch.nodeType;
+      if (t === 1) { // element
+        if (!allowed.has(ch.tagName)) {
+          while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
+          node.removeChild(ch);
+        } else {
+          // clean attributes
+          for (const a of Array.from(ch.attributes)) {
+            if (a.name !== "src" && a.name !== "class") ch.removeAttribute(a.name);
+          }
+          walk(ch);
+        }
+      }
+      if (t === 3) { continue; } // text safe
+    }
+  })(wrap);
+  return wrap.innerHTML;
+}
+
   function formatMarkdownLite(s) {
     const lines = String(s || "").split(/\n/); const out = []; let inList = false;
     for (const raw of lines) {
