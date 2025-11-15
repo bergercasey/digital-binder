@@ -281,33 +281,28 @@ function printPreviewAndClose(){
 
   const html = buildPrintHtml(body.innerHTML);
 
-  // Create hidden iframe for printing
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
+  // Open a new tab/window for printing (more reliable on iOS)
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Popup blocked. Please allow popups for this site to print.");
+    return;
+  }
 
-  const cleanup = () => {
-    try { document.body.removeChild(iframe); } catch(_){}
-    if (overlay) overlay.style.display = "none";
-  };
+  // Write our print HTML into the new window
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 
-  // Wait for the iframe document to finish loading before calling print()
-  iframe.onload = () => {
-    try {
-      const w = iframe.contentWindow;
-      if (w) {
-        try { w.focus(); } catch(_) {}
-        try { w.print(); } catch(_) {}
-      }
-    } finally {
-      // iOS Safari doesn’t always fire afterprint reliably, so we clean up shortly after
-      setTimeout(cleanup, 500);
-    }
-  };
+  // Close the overlay in the main app immediately
+  if (overlay) overlay.style.display = "none";
+
+  // Give the new window a moment to render, then trigger print
+  // (iOS/Safari behaves better with a small delay)
+  setTimeout(() => {
+    try { win.focus(); } catch (_) {}
+    try { win.print(); } catch (_) {}
+  }, 300);
+}
 
   document.body.appendChild(iframe);
 
