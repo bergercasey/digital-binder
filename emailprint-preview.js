@@ -279,7 +279,7 @@ function printPreviewAndClose(){
 
   const html = buildPrintHtml(body.innerHTML);
 
-  // Open a new tab/window for printing (more reliable on iOS)
+  // Open a new tab/window for printing
   const win = window.open("", "_blank");
   if (!win) {
     alert("Popup blocked. Please allow popups for this site to print.");
@@ -291,13 +291,23 @@ function printPreviewAndClose(){
   win.document.write(html);
   win.document.close();
 
-  // Close the overlay in the main app
+  // Hide the overlay in the main app right away
   if (overlay) overlay.style.display = "none";
 
-  // Give the new window a moment to render, then trigger print
+  // Give the print window a moment to render, then trigger print
   setTimeout(() => {
-    try { win.focus(); } catch(_) {}
-    try { win.print(); } catch(_) {}
+    try { win.focus(); } catch (_) {}
+
+    try {
+      win.print();
+    } catch (_) {
+      // If print() fails, still try to close so user isn't stuck
+    }
+
+    // After printing is triggered, close the print window so the app returns to the job view
+    setTimeout(() => {
+      try { win.close(); } catch (_) {}
+    }, 800); // tweak this delay if needed
   }, 300);
 }
 function openPreview(){
