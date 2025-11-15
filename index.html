@@ -142,45 +142,42 @@ header { position: relative; }
   border: 1px solid #e5e7eb;
   border-radius: 6px;
 }
-/* ---------- PRINT SETTINGS ---------- */
+/* ---------- PRINT SETTINGS (strong override) ---------- */
 @media print {
 
-  /* shrink the overall text scale */
+  /* Set a smaller base size for everything */
+  html {
+    font-size: 10px !important;   /* try 10px; go to 9px or 8px if you want even smaller */
+  }
+
   body {
-    font-size: 60%;        /* try 70% of normal size — you can adjust (e.g. 60% or 80%) */
+    font-size: 1rem !important;   /* follow html */
+    line-height: 1.2 !important;
   }
 
-  /* optional: tighten spacing a bit */
-  h1, h2, h3 {
-    margin-top: 0.3em;
-    margin-bottom: 0.3em;
+  /* Common text containers */
+  h1 { font-size: 1.6rem !important; margin: 0.3em 0 !important; }
+  h2, h3 { font-size: 1.3rem !important; margin: 0.25em 0 !important; }
+
+  td, th, div, span, p, .note-text {
+    font-size: 1rem !important;
+    line-height: 1.2 !important;
   }
 
-  /* ensure buttons, toolbars, etc. don’t print */
+  /* Hide controls that don't need to print */
   .toolbar,
   #admin-panel,
   button {
     display: none !important;
   }
 
-  /* keep the schedule grid lines sharp */
-  table, td, th, div {
-    border-color: #000 !important;
-  }
-
-  /* make notes text a bit denser */
-  .note-text {
-    font-size: 0.9em;
-    line-height: 1.2;
-  }
-
-  /* make images smaller on paper */
+  /* Make images smaller on paper */
   .note-img {
-    max-width: 50%;       /* even smaller for print */
-    margin: 4px auto;
+    max-width: 45% !important;
+    height: auto !important;
+    margin: 4px auto !important;
   }
 }
-
 
   </style>
 <link rel="apple-touch-icon" sizes="180x180" href="/jobs-icon-180.png?v=1758978146">
