@@ -1220,51 +1220,118 @@ async function updateNextAutoBackup() {
   }
 }
 })();
-// --- Note images (Dropbox/URL → inline) — SAFE VERSION ---
-(function(){
-  const NOTES_ROOT_ID = 'notes-list';
-  let obs = null;
-  let isRendering = false;
+// --- Notes helpers (HTML + markdown-lite fallback) ---
 
-  function normalizeImageURL(url){
-    try{
-      const u = new URL(String(url).trim());
-      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com'){
-        u.hostname = 'dl.dropboxusercontent.com';
-        u.search = '';
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+}
+
+// Turn Dropbox share URLs into direct file URLs
+function normalizeImageURL(url) {
+  try {
+    const u = new URL(String(url || "").trim());
+
+    if (u.hostname === "www.dropbox.com" || u.hostname === "dropbox.com") {
+      // Newer Dropbox format: /scl/fi/<id>/<file>  →  /s/<id>/<file>
+      if (u.pathname.startsWith("/scl/fi/")) {
+        u.pathname = u.pathname.replace(/^\/scl\/fi\//, "/s/");
       }
+      // Direct file host
+      u.hostname = "dl.dropboxusercontent.com";
+      // Ensure we request the file, not the HTML preview
+      u.searchParams.set("dl", "1");
       return u.toString();
-    }catch{ return url; }
-  }
+    }
 
-  function isLikelyImageURL(url){
-    return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url)
-        || /(^https?:\/\/)?(www\.)?dropbox\.com\//i.test(url)
-        || /(^https?:\/\/)?dl\.dropboxusercontent\.com\//i.test(url);
+    // Already direct or some other host
+    return u.toString();
+  } catch {
+    return String(url || "");
   }
+}
 
-  function renderNoteContentInto(el, text){
-    el.textContent = '';
-    const parts = String(text).split(/(\s+)/);
-    for (const part of parts){
-      if (/^\s+$/.test(part)) { el.appendChild(document.createTextNode(part)); continue; }
-      if (/^https?:\/\/\S+$/i.test(part) && isLikelyImageURL(part)){
-        const img = document.createElement('img');
-        img.src = normalizeImageURL(part);
-        img.alt = 'image'; img.loading = 'lazy';
-        img.className = 'note-img';
-        el.appendChild(img);
-      } else if (/^https?:\/\/\S+$/i.test(part)) {
-        const a = document.createElement('a');
-        a.href = part; a.target = '_blank'; a.rel = 'noopener';
-        a.textContent = part;
-        el.appendChild(a);
-      } else {
-        el.appendChild(document.createTextNode(part));
-      }
+// detect simple "this whole line is an image URL"
+function isImageUrl(url) {
+  const u = String(url || "").trim();
+  // image extensions, including HEIC/HEIF
+  if (/\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)(\?.*)?$/i.test(u)) return true;
+  // or any Dropbox URL (we'll normalize it)
+  if (/^https?:\/\/(www\.)?dropbox\.com\//i.test(u)) return true;
+  if (/^https?:\/\/dl\.dropboxusercontent\.com\//i.test(u)) return true;
+  return false;
+}
+
+function inlineFmt(s) {
+  let x = s;
+  x = x.replace(/\*\*(.+?)\*\*/g, "<strong>$1<\/strong>");
+  x = x.replace(/__(.+?)__/g, "<u>$1<\/u>");
+  x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, "$1<em>$2<\/em>");
+  x = x.replace(/==(.+?)==/g, "<mark>$1<\/mark>");
+  return x;
+}
+
+function formatMarkdownLite(s) {
+  const lines = String(s || "").split(/\n/);
+  const out = [];
+  let inList = false;
+
+  for (const raw of lines) {
+    const rawLine = String(raw || "");
+    const trimmed = rawLine.trim();
+
+    // If the whole line is an image URL -> render image
+    if (trimmed && isImageUrl(trimmed)) {
+      if (inList) { out.push("</ul>"); inList = false; }
+      const src = normalizeImageURL(trimmed);
+      const safe = escapeHtml(src);
+      out.push('<img src="' + safe + '" class="note-img">');
+      continue;
+    }
+
+    const line = escapeHtml(rawLine);
+
+    // list item (dash)
+    if (/^\s*-\s+/.test(line)) {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      const item = line.replace(/^\s*-\s+/, "");
+      out.push("<li>" + inlineFmt(item) + "</li>");
+    } else {
+      if (inList) { out.push("</ul>"); inList = false; }
+      out.push(inlineFmt(line) + "<br>");
     }
   }
 
+  if (inList) out.push("</ul>");
+  return out.join("");
+}
+
+function sanitizeHtml(input) {
+  const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","LI","P","DIV","SPAN","IMG"]);
+  const wrap = document.createElement("div");
+  wrap.innerHTML = input || "";
+  (function walk(node) {
+    for (let i = node.childNodes.length - 1; i >= 0; i--) {
+      const ch = node.childNodes[i];
+      const t = ch.nodeType;
+      if (t === 1) { // element
+        if (!allowed.has(ch.tagName)) {
+          while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
+          node.removeChild(ch);
+        } else {
+          // keep only safe attributes
+          for (const a of Array.from(ch.attributes)) {
+            if (a.name !== "src" && a.name !== "class") ch.removeAttribute(a.name);
+          }
+          walk(ch);
+        }
+      }
+    }
+  })(wrap);
+  return wrap.innerHTML;
+}
  function processNotes(){
   const root = document.getElementById(NOTES_ROOT_ID);
   if (!root) return;
