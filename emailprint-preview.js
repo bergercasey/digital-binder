@@ -215,9 +215,7 @@
 
   function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
 
-  
-  function buildPrintHtml(inner){
-  // Inline minimal styles to match modal view — but scaled down for print
+ function buildPrintHtml(inner){
   const css = `
     :root{ --ink:#111; --line:#e5e7eb; }
 
@@ -273,7 +271,7 @@
 <html><head><meta charset="utf-8"><title>Print</title><style>${css}</style></head>
 <body>${inner}</body></html>`;
 }
-
+ 
 function printPreviewAndClose(){
   const overlay = document.getElementById("ep-overlay");
   const body = document.getElementById("ep-body");
@@ -293,30 +291,15 @@ function printPreviewAndClose(){
   win.document.write(html);
   win.document.close();
 
-  // Close the overlay in the main app immediately
+  // Close the overlay in the main app
   if (overlay) overlay.style.display = "none";
 
   // Give the new window a moment to render, then trigger print
-  // (iOS/Safari behaves better with a small delay)
   setTimeout(() => {
-    try { win.focus(); } catch (_) {}
-    try { win.print(); } catch (_) {}
+    try { win.focus(); } catch(_) {}
+    try { win.print(); } catch(_) {}
   }, 300);
 }
-
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
-  if (!doc) {
-    cleanup();
-    return;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-}
-
 function openPreview(){
     injectStyles();
     ensureModal();
