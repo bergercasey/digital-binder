@@ -401,18 +401,47 @@ function escapeHtml(s) {
     .replace(/>/g,"&gt;");
 }
 
+// Turn Dropbox share URLs into direct file URLs
+function normalizeImageURL(url) {
+  try {
+    const u = new URL(String(url || "").trim());
+
+    if (u.hostname === "www.dropbox.com" || u.hostname === "dropbox.com") {
+      // Newer Dropbox format: /scl/fi/<id>/<file>  →  /s/<id>/<file>
+      if (u.pathname.startsWith("/scl/fi/")) {
+        u.pathname = u.pathname.replace(/^\/scl\/fi\//, "/s/");
+      }
+      // Direct file host
+      u.hostname = "dl.dropboxusercontent.com";
+      // Ensure we request the file, not the HTML preview
+      u.searchParams.set("dl", "1");
+      return u.toString();
+    }
+
+    // Already direct or some other host
+    return u.toString();
+  } catch {
+    return String(url || "");
+  }
+}
+
 // detect simple "this whole line is an image URL"
 function isImageUrl(url) {
-  return /^https?:\/\/\S+\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i
-    .test(String(url || "").trim());
+  const u = String(url || "").trim();
+  // image extensions, including HEIC/HEIF
+  if (/\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)(\?.*)?$/i.test(u)) return true;
+  // or any Dropbox URL (we'll normalize it)
+  if (/^https?:\/\/(www\.)?dropbox\.com\//i.test(u)) return true;
+  if (/^https?:\/\/dl\.dropboxusercontent\.com\//i.test(u)) return true;
+  return false;
 }
 
 function inlineFmt(s) {
   let x = s;
-  x = x.replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>');
-  x = x.replace(/__(.+?)__/g, '<u>$1<\/u>');
-  x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, '$1<em>$2<\/em>');
-  x = x.replace(/==(.+?)==/g, '<mark>$1<\/mark>');
+  x = x.replace(/\*\*(.+?)\*\*/g, "<strong>$1<\/strong>");
+  x = x.replace(/__(.+?)__/g, "<u>$1<\/u>");
+  x = x.replace(/(^|[^_])_([^_](?:.*?[^_])?)_(?!_)/g, "$1<em>$2<\/em>");
+  x = x.replace(/==(.+?)==/g, "<mark>$1<\/mark>");
   return x;
 }
 
@@ -428,7 +457,8 @@ function formatMarkdownLite(s) {
     // If the whole line is an image URL -> render image
     if (trimmed && isImageUrl(trimmed)) {
       if (inList) { out.push("</ul>"); inList = false; }
-      const safe = escapeHtml(trimmed);
+      const src = normalizeImageURL(trimmed);
+      const safe = escapeHtml(src);
       out.push('<img src="' + safe + '" class="note-img">');
       continue;
     }
@@ -440,8 +470,7 @@ function formatMarkdownLite(s) {
       if (!inList) { out.push("<ul>"); inList = true; }
       const item = line.replace(/^\s*-\s+/, "");
       out.push("<li>" + inlineFmt(item) + "</li>");
-    }
-    else {
+    } else {
       if (inList) { out.push("</ul>"); inList = false; }
       out.push(inlineFmt(line) + "<br>");
     }
@@ -455,8 +484,8 @@ function sanitizeHtml(input) {
   const allowed = new Set(["STRONG","EM","U","MARK","BR","UL","LI","P","DIV","SPAN","IMG"]);
   const wrap = document.createElement("div");
   wrap.innerHTML = input || "";
-  (function walk(node){
-    for (let i=node.childNodes.length-1; i>=0; i--) {
+  (function walk(node) {
+    for (let i = node.childNodes.length - 1; i >= 0; i--) {
       const ch = node.childNodes[i];
       const t = ch.nodeType;
       if (t === 1) { // element
@@ -464,14 +493,13 @@ function sanitizeHtml(input) {
           while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
           node.removeChild(ch);
         } else {
-          // clean attributes
+          // keep only safe attributes
           for (const a of Array.from(ch.attributes)) {
             if (a.name !== "src" && a.name !== "class") ch.removeAttribute(a.name);
           }
           walk(ch);
         }
       }
-      if (t === 3) { continue; } // text safe
     }
   })(wrap);
   return wrap.innerHTML;
