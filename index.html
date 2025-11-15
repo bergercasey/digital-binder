@@ -142,6 +142,44 @@ header { position: relative; }
   border: 1px solid #e5e7eb;
   border-radius: 6px;
 }
+/* ---------- PRINT SETTINGS ---------- */
+@media print {
+
+  /* shrink the overall text scale */
+  body {
+    font-size: 70%;        /* try 70% of normal size — you can adjust (e.g. 60% or 80%) */
+  }
+
+  /* optional: tighten spacing a bit */
+  h1, h2, h3 {
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+  }
+
+  /* ensure buttons, toolbars, etc. don’t print */
+  .toolbar,
+  #admin-panel,
+  button {
+    display: none !important;
+  }
+
+  /* keep the schedule grid lines sharp */
+  table, td, th, div {
+    border-color: #000 !important;
+  }
+
+  /* make notes text a bit denser */
+  .note-text {
+    font-size: 0.9em;
+    line-height: 1.2;
+  }
+
+  /* make images smaller on paper */
+  .note-img {
+    max-width: 50%;       /* even smaller for print */
+    margin: 4px auto;
+  }
+}
 
 
   </style>
