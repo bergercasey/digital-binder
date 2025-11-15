@@ -274,46 +274,54 @@
 <body>${inner}</body></html>`;
 }
 
+function printPreviewAndClose(){
+  const overlay = document.getElementById("ep-overlay");
+  const body = document.getElementById("ep-body");
+  if (!body) return;
 
-  function printPreviewAndClose(){
-    const overlay = document.getElementById("ep-overlay");
-    const body = document.getElementById("ep-body");
-    if (!body) return;
-    // Create hidden iframe
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentWindow || iframe.contentDocument;
-    const w = iframe.contentWindow;
-    const d = iframe.contentDocument || (doc && doc.document);
-    const html = buildPrintHtml(body.innerHTML);
-    (d || doc.document).open();
-    (d || doc.document).write(html);
-    (d || doc.document).close();
+  const html = buildPrintHtml(body.innerHTML);
 
-    // Close overlay after printing
-    const cleanup = () => {
-      try { document.body.removeChild(iframe); } catch(_){}
-      if (overlay) overlay.style.display = "none";
-    };
+  // Create hidden iframe for printing
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
 
-    if (w) {
-      // Safari/iOS friendly approach
-      const after = () => { w.removeEventListener('afterprint', after); cleanup(); };
-      try { w.addEventListener('afterprint', after); } catch(_){}
-      try { w.focus(); } catch(_){}
-      try { w.print(); } catch(_){ cleanup(); }
-      // Fallback cleanup
-      setTimeout(cleanup, 2000);
-    } else {
-      cleanup();
+  const cleanup = () => {
+    try { document.body.removeChild(iframe); } catch(_){}
+    if (overlay) overlay.style.display = "none";
+  };
+
+  // Wait for the iframe document to finish loading before calling print()
+  iframe.onload = () => {
+    try {
+      const w = iframe.contentWindow;
+      if (w) {
+        try { w.focus(); } catch(_) {}
+        try { w.print(); } catch(_) {}
+      }
+    } finally {
+      // iOS Safari doesn’t always fire afterprint reliably, so we clean up shortly after
+      setTimeout(cleanup, 500);
     }
+  };
+
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+  if (!doc) {
+    cleanup();
+    return;
   }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+}
+
 function openPreview(){
     injectStyles();
     ensureModal();
