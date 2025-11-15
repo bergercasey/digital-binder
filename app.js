@@ -1220,102 +1220,94 @@ async function updateNextAutoBackup() {
   }
 }
 })();
-// --- Note images (Dropbox/URL → inline) — SAFE VERSION ---
-(function(){
-  const NOTES_ROOT_ID = 'notes-list';
+// --- Note images (Dropbox URL / direct URL → inline img, URL-only notes) ---
+(function () {
+  const NOTES_ROOT_ID = "notes-list";
   let obs = null;
-  let isRendering = false;
 
-  function normalizeImageURL(url){
-    try{
-      const u = new URL(String(url).trim());
-      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com'){
-        u.hostname = 'dl.dropboxusercontent.com';
-        u.search = '';
+  // Convert Dropbox share URL → direct file URL
+  function normalizeImageURL(url) {
+    try {
+      const u = new URL(String(url || "").trim());
+
+      if (u.hostname === "www.dropbox.com" || u.hostname === "dropbox.com") {
+        // Handle new /scl/fi/... style links
+        if (u.pathname.startsWith("/scl/fi/")) {
+          u.pathname = u.pathname.replace(/^\/scl\/fi\//, "/s/");
+        }
+        u.hostname = "dl.dropboxusercontent.com";
+        // request the file, not the HTML preview
+        u.searchParams.set("dl", "1");
+        return u.toString();
       }
+
       return u.toString();
-    }catch{ return url; }
-  }
-
-  function isLikelyImageURL(url){
-    return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url)
-        || /(^https?:\/\/)?(www\.)?dropbox\.com\//i.test(url)
-        || /(^https?:\/\/)?dl\.dropboxusercontent\.com\//i.test(url);
-  }
-
-  function renderNoteContentInto(el, text){
-    el.textContent = '';
-    const parts = String(text).split(/(\s+)/);
-    for (const part of parts){
-      if (/^\s+$/.test(part)) { el.appendChild(document.createTextNode(part)); continue; }
-      if (/^https?:\/\/\S+$/i.test(part) && isLikelyImageURL(part)){
-        const img = document.createElement('img');
-        img.src = normalizeImageURL(part);
-        img.alt = 'image'; img.loading = 'lazy';
-        img.className = 'note-img';
-        el.appendChild(img);
-      } else if (/^https?:\/\/\S+$/i.test(part)) {
-        const a = document.createElement('a');
-        a.href = part; a.target = '_blank'; a.rel = 'noopener';
-        a.textContent = part;
-        el.appendChild(a);
-      } else {
-        el.appendChild(document.createTextNode(part));
-      }
+    } catch {
+      return String(url || "");
     }
   }
 
- function processNotes(){
-  const root = document.getElementById(NOTES_ROOT_ID);
-  if (!root) return;
+  function isLikelyImageURL(url) {
+    const u = String(url || "").trim();
+    // image extensions including HEIC/HEIF
+    if (/\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)(\?.*)?$/i.test(u)) return true;
+    // any Dropbox URL (we'll normalize it)
+    if (/^https?:\/\/(www\.)?dropbox\.com\//i.test(u)) return true;
+    if (/^https?:\/\/dl\.dropboxusercontent\.com\//i.test(u)) return true;
+    return false;
+  }
 
-  isRendering = true; // prevent observer loop
-  try{
-    root.querySelectorAll('.note-item .note-text, .note-text').forEach(el=>{
-      if (el.dataset.noteImgProcessed === '1') return; // only once
+  function processNotes() {
+    const root = document.getElementById(NOTES_ROOT_ID);
+    if (!root) return;
 
-      // ✅ If this note already has HTML structure (lists, paragraphs, line breaks),
-      // don't rebuild it from text or we'll lose the formatting.
-      const existingHtml = el.innerHTML || '';
-      if (/(<(ul|ol|li|br|p)[\s>])/i.test(existingHtml)) {
-        el.dataset.noteImgProcessed = '1';
+    root.querySelectorAll(".note-item .note-text, .note-text").forEach((el) => {
+      if (el.dataset.noteImgProcessed === "1") return;
+
+      const raw = (el.textContent || "").trim();
+      if (!raw) {
+        el.dataset.noteImgProcessed = "1";
         return;
       }
 
-      // Plain-text note: keep old behavior (convert URLs to images/links)
-      const raw = el.textContent || '';
-      el.dataset.noteRaw = raw;
-      renderNoteContentInto(el, raw);
-      el.dataset.noteImgProcessed = '1';
+      // Only convert if the *entire* note is a single URL
+      if (!/^https?:\/\/\S+$/i.test(raw) || !isLikelyImageURL(raw)) {
+        el.dataset.noteImgProcessed = "1";
+        return;
+      }
+
+      const src = normalizeImageURL(raw);
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "image";
+      img.loading = "lazy";
+      img.className = "note-img";
+
+      el.innerHTML = "";
+      el.appendChild(img);
+      el.dataset.noteImgProcessed = "1";
     });
-  } finally {
-    isRendering = false;
   }
-}
 
-
-  function startObserver(){
+  function startObserver() {
     const root = document.getElementById(NOTES_ROOT_ID);
     if (!root || obs) return;
-    obs = new MutationObserver((muts)=>{
-      if (isRendering) return;
-      // only react to added rows; debounce to next tick
-      let interesting = false;
-      for (const m of muts){
-        if (m.addedNodes && m.addedNodes.length){ interesting = true; break; }
-      }
-      if (interesting) setTimeout(processNotes, 0);
+
+    obs = new MutationObserver(() => {
+      // run after new notes are added
+      setTimeout(processNotes, 0);
     });
-    obs.observe(root, { childList:true, subtree:true });
+
+    obs.observe(root, { childList: true, subtree: true });
   }
 
-  function init(){
+  function init() {
     processNotes();
     startObserver();
   }
 
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', init, { once:true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
   } else {
     init();
   }
